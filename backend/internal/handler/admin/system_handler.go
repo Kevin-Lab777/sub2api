@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/sysutil"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/response"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/sysutil"
+	"github.com/Kevin-Lab777/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

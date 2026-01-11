@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 

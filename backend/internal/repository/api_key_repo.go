@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/apikey"
-	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	dbent "github.com/Kevin-Lab777/sub2api/ent"
+	"github.com/Kevin-Lab777/sub2api/ent/apikey"
+	"github.com/Kevin-Lab777/sub2api/ent/schema/mixins"
+	"github.com/Kevin-Lab777/sub2api/internal/service"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/pagination"
 )
 
 type apiKeyRepository struct {

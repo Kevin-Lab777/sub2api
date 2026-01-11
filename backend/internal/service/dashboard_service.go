@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/usagestats"
 )
 
 // DashboardService provides aggregated statistics for admin dashboard.

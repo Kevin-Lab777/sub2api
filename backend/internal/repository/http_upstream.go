@@ -12,10 +12,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
-	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/Kevin-Lab777/sub2api/internal/config"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/proxyutil"
+	"github.com/Kevin-Lab777/sub2api/internal/service"
+	"github.com/Kevin-Lab777/sub2api/internal/util/urlvalidator"
 )
 
 // 默认配置常量

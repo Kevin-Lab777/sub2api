@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Kevin-Lab777/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
 )
 

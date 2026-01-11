@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Kevin-Lab777/sub2api/internal/config"
+	"github.com/Kevin-Lab777/sub2api/internal/handler/dto"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/response"
+	"github.com/Kevin-Lab777/sub2api/internal/server/middleware"
+	"github.com/Kevin-Lab777/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

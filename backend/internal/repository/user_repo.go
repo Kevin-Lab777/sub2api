@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"strings"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
+	dbent "github.com/Kevin-Lab777/sub2api/ent"
+	dbuser "github.com/Kevin-Lab777/sub2api/ent/user"
 	// [LITE:DELETED] userallowedgroup import
-	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Kevin-Lab777/sub2api/ent/usersubscription"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/pagination"
+	"github.com/Kevin-Lab777/sub2api/internal/service"
 )
 
 type userRepository struct {

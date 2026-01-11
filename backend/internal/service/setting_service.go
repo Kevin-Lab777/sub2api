@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Kevin-Lab777/sub2api/internal/config"
+	infraerrors "github.com/Kevin-Lab777/sub2api/internal/pkg/errors"
 )
 
 var (
