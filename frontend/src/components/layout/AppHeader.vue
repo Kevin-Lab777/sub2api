@@ -26,9 +26,6 @@
         <!-- Language Switcher -->
         <LocaleSwitcher />
 
-        <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" />
-
         <!-- Balance Display -->
         <div
           v-if="user"
@@ -97,16 +94,6 @@
               </div>
 
               <div class="py-1">
-                <router-link to="/profile" @click="closeDropdown" class="dropdown-item">
-                  <Icon name="user" size="sm" />
-                  {{ t('nav.profile') }}
-                </router-link>
-
-                <router-link to="/keys" @click="closeDropdown" class="dropdown-item">
-                  <Icon name="key" size="sm" />
-                  {{ t('nav.apiKeys') }}
-                </router-link>
-
                 <a
                   href="https://github.com/Wei-Shaw/sub2api"
                   target="_blank"
@@ -197,7 +184,6 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
-import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const router = useRouter()

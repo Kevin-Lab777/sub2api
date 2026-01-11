@@ -9,6 +9,7 @@ import (
 )
 
 // RegisterAdminRoutes 注册管理员路由
+// [LITE] 移除了 registerRedeemCodeRoutes 和 registerPromoCodeRoutes
 func RegisterAdminRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
@@ -17,11 +18,13 @@ func RegisterAdminRoutes(
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
 	{
+		// [LITE] 当前管理员信息
+		admin.GET("/me", h.Public.GetCurrentAdmin)
+
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
 
-		// 用户管理
-		registerUserManagementRoutes(admin, h)
+		// [LITE:DELETED] registerUserManagementRoutes - 用户管理
 
 		// 分组管理
 		registerGroupRoutes(admin, h)
@@ -41,11 +44,8 @@ func RegisterAdminRoutes(
 		// 代理管理
 		registerProxyRoutes(admin, h)
 
-		// 卡密管理
-		registerRedeemCodeRoutes(admin, h)
-
-		// 优惠码管理
-		registerPromoCodeRoutes(admin, h)
+		// [LITE:DELETED] registerRedeemCodeRoutes - 卡密管理
+		// [LITE:DELETED] registerPromoCodeRoutes - 优惠码管理
 
 		// 系统设置
 		registerSettingsRoutes(admin, h)
@@ -59,8 +59,7 @@ func RegisterAdminRoutes(
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
 
-		// 用户属性管理
-		registerUserAttributeRoutes(admin, h)
+		// [LITE:DELETED] registerUserAttributeRoutes - 用户属性管理
 	}
 }
 
@@ -78,23 +77,7 @@ func registerDashboardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
-func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	users := admin.Group("/users")
-	{
-		users.GET("", h.Admin.User.List)
-		users.GET("/:id", h.Admin.User.GetByID)
-		users.POST("", h.Admin.User.Create)
-		users.PUT("/:id", h.Admin.User.Update)
-		users.DELETE("/:id", h.Admin.User.Delete)
-		users.POST("/:id/balance", h.Admin.User.UpdateBalance)
-		users.GET("/:id/api-keys", h.Admin.User.GetUserAPIKeys)
-		users.GET("/:id/usage", h.Admin.User.GetUserUsage)
-
-		// User attribute values
-		users.GET("/:id/attributes", h.Admin.UserAttribute.GetUserAttributes)
-		users.PUT("/:id/attributes", h.Admin.UserAttribute.UpdateUserAttributes)
-	}
-}
+// [LITE:DELETED] registerUserManagementRoutes - 用户管理路由已移除
 
 func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	groups := admin.Group("/groups")
@@ -190,39 +173,16 @@ func registerProxyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
-func registerRedeemCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	codes := admin.Group("/redeem-codes")
-	{
-		codes.GET("", h.Admin.Redeem.List)
-		codes.GET("/stats", h.Admin.Redeem.GetStats)
-		codes.GET("/export", h.Admin.Redeem.Export)
-		codes.GET("/:id", h.Admin.Redeem.GetByID)
-		codes.POST("/generate", h.Admin.Redeem.Generate)
-		codes.DELETE("/:id", h.Admin.Redeem.Delete)
-		codes.POST("/batch-delete", h.Admin.Redeem.BatchDelete)
-		codes.POST("/:id/expire", h.Admin.Redeem.Expire)
-	}
-}
-
-func registerPromoCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	promoCodes := admin.Group("/promo-codes")
-	{
-		promoCodes.GET("", h.Admin.Promo.List)
-		promoCodes.GET("/:id", h.Admin.Promo.GetByID)
-		promoCodes.POST("", h.Admin.Promo.Create)
-		promoCodes.PUT("/:id", h.Admin.Promo.Update)
-		promoCodes.DELETE("/:id", h.Admin.Promo.Delete)
-		promoCodes.GET("/:id/usages", h.Admin.Promo.GetUsages)
-	}
-}
+// [LITE:DELETED] registerRedeemCodeRoutes - 卡密管理路由已移除
+// [LITE:DELETED] registerPromoCodeRoutes - 优惠码管理路由已移除
 
 func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	adminSettings := admin.Group("/settings")
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
-		adminSettings.POST("/test-smtp", h.Admin.Setting.TestSMTPConnection)
-		adminSettings.POST("/send-test-email", h.Admin.Setting.SendTestEmail)
+		// [LITE:DELETED] POST /test-smtp
+		// [LITE:DELETED] POST /send-test-email
 		// Admin API Key 管理
 		adminSettings.GET("/admin-api-key", h.Admin.Setting.GetAdminAPIKey)
 		adminSettings.POST("/admin-api-key/regenerate", h.Admin.Setting.RegenerateAdminAPIKey)
@@ -268,16 +228,9 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		usage.GET("/search-users", h.Admin.Usage.SearchUsers)
 		usage.GET("/search-api-keys", h.Admin.Usage.SearchAPIKeys)
 	}
+
+	// [LITE] API Key 用量重置
+	admin.POST("/api-keys/:id/reset-usage", h.Admin.Usage.ResetAPIKeyUsage)
 }
 
-func registerUserAttributeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	attrs := admin.Group("/user-attributes")
-	{
-		attrs.GET("", h.Admin.UserAttribute.ListDefinitions)
-		attrs.POST("", h.Admin.UserAttribute.CreateDefinition)
-		attrs.POST("/batch", h.Admin.UserAttribute.GetBatchUserAttributes)
-		attrs.PUT("/reorder", h.Admin.UserAttribute.ReorderDefinitions)
-		attrs.PUT("/:id", h.Admin.UserAttribute.UpdateDefinition)
-		attrs.DELETE("/:id", h.Admin.UserAttribute.DeleteDefinition)
-	}
-}
+// [LITE:DELETED] registerUserAttributeRoutes - 用户属性管理路由已移除

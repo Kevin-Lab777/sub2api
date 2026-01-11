@@ -8,6 +8,7 @@ import (
 )
 
 // RegisterUserRoutes 注册用户相关路由（需要认证）
+// [LITE] 移除了 Redeem 和 Subscription 路由，保留 API Key 管理
 func RegisterUserRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
@@ -53,20 +54,7 @@ func RegisterUserRoutes(
 			usage.POST("/dashboard/api-keys-usage", h.Usage.DashboardAPIKeysUsage)
 		}
 
-		// 卡密兑换
-		redeem := authenticated.Group("/redeem")
-		{
-			redeem.POST("", h.Redeem.Redeem)
-			redeem.GET("/history", h.Redeem.GetHistory)
-		}
-
-		// 用户订阅
-		subscriptions := authenticated.Group("/subscriptions")
-		{
-			subscriptions.GET("", h.Subscription.List)
-			subscriptions.GET("/active", h.Subscription.GetActive)
-			subscriptions.GET("/progress", h.Subscription.GetProgress)
-			subscriptions.GET("/summary", h.Subscription.GetSummary)
-		}
+		// [LITE:DELETED] 卡密兑换路由
+		// [LITE:DELETED] 用户订阅路由
 	}
 }

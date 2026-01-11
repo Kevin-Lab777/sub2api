@@ -28,10 +28,7 @@ func ProvideUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, b
 	return NewUpdateService(cache, githubClient, buildInfo.Version, buildInfo.BuildType)
 }
 
-// ProvideEmailQueueService creates EmailQueueService with default worker count
-func ProvideEmailQueueService(emailService *EmailService) *EmailQueueService {
-	return NewEmailQueueService(emailService, 3)
-}
+// [LITE:DELETED] ProvideEmailQueueService
 
 // ProvideTokenRefreshService creates and starts TokenRefreshService
 func ProvideTokenRefreshService(
@@ -83,11 +80,10 @@ var ProviderSet = wire.NewSet(
 	NewAuthService,
 	NewUserService,
 	NewAPIKeyService,
+	NewAPIKeyUsageService, // [LITE] API Key 用量管理服务
 	NewGroupService,
 	NewAccountService,
 	NewProxyService,
-	NewRedeemService,
-	NewPromoService,
 	NewUsageService,
 	NewDashboardService,
 	ProvidePricingService,
@@ -109,12 +105,8 @@ var ProviderSet = wire.NewSet(
 	NewAccountUsageService,
 	NewAccountTestService,
 	NewSettingService,
-	NewEmailService,
-	ProvideEmailQueueService,
-	NewTurnstileService,
 	NewSubscriptionService,
 	ProvideConcurrencyService,
-	NewIdentityService,
 	NewCRSSyncService,
 	ProvideUpdateService,
 	ProvideTokenRefreshService,
@@ -122,6 +114,5 @@ var ProviderSet = wire.NewSet(
 	ProvideTimingWheelService,
 	ProvideDeferredService,
 	NewAntigravityQuotaFetcher,
-	NewUserAttributeService,
 	NewUsageCache,
 )

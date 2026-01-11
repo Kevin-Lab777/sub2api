@@ -169,16 +169,8 @@ func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.C
 	}
 
 	// 2. Get schedulable OpenAI accounts
-	var accounts []Account
-	var err error
-	// 简易模式：忽略分组限制，查询所有可用账号
-	if s.cfg.RunMode == config.RunModeSimple {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
-	} else if groupID != nil {
-		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, PlatformOpenAI)
-	} else {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
-	}
+	// [LITE] 忽略分组限制，查询所有可用账号
+	accounts, err := s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
@@ -445,15 +437,8 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 }
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64) ([]Account, error) {
-	var accounts []Account
-	var err error
-	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
-	} else if groupID != nil {
-		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, PlatformOpenAI)
-	} else {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
-	}
+	// [LITE] 忽略分组限制，查询所有可用账号
+	accounts, err := s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
@@ -1285,12 +1270,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	inserted, err := s.usageLogRepo.Create(ctx, usageLog)
-	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		log.Printf("[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
-		s.deferredService.ScheduleLastUsedUpdate(account.ID)
-		return nil
-	}
-
+	// [LITE] 不再有简易模式跳过计费，继续执行 API Key 限额记录
 	shouldBill := inserted || err != nil
 
 	// Deduct based on billing type

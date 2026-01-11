@@ -5,12 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
+	// [LITE:DELETED] userallowedgroup import
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -363,15 +362,11 @@ func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	return r.client.User.Query().Where(dbuser.EmailEQ(email)).Exist(ctx)
 }
 
+// [LITE:DELETED] RemoveGroupFromAllowedGroups function - no longer needed without UserAllowedGroup
+
 func (r *userRepository) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
-	// 仅操作 user_allowed_groups 联接表，legacy users.allowed_groups 列已弃用。
-	affected, err := r.client.UserAllowedGroup.Delete().
-		Where(userallowedgroup.GroupIDEQ(groupID)).
-		Exec(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return int64(affected), nil
+	// [LITE] UserAllowedGroup 功能已移除，直接返回 0
+	return 0, nil
 }
 
 func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, error) {
@@ -387,74 +382,21 @@ func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, erro
 	}
 
 	out := userEntityToService(m)
-	groups, err := r.loadAllowedGroups(ctx, []int64{m.ID})
-	if err != nil {
-		return nil, err
-	}
-	if v, ok := groups[m.ID]; ok {
-		out.AllowedGroups = v
-	}
+	// [LITE:DELETED] AllowedGroups loading
 	return out, nil
 }
+
+// [LITE:DELETED] loadAllowedGroups function - no longer needed
 
 func (r *userRepository) loadAllowedGroups(ctx context.Context, userIDs []int64) (map[int64][]int64, error) {
-	out := make(map[int64][]int64, len(userIDs))
-	if len(userIDs) == 0 {
-		return out, nil
-	}
-
-	rows, err := r.client.UserAllowedGroup.Query().
-		Where(userallowedgroup.UserIDIn(userIDs...)).
-		All(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range rows {
-		out[rows[i].UserID] = append(out[rows[i].UserID], rows[i].GroupID)
-	}
-
-	for userID := range out {
-		sort.Slice(out[userID], func(i, j int) bool { return out[userID][i] < out[userID][j] })
-	}
-
-	return out, nil
+	// [LITE] UserAllowedGroup 功能已移除，返回空 map
+	return make(map[int64][]int64), nil
 }
 
-// syncUserAllowedGroupsWithClient 在 ent client/事务内同步用户允许分组：
-// 仅操作 user_allowed_groups 联接表，legacy users.allowed_groups 列已弃用。
+// [LITE:DELETED] syncUserAllowedGroupsWithClient function - no longer needed
+
 func (r *userRepository) syncUserAllowedGroupsWithClient(ctx context.Context, client *dbent.Client, userID int64, groupIDs []int64) error {
-	if client == nil {
-		return nil
-	}
-
-	// Keep join table as the source of truth for reads.
-	if _, err := client.UserAllowedGroup.Delete().Where(userallowedgroup.UserIDEQ(userID)).Exec(ctx); err != nil {
-		return err
-	}
-
-	unique := make(map[int64]struct{}, len(groupIDs))
-	for _, id := range groupIDs {
-		if id <= 0 {
-			continue
-		}
-		unique[id] = struct{}{}
-	}
-
-	if len(unique) > 0 {
-		creates := make([]*dbent.UserAllowedGroupCreate, 0, len(unique))
-		for groupID := range unique {
-			creates = append(creates, client.UserAllowedGroup.Create().SetUserID(userID).SetGroupID(groupID))
-		}
-		if err := client.UserAllowedGroup.
-			CreateBulk(creates...).
-			OnConflictColumns(userallowedgroup.FieldUserID, userallowedgroup.FieldGroupID).
-			DoNothing().
-			Exec(ctx); err != nil {
-			return err
-		}
-	}
-
+	// [LITE] UserAllowedGroup 功能已移除
 	return nil
 }
 

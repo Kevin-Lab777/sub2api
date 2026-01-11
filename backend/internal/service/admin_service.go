@@ -58,13 +58,7 @@ type AdminService interface {
 	CheckProxyExists(ctx context.Context, host string, port int, username, password string) (bool, error)
 	TestProxy(ctx context.Context, id int64) (*ProxyTestResult, error)
 
-	// Redeem code management
-	ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string) ([]RedeemCode, int64, error)
-	GetRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
-	GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error)
-	DeleteRedeemCode(ctx context.Context, id int64) error
-	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
-	ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
+	// [LITE:DELETED] Redeem code management methods
 }
 
 // CreateUserInput represents input for creating a new user via admin operations.
@@ -210,13 +204,7 @@ type UpdateProxyInput struct {
 	Status   string
 }
 
-type GenerateRedeemCodesInput struct {
-	Count        int
-	Type         string
-	Value        float64
-	GroupID      *int64 // 订阅类型专用：关联的分组ID
-	ValidityDays int    // 订阅类型专用：有效天数
-}
+// [LITE:DELETED] GenerateRedeemCodesInput struct
 
 // ProxyTestResult represents the result of testing a proxy
 type ProxyTestResult struct {
@@ -249,7 +237,7 @@ type adminServiceImpl struct {
 	accountRepo         AccountRepository
 	proxyRepo           ProxyRepository
 	apiKeyRepo          APIKeyRepository
-	redeemCodeRepo      RedeemCodeRepository
+	// [LITE:DELETED] redeemCodeRepo
 	billingCacheService *BillingCacheService
 	proxyProber         ProxyExitInfoProber
 }
@@ -261,7 +249,7 @@ func NewAdminService(
 	accountRepo AccountRepository,
 	proxyRepo ProxyRepository,
 	apiKeyRepo APIKeyRepository,
-	redeemCodeRepo RedeemCodeRepository,
+	// [LITE:DELETED] redeemCodeRepo parameter
 	billingCacheService *BillingCacheService,
 	proxyProber ProxyExitInfoProber,
 ) AdminService {
@@ -271,7 +259,7 @@ func NewAdminService(
 		accountRepo:         accountRepo,
 		proxyRepo:           proxyRepo,
 		apiKeyRepo:          apiKeyRepo,
-		redeemCodeRepo:      redeemCodeRepo,
+		// [LITE:DELETED] redeemCodeRepo assignment
 		billingCacheService: billingCacheService,
 		proxyProber:         proxyProber,
 	}
@@ -322,7 +310,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		return nil, errors.New("cannot disable admin user")
 	}
 
-	oldConcurrency := user.Concurrency
+	// [LITE:DELETED] oldConcurrency tracking (no longer needed without RedeemCode audit)
 
 	if input.Email != "" {
 		user.Email = input.Email
@@ -356,26 +344,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		return nil, err
 	}
 
-	concurrencyDiff := user.Concurrency - oldConcurrency
-	if concurrencyDiff != 0 {
-		code, err := GenerateRedeemCode()
-		if err != nil {
-			log.Printf("failed to generate adjustment redeem code: %v", err)
-			return user, nil
-		}
-		adjustmentRecord := &RedeemCode{
-			Code:   code,
-			Type:   AdjustmentTypeAdminConcurrency,
-			Value:  float64(concurrencyDiff),
-			Status: StatusUsed,
-			UsedBy: &user.ID,
-		}
-		now := time.Now()
-		adjustmentRecord.UsedAt = &now
-		if err := s.redeemCodeRepo.Create(ctx, adjustmentRecord); err != nil {
-			log.Printf("failed to create concurrency adjustment redeem code: %v", err)
-		}
-	}
+	// [LITE:DELETED] concurrency adjustment audit logging via RedeemCode
 
 	return user, nil
 }
@@ -402,7 +371,8 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		return nil, err
 	}
 
-	oldBalance := user.Balance
+	// [LITE:DELETED] oldBalance tracking (no longer needed without RedeemCode audit)
+	currentBalance := user.Balance
 
 	switch operation {
 	case "set":
@@ -414,7 +384,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 	}
 
 	if user.Balance < 0 {
-		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, user.Balance)
+		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", currentBalance, user.Balance)
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
@@ -431,29 +401,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		}()
 	}
 
-	balanceDiff := user.Balance - oldBalance
-	if balanceDiff != 0 {
-		code, err := GenerateRedeemCode()
-		if err != nil {
-			log.Printf("failed to generate adjustment redeem code: %v", err)
-			return user, nil
-		}
-
-		adjustmentRecord := &RedeemCode{
-			Code:   code,
-			Type:   AdjustmentTypeAdminBalance,
-			Value:  balanceDiff,
-			Status: StatusUsed,
-			UsedBy: &user.ID,
-			Notes:  notes,
-		}
-		now := time.Now()
-		adjustmentRecord.UsedAt = &now
-
-		if err := s.redeemCodeRepo.Create(ctx, adjustmentRecord); err != nil {
-			log.Printf("failed to create balance adjustment redeem code: %v", err)
-		}
-	}
+	// [LITE:DELETED] balance adjustment audit logging via RedeemCode
 
 	return user, nil
 }
@@ -1107,89 +1055,7 @@ func (s *adminServiceImpl) CheckProxyExists(ctx context.Context, host string, po
 	return s.proxyRepo.ExistsByHostPortAuth(ctx, host, port, username, password)
 }
 
-// Redeem code management implementations
-func (s *adminServiceImpl) ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string) ([]RedeemCode, int64, error) {
-	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
-	codes, result, err := s.redeemCodeRepo.ListWithFilters(ctx, params, codeType, status, search)
-	if err != nil {
-		return nil, 0, err
-	}
-	return codes, result.Total, nil
-}
-
-func (s *adminServiceImpl) GetRedeemCode(ctx context.Context, id int64) (*RedeemCode, error) {
-	return s.redeemCodeRepo.GetByID(ctx, id)
-}
-
-func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error) {
-	// 如果是订阅类型，验证必须有 GroupID
-	if input.Type == RedeemTypeSubscription {
-		if input.GroupID == nil {
-			return nil, errors.New("group_id is required for subscription type")
-		}
-		// 验证分组存在且为订阅类型
-		group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
-		if err != nil {
-			return nil, fmt.Errorf("group not found: %w", err)
-		}
-		if !group.IsSubscriptionType() {
-			return nil, errors.New("group must be subscription type")
-		}
-	}
-
-	codes := make([]RedeemCode, 0, input.Count)
-	for i := 0; i < input.Count; i++ {
-		codeValue, err := GenerateRedeemCode()
-		if err != nil {
-			return nil, err
-		}
-		code := RedeemCode{
-			Code:   codeValue,
-			Type:   input.Type,
-			Value:  input.Value,
-			Status: StatusUnused,
-		}
-		// 订阅类型专用字段
-		if input.Type == RedeemTypeSubscription {
-			code.GroupID = input.GroupID
-			code.ValidityDays = input.ValidityDays
-			if code.ValidityDays <= 0 {
-				code.ValidityDays = 30 // 默认30天
-			}
-		}
-		if err := s.redeemCodeRepo.Create(ctx, &code); err != nil {
-			return nil, err
-		}
-		codes = append(codes, code)
-	}
-	return codes, nil
-}
-
-func (s *adminServiceImpl) DeleteRedeemCode(ctx context.Context, id int64) error {
-	return s.redeemCodeRepo.Delete(ctx, id)
-}
-
-func (s *adminServiceImpl) BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error) {
-	var deleted int64
-	for _, id := range ids {
-		if err := s.redeemCodeRepo.Delete(ctx, id); err == nil {
-			deleted++
-		}
-	}
-	return deleted, nil
-}
-
-func (s *adminServiceImpl) ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error) {
-	code, err := s.redeemCodeRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	code.Status = StatusExpired
-	if err := s.redeemCodeRepo.Update(ctx, code); err != nil {
-		return nil, err
-	}
-	return code, nil
-}
+// [LITE:DELETED] Redeem code management implementations (ListRedeemCodes, GetRedeemCode, GenerateRedeemCodes, DeleteRedeemCode, BatchDeleteRedeemCodes, ExpireRedeemCode)
 
 func (s *adminServiceImpl) TestProxy(ctx context.Context, id int64) (*ProxyTestResult, error) {
 	proxy, err := s.proxyRepo.GetByID(ctx, id)

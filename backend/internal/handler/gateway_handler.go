@@ -518,6 +518,25 @@ func (h *GatewayHandler) Usage(c *gin.Context) {
 		return
 	}
 
+	// [LITE] 限额模式：API Key 或 Group 有限额配置时返回限额信息
+	hasAPIKeyLimits := apiKey.HasAnyLimit()
+	hasGroupLimits := apiKey.Group != nil && (apiKey.Group.HasDailyLimit() || apiKey.Group.HasWeeklyLimit() || apiKey.Group.HasMonthlyLimit())
+
+	if hasAPIKeyLimits || hasGroupLimits {
+		remaining := h.calculateAPIKeyRemaining(apiKey)
+		planName := "限额模式"
+		if apiKey.Group != nil {
+			planName = apiKey.Group.Name
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"isValid":   true,
+			"planName":  planName,
+			"remaining": remaining,
+			"unit":      "USD",
+		})
+		return
+	}
+
 	// 余额模式：返回钱包余额
 	latestUser, err := h.userService.GetByID(c.Request.Context(), subject.UserID)
 	if err != nil {
@@ -565,6 +584,98 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 			return 0
 		}
 		remainingValues = append(remainingValues, remaining)
+	}
+
+	// 如果没有配置任何限额，返回-1表示无限制
+	if len(remainingValues) == 0 {
+		return -1
+	}
+
+	// 返回最小值
+	min := remainingValues[0]
+	for _, v := range remainingValues[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+// calculateAPIKeyRemaining [LITE] 计算 API Key 剩余可用额度
+// 逻辑：
+// 1. 优先使用 API Key 自身限额，否则使用 Group 限额
+// 2. 如果日/周/月/总任一限额达到100%，返回0
+// 3. 否则返回所有已配置周期中剩余额度的最小值
+func (h *GatewayHandler) calculateAPIKeyRemaining(apiKey *service.APIKey) float64 {
+	var remainingValues []float64
+
+	// 优先使用 API Key 自身限额
+	if apiKey.HasAnyLimit() {
+		// 检查日限额
+		if apiKey.HasDailyLimit() {
+			remaining := *apiKey.DailyLimitUSD - apiKey.DailyUsageUSD
+			if remaining <= 0 {
+				return 0
+			}
+			remainingValues = append(remainingValues, remaining)
+		}
+
+		// 检查周限额
+		if apiKey.HasWeeklyLimit() {
+			remaining := *apiKey.WeeklyLimitUSD - apiKey.WeeklyUsageUSD
+			if remaining <= 0 {
+				return 0
+			}
+			remainingValues = append(remainingValues, remaining)
+		}
+
+		// 检查月限额
+		if apiKey.HasMonthlyLimit() {
+			remaining := *apiKey.MonthlyLimitUSD - apiKey.MonthlyUsageUSD
+			if remaining <= 0 {
+				return 0
+			}
+			remainingValues = append(remainingValues, remaining)
+		}
+
+		// 检查总限额
+		if apiKey.HasTotalLimit() {
+			remaining := *apiKey.TotalLimitUSD - apiKey.TotalUsageUSD
+			if remaining <= 0 {
+				return 0
+			}
+			remainingValues = append(remainingValues, remaining)
+		}
+	} else if apiKey.Group != nil {
+		// 使用 Group 限额
+		group := apiKey.Group
+
+		// 检查日限额
+		if group.HasDailyLimit() {
+			remaining := *group.DailyLimitUSD - apiKey.DailyUsageUSD
+			if remaining <= 0 {
+				return 0
+			}
+			remainingValues = append(remainingValues, remaining)
+		}
+
+		// 检查周限额
+		if group.HasWeeklyLimit() {
+			remaining := *group.WeeklyLimitUSD - apiKey.WeeklyUsageUSD
+			if remaining <= 0 {
+				return 0
+			}
+			remainingValues = append(remainingValues, remaining)
+		}
+
+		// 检查月限额
+		if group.HasMonthlyLimit() {
+			remaining := *group.MonthlyLimitUSD - apiKey.MonthlyUsageUSD
+			if remaining <= 0 {
+				return 0
+			}
+			remainingValues = append(remainingValues, remaining)
+		}
 	}
 
 	// 如果没有配置任何限额，返回-1表示无限制

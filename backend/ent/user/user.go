@@ -39,22 +39,12 @@ const (
 	FieldNotes = "notes"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
-	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
-	EdgeRedeemCodes = "redeem_codes"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
 	EdgeSubscriptions = "subscriptions"
 	// EdgeAssignedSubscriptions holds the string denoting the assigned_subscriptions edge name in mutations.
 	EdgeAssignedSubscriptions = "assigned_subscriptions"
-	// EdgeAllowedGroups holds the string denoting the allowed_groups edge name in mutations.
-	EdgeAllowedGroups = "allowed_groups"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
-	// EdgeAttributeValues holds the string denoting the attribute_values edge name in mutations.
-	EdgeAttributeValues = "attribute_values"
-	// EdgePromoCodeUsages holds the string denoting the promo_code_usages edge name in mutations.
-	EdgePromoCodeUsages = "promo_code_usages"
-	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
-	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// APIKeysTable is the table that holds the api_keys relation/edge.
@@ -64,13 +54,6 @@ const (
 	APIKeysInverseTable = "api_keys"
 	// APIKeysColumn is the table column denoting the api_keys relation/edge.
 	APIKeysColumn = "user_id"
-	// RedeemCodesTable is the table that holds the redeem_codes relation/edge.
-	RedeemCodesTable = "redeem_codes"
-	// RedeemCodesInverseTable is the table name for the RedeemCode entity.
-	// It exists in this package in order to avoid circular dependency with the "redeemcode" package.
-	RedeemCodesInverseTable = "redeem_codes"
-	// RedeemCodesColumn is the table column denoting the redeem_codes relation/edge.
-	RedeemCodesColumn = "used_by"
 	// SubscriptionsTable is the table that holds the subscriptions relation/edge.
 	SubscriptionsTable = "user_subscriptions"
 	// SubscriptionsInverseTable is the table name for the UserSubscription entity.
@@ -85,11 +68,6 @@ const (
 	AssignedSubscriptionsInverseTable = "user_subscriptions"
 	// AssignedSubscriptionsColumn is the table column denoting the assigned_subscriptions relation/edge.
 	AssignedSubscriptionsColumn = "assigned_by"
-	// AllowedGroupsTable is the table that holds the allowed_groups relation/edge. The primary key declared below.
-	AllowedGroupsTable = "user_allowed_groups"
-	// AllowedGroupsInverseTable is the table name for the Group entity.
-	// It exists in this package in order to avoid circular dependency with the "group" package.
-	AllowedGroupsInverseTable = "groups"
 	// UsageLogsTable is the table that holds the usage_logs relation/edge.
 	UsageLogsTable = "usage_logs"
 	// UsageLogsInverseTable is the table name for the UsageLog entity.
@@ -97,27 +75,6 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "user_id"
-	// AttributeValuesTable is the table that holds the attribute_values relation/edge.
-	AttributeValuesTable = "user_attribute_values"
-	// AttributeValuesInverseTable is the table name for the UserAttributeValue entity.
-	// It exists in this package in order to avoid circular dependency with the "userattributevalue" package.
-	AttributeValuesInverseTable = "user_attribute_values"
-	// AttributeValuesColumn is the table column denoting the attribute_values relation/edge.
-	AttributeValuesColumn = "user_id"
-	// PromoCodeUsagesTable is the table that holds the promo_code_usages relation/edge.
-	PromoCodeUsagesTable = "promo_code_usages"
-	// PromoCodeUsagesInverseTable is the table name for the PromoCodeUsage entity.
-	// It exists in this package in order to avoid circular dependency with the "promocodeusage" package.
-	PromoCodeUsagesInverseTable = "promo_code_usages"
-	// PromoCodeUsagesColumn is the table column denoting the promo_code_usages relation/edge.
-	PromoCodeUsagesColumn = "user_id"
-	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
-	UserAllowedGroupsTable = "user_allowed_groups"
-	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
-	// It exists in this package in order to avoid circular dependency with the "userallowedgroup" package.
-	UserAllowedGroupsInverseTable = "user_allowed_groups"
-	// UserAllowedGroupsColumn is the table column denoting the user_allowed_groups relation/edge.
-	UserAllowedGroupsColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -135,12 +92,6 @@ var Columns = []string{
 	FieldUsername,
 	FieldNotes,
 }
-
-var (
-	// AllowedGroupsPrimaryKey and AllowedGroupsColumn2 are the table columns denoting the
-	// primary key for the allowed_groups relation (M2M).
-	AllowedGroupsPrimaryKey = []string{"user_id", "group_id"}
-)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -267,20 +218,6 @@ func ByAPIKeys(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByRedeemCodesCount orders the results by redeem_codes count.
-func ByRedeemCodesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newRedeemCodesStep(), opts...)
-	}
-}
-
-// ByRedeemCodes orders the results by redeem_codes terms.
-func ByRedeemCodes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newRedeemCodesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // BySubscriptionsCount orders the results by subscriptions count.
 func BySubscriptionsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -309,20 +246,6 @@ func ByAssignedSubscriptions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOp
 	}
 }
 
-// ByAllowedGroupsCount orders the results by allowed_groups count.
-func ByAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newAllowedGroupsStep(), opts...)
-	}
-}
-
-// ByAllowedGroups orders the results by allowed_groups terms.
-func ByAllowedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newAllowedGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByUsageLogsCount orders the results by usage_logs count.
 func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -336,60 +259,11 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-
-// ByAttributeValuesCount orders the results by attribute_values count.
-func ByAttributeValuesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newAttributeValuesStep(), opts...)
-	}
-}
-
-// ByAttributeValues orders the results by attribute_values terms.
-func ByAttributeValues(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newAttributeValuesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByPromoCodeUsagesCount orders the results by promo_code_usages count.
-func ByPromoCodeUsagesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newPromoCodeUsagesStep(), opts...)
-	}
-}
-
-// ByPromoCodeUsages orders the results by promo_code_usages terms.
-func ByPromoCodeUsages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newPromoCodeUsagesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
-func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newUserAllowedGroupsStep(), opts...)
-	}
-}
-
-// ByUserAllowedGroups orders the results by user_allowed_groups terms.
-func ByUserAllowedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newUserAllowedGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
 func newAPIKeysStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(APIKeysInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, APIKeysTable, APIKeysColumn),
-	)
-}
-func newRedeemCodesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(RedeemCodesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, RedeemCodesTable, RedeemCodesColumn),
 	)
 }
 func newSubscriptionsStep() *sqlgraph.Step {
@@ -406,38 +280,10 @@ func newAssignedSubscriptionsStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, AssignedSubscriptionsTable, AssignedSubscriptionsColumn),
 	)
 }
-func newAllowedGroupsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(AllowedGroupsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, false, AllowedGroupsTable, AllowedGroupsPrimaryKey...),
-	)
-}
 func newUsageLogsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
-	)
-}
-func newAttributeValuesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(AttributeValuesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, AttributeValuesTable, AttributeValuesColumn),
-	)
-}
-func newPromoCodeUsagesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(PromoCodeUsagesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, PromoCodeUsagesTable, PromoCodeUsagesColumn),
-	)
-}
-func newUserAllowedGroupsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(UserAllowedGroupsInverseTable, UserAllowedGroupsColumn),
-		sqlgraph.Edge(sqlgraph.O2M, true, UserAllowedGroupsTable, UserAllowedGroupsColumn),
 	)
 }

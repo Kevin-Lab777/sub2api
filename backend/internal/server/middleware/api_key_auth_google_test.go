@@ -175,10 +175,10 @@ func TestApiKeyAuthWithSubscriptionGoogleSetsGroupContext(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		&config.Config{RunMode: config.RunModeSimple},
+		&config.Config{},
 	)
 
-	cfg := &config.Config{RunMode: config.RunModeSimple}
+	cfg := &config.Config{}
 	r := gin.New()
 	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) {
@@ -215,7 +215,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_QueryKeyAllowedOnV1Beta(t *testing.T) 
 			}, nil
 		},
 	})
-	cfg := &config.Config{RunMode: config.RunModeSimple}
+	cfg := &config.Config{}
 	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 

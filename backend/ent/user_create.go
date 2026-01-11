@@ -12,12 +12,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
-	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
-	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -182,21 +178,6 @@ func (_c *UserCreate) AddAPIKeys(v ...*APIKey) *UserCreate {
 	return _c.AddAPIKeyIDs(ids...)
 }
 
-// AddRedeemCodeIDs adds the "redeem_codes" edge to the RedeemCode entity by IDs.
-func (_c *UserCreate) AddRedeemCodeIDs(ids ...int64) *UserCreate {
-	_c.mutation.AddRedeemCodeIDs(ids...)
-	return _c
-}
-
-// AddRedeemCodes adds the "redeem_codes" edges to the RedeemCode entity.
-func (_c *UserCreate) AddRedeemCodes(v ...*RedeemCode) *UserCreate {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddRedeemCodeIDs(ids...)
-}
-
 // AddSubscriptionIDs adds the "subscriptions" edge to the UserSubscription entity by IDs.
 func (_c *UserCreate) AddSubscriptionIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddSubscriptionIDs(ids...)
@@ -227,21 +208,6 @@ func (_c *UserCreate) AddAssignedSubscriptions(v ...*UserSubscription) *UserCrea
 	return _c.AddAssignedSubscriptionIDs(ids...)
 }
 
-// AddAllowedGroupIDs adds the "allowed_groups" edge to the Group entity by IDs.
-func (_c *UserCreate) AddAllowedGroupIDs(ids ...int64) *UserCreate {
-	_c.mutation.AddAllowedGroupIDs(ids...)
-	return _c
-}
-
-// AddAllowedGroups adds the "allowed_groups" edges to the Group entity.
-func (_c *UserCreate) AddAllowedGroups(v ...*Group) *UserCreate {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddAllowedGroupIDs(ids...)
-}
-
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
 func (_c *UserCreate) AddUsageLogIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddUsageLogIDs(ids...)
@@ -255,36 +221,6 @@ func (_c *UserCreate) AddUsageLogs(v ...*UsageLog) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddUsageLogIDs(ids...)
-}
-
-// AddAttributeValueIDs adds the "attribute_values" edge to the UserAttributeValue entity by IDs.
-func (_c *UserCreate) AddAttributeValueIDs(ids ...int64) *UserCreate {
-	_c.mutation.AddAttributeValueIDs(ids...)
-	return _c
-}
-
-// AddAttributeValues adds the "attribute_values" edges to the UserAttributeValue entity.
-func (_c *UserCreate) AddAttributeValues(v ...*UserAttributeValue) *UserCreate {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddAttributeValueIDs(ids...)
-}
-
-// AddPromoCodeUsageIDs adds the "promo_code_usages" edge to the PromoCodeUsage entity by IDs.
-func (_c *UserCreate) AddPromoCodeUsageIDs(ids ...int64) *UserCreate {
-	_c.mutation.AddPromoCodeUsageIDs(ids...)
-	return _c
-}
-
-// AddPromoCodeUsages adds the "promo_code_usages" edges to the PromoCodeUsage entity.
-func (_c *UserCreate) AddPromoCodeUsages(v ...*PromoCodeUsage) *UserCreate {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddPromoCodeUsageIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -509,22 +445,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := _c.mutation.RedeemCodesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.RedeemCodesTable,
-			Columns: []string{user.RedeemCodesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
 	if nodes := _c.mutation.SubscriptionsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -557,26 +477,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := _c.mutation.AllowedGroupsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   user.AllowedGroupsTable,
-			Columns: user.AllowedGroupsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		createE := &UserAllowedGroupCreate{config: _c.config, mutation: newUserAllowedGroupMutation(_c.config, OpCreate)}
-		createE.defaults()
-		_, specE := createE.createSpec()
-		edge.Target.Fields = specE.Fields
-		_spec.Edges = append(_spec.Edges, edge)
-	}
 	if nodes := _c.mutation.UsageLogsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -586,38 +486,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.AttributeValuesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.AttributeValuesTable,
-			Columns: []string{user.AttributeValuesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(userattributevalue.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.PromoCodeUsagesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.PromoCodeUsagesTable,
-			Columns: []string{user.PromoCodeUsagesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(promocodeusage.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

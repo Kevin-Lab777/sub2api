@@ -1,6 +1,6 @@
 /**
  * Vue Router configuration for Sub2API frontend
- * Defines all application routes with lazy loading and navigation guards
+ * [LITE] Simplified - Admin only, no user routes
  */
 
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
@@ -40,118 +40,24 @@ const routes: RouteRecordRaw[] = [
       title: 'Login'
     }
   },
-  {
-    path: '/register',
-    name: 'Register',
-    component: () => import('@/views/auth/RegisterView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Register'
-    }
-  },
-  {
-    path: '/email-verify',
-    name: 'EmailVerify',
-    component: () => import('@/views/auth/EmailVerifyView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Verify Email'
-    }
-  },
-  {
-    path: '/auth/callback',
-    name: 'OAuthCallback',
-    component: () => import('@/views/auth/OAuthCallbackView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'OAuth Callback'
-    }
-  },
-  {
-    path: '/auth/linuxdo/callback',
-    name: 'LinuxDoOAuthCallback',
-    component: () => import('@/views/auth/LinuxDoCallbackView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'LinuxDo OAuth Callback'
-    }
-  },
 
-  // ==================== User Routes ====================
+  // ==================== Root Redirect ====================
   {
     path: '/',
-    redirect: '/home'
+    redirect: '/admin/dashboard'
   },
-  {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: () => import('@/views/user/DashboardView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: 'Dashboard',
-      titleKey: 'dashboard.title',
-      descriptionKey: 'dashboard.welcomeMessage'
-    }
-  },
+
+  // ==================== API Keys (Admin) ====================
   {
     path: '/keys',
     name: 'Keys',
     component: () => import('@/views/user/KeysView.vue'),
     meta: {
       requiresAuth: true,
-      requiresAdmin: false,
+      requiresAdmin: true,
       title: 'API Keys',
       titleKey: 'keys.title',
       descriptionKey: 'keys.description'
-    }
-  },
-  {
-    path: '/usage',
-    name: 'Usage',
-    component: () => import('@/views/user/UsageView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: 'Usage Records',
-      titleKey: 'usage.title',
-      descriptionKey: 'usage.description'
-    }
-  },
-  {
-    path: '/redeem',
-    name: 'Redeem',
-    component: () => import('@/views/user/RedeemView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: 'Redeem Code',
-      titleKey: 'redeem.title',
-      descriptionKey: 'redeem.description'
-    }
-  },
-  {
-    path: '/profile',
-    name: 'Profile',
-    component: () => import('@/views/user/ProfileView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: 'Profile',
-      titleKey: 'profile.title',
-      descriptionKey: 'profile.description'
-    }
-  },
-  {
-    path: '/subscriptions',
-    name: 'Subscriptions',
-    component: () => import('@/views/user/SubscriptionsView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: 'My Subscriptions',
-      titleKey: 'userSubscriptions.title',
-      descriptionKey: 'userSubscriptions.description'
     }
   },
 
@@ -170,18 +76,6 @@ const routes: RouteRecordRaw[] = [
       title: 'Admin Dashboard',
       titleKey: 'admin.dashboard.title',
       descriptionKey: 'admin.dashboard.description'
-    }
-  },
-  {
-    path: '/admin/users',
-    name: 'AdminUsers',
-    component: () => import('@/views/admin/UsersView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'User Management',
-      titleKey: 'admin.users.title',
-      descriptionKey: 'admin.users.description'
     }
   },
   {
@@ -230,30 +124,6 @@ const routes: RouteRecordRaw[] = [
       title: 'Proxy Management',
       titleKey: 'admin.proxies.title',
       descriptionKey: 'admin.proxies.description'
-    }
-  },
-  {
-    path: '/admin/redeem',
-    name: 'AdminRedeem',
-    component: () => import('@/views/admin/RedeemView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Redeem Code Management',
-      titleKey: 'admin.redeem.title',
-      descriptionKey: 'admin.redeem.description'
-    }
-  },
-  {
-    path: '/admin/promo-codes',
-    name: 'AdminPromoCodes',
-    component: () => import('@/views/admin/PromoCodesView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Promo Code Management',
-      titleKey: 'admin.promo.title',
-      descriptionKey: 'admin.promo.description'
     }
   },
   {
@@ -335,10 +205,9 @@ router.beforeEach((to, _from, next) => {
 
   // If route doesn't require auth, allow access
   if (!requiresAuth) {
-    // If already authenticated and trying to access login/register, redirect to appropriate dashboard
-    if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-      // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    // If already authenticated and trying to access login, redirect to admin dashboard
+    if (authStore.isAuthenticated && to.path === '/login') {
+      next('/admin/dashboard')
       return
     }
     next()
@@ -357,26 +226,9 @@ router.beforeEach((to, _from, next) => {
 
   // Check admin requirement
   if (requiresAdmin && !authStore.isAdmin) {
-    // User is authenticated but not admin, redirect to user dashboard
-    next('/dashboard')
+    // User is authenticated but not admin, redirect to login
+    next('/login')
     return
-  }
-
-  // 简易模式下限制访问某些页面
-  if (authStore.isSimpleMode) {
-    const restrictedPaths = [
-      '/admin/groups',
-      '/admin/subscriptions',
-      '/admin/redeem',
-      '/subscriptions',
-      '/redeem'
-    ]
-
-    if (restrictedPaths.some((path) => to.path.startsWith(path))) {
-      // 简易模式下访问受限页面,重定向到仪表板
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
-      return
-    }
   }
 
   // All checks passed, allow navigation

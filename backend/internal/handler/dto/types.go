@@ -31,6 +31,18 @@ type APIKey struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 
+	// [LITE] 限额字段
+	DailyLimitUSD   *float64 `json:"daily_limit_usd,omitempty"`
+	WeeklyLimitUSD  *float64 `json:"weekly_limit_usd,omitempty"`
+	MonthlyLimitUSD *float64 `json:"monthly_limit_usd,omitempty"`
+	TotalLimitUSD   *float64 `json:"total_limit_usd,omitempty"`
+
+	// [LITE] 用量追踪字段
+	DailyUsageUSD   float64 `json:"daily_usage_usd"`
+	WeeklyUsageUSD  float64 `json:"weekly_usage_usd"`
+	MonthlyUsageUSD float64 `json:"monthly_usage_usd"`
+	TotalUsageUSD   float64 `json:"total_usage_usd"`
+
 	User  *User  `json:"user,omitempty"`
 	Group *Group `json:"group,omitempty"`
 }

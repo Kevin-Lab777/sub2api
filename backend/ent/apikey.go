@@ -40,6 +40,28 @@ type APIKey struct {
 	IPWhitelist []string `json:"ip_whitelist,omitempty"`
 	// Blocked IPs/CIDRs
 	IPBlacklist []string `json:"ip_blacklist,omitempty"`
+	// 日限额 (USD)，nil = 使用分组限额
+	DailyLimitUsd *float64 `json:"daily_limit_usd,omitempty"`
+	// 周限额 (USD)，nil = 使用分组限额
+	WeeklyLimitUsd *float64 `json:"weekly_limit_usd,omitempty"`
+	// 月限额 (USD)，nil = 使用分组限额
+	MonthlyLimitUsd *float64 `json:"monthly_limit_usd,omitempty"`
+	// 总限额 (USD)，nil = 无限制
+	TotalLimitUsd *float64 `json:"total_limit_usd,omitempty"`
+	// 今日已用额度
+	DailyUsageUsd float64 `json:"daily_usage_usd,omitempty"`
+	// 本周已用额度
+	WeeklyUsageUsd float64 `json:"weekly_usage_usd,omitempty"`
+	// 本月已用额度
+	MonthlyUsageUsd float64 `json:"monthly_usage_usd,omitempty"`
+	// 累计已用额度
+	TotalUsageUsd float64 `json:"total_usage_usd,omitempty"`
+	// 日用量重置时间
+	UsageResetDaily *time.Time `json:"usage_reset_daily,omitempty"`
+	// 周用量重置时间
+	UsageResetWeekly *time.Time `json:"usage_reset_weekly,omitempty"`
+	// 月用量重置时间
+	UsageResetMonthly *time.Time `json:"usage_reset_monthly,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the APIKeyQuery when eager-loading is set.
 	Edges        APIKeyEdges `json:"edges"`
@@ -97,11 +119,13 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case apikey.FieldIPWhitelist, apikey.FieldIPBlacklist:
 			values[i] = new([]byte)
+		case apikey.FieldDailyLimitUsd, apikey.FieldWeeklyLimitUsd, apikey.FieldMonthlyLimitUsd, apikey.FieldTotalLimitUsd, apikey.FieldDailyUsageUsd, apikey.FieldWeeklyUsageUsd, apikey.FieldMonthlyUsageUsd, apikey.FieldTotalUsageUsd:
+			values[i] = new(sql.NullFloat64)
 		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID:
 			values[i] = new(sql.NullInt64)
 		case apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
 			values[i] = new(sql.NullString)
-		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt:
+		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldUsageResetDaily, apikey.FieldUsageResetWeekly, apikey.FieldUsageResetMonthly:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -190,6 +214,79 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field ip_blacklist: %w", err)
 				}
 			}
+		case apikey.FieldDailyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field daily_limit_usd", values[i])
+			} else if value.Valid {
+				_m.DailyLimitUsd = new(float64)
+				*_m.DailyLimitUsd = value.Float64
+			}
+		case apikey.FieldWeeklyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field weekly_limit_usd", values[i])
+			} else if value.Valid {
+				_m.WeeklyLimitUsd = new(float64)
+				*_m.WeeklyLimitUsd = value.Float64
+			}
+		case apikey.FieldMonthlyLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field monthly_limit_usd", values[i])
+			} else if value.Valid {
+				_m.MonthlyLimitUsd = new(float64)
+				*_m.MonthlyLimitUsd = value.Float64
+			}
+		case apikey.FieldTotalLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field total_limit_usd", values[i])
+			} else if value.Valid {
+				_m.TotalLimitUsd = new(float64)
+				*_m.TotalLimitUsd = value.Float64
+			}
+		case apikey.FieldDailyUsageUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field daily_usage_usd", values[i])
+			} else if value.Valid {
+				_m.DailyUsageUsd = value.Float64
+			}
+		case apikey.FieldWeeklyUsageUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field weekly_usage_usd", values[i])
+			} else if value.Valid {
+				_m.WeeklyUsageUsd = value.Float64
+			}
+		case apikey.FieldMonthlyUsageUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field monthly_usage_usd", values[i])
+			} else if value.Valid {
+				_m.MonthlyUsageUsd = value.Float64
+			}
+		case apikey.FieldTotalUsageUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field total_usage_usd", values[i])
+			} else if value.Valid {
+				_m.TotalUsageUsd = value.Float64
+			}
+		case apikey.FieldUsageResetDaily:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field usage_reset_daily", values[i])
+			} else if value.Valid {
+				_m.UsageResetDaily = new(time.Time)
+				*_m.UsageResetDaily = value.Time
+			}
+		case apikey.FieldUsageResetWeekly:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field usage_reset_weekly", values[i])
+			} else if value.Valid {
+				_m.UsageResetWeekly = new(time.Time)
+				*_m.UsageResetWeekly = value.Time
+			}
+		case apikey.FieldUsageResetMonthly:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field usage_reset_monthly", values[i])
+			} else if value.Valid {
+				_m.UsageResetMonthly = new(time.Time)
+				*_m.UsageResetMonthly = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -274,6 +371,53 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("ip_blacklist=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IPBlacklist))
+	builder.WriteString(", ")
+	if v := _m.DailyLimitUsd; v != nil {
+		builder.WriteString("daily_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.WeeklyLimitUsd; v != nil {
+		builder.WriteString("weekly_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.MonthlyLimitUsd; v != nil {
+		builder.WriteString("monthly_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.TotalLimitUsd; v != nil {
+		builder.WriteString("total_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("daily_usage_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DailyUsageUsd))
+	builder.WriteString(", ")
+	builder.WriteString("weekly_usage_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.WeeklyUsageUsd))
+	builder.WriteString(", ")
+	builder.WriteString("monthly_usage_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.MonthlyUsageUsd))
+	builder.WriteString(", ")
+	builder.WriteString("total_usage_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TotalUsageUsd))
+	builder.WriteString(", ")
+	if v := _m.UsageResetDaily; v != nil {
+		builder.WriteString("usage_reset_daily=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.UsageResetWeekly; v != nil {
+		builder.WriteString("usage_reset_weekly=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.UsageResetMonthly; v != nil {
+		builder.WriteString("usage_reset_monthly=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

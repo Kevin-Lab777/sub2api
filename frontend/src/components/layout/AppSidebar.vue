@@ -53,51 +53,6 @@
             </transition>
           </router-link>
         </div>
-
-        <!-- Personal Section for Admin (hidden in simple mode) -->
-        <div v-if="!authStore.isSimpleMode" class="sidebar-section">
-          <div v-if="!sidebarCollapsed" class="sidebar-section-title">
-            {{ t('nav.myAccount') }}
-          </div>
-          <div v-else class="mx-3 my-3 h-px bg-gray-200 dark:bg-dark-700"></div>
-
-          <router-link
-            v-for="item in personalNavItems"
-            :key="item.path"
-            :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path) }"
-            :title="sidebarCollapsed ? item.label : undefined"
-            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
-          >
-            <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <transition name="fade">
-              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
-            </transition>
-          </router-link>
-        </div>
-      </template>
-
-      <!-- Regular User View -->
-      <template v-else>
-        <div class="sidebar-section">
-          <router-link
-            v-for="item in userNavItems"
-            :key="item.path"
-            :to="item.path"
-            class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path) }"
-            :title="sidebarCollapsed ? item.label : undefined"
-            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
-          >
-            <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <transition name="fade">
-              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
-            </transition>
-          </router-link>
-        </div>
       </template>
     </nav>
 
@@ -183,21 +138,6 @@ const DashboardIcon = {
     )
 }
 
-const KeyIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z'
-        })
-      ]
-    )
-}
-
 const ChartIcon = {
   render: () =>
     h(
@@ -213,51 +153,6 @@ const ChartIcon = {
     )
 }
 
-const GiftIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z'
-        })
-      ]
-    )
-}
-
-const UserIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z'
-        })
-      ]
-    )
-}
-
-const UsersIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z'
-        })
-      ]
-    )
-}
-
 const FolderIcon = {
   render: () =>
     h(
@@ -268,6 +163,21 @@ const FolderIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z'
+        })
+      ]
+    )
+}
+
+const KeyIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z'
         })
       ]
     )
@@ -313,21 +223,6 @@ const ServerIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z'
-        })
-      ]
-    )
-}
-
-const TicketIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z'
         })
       ]
     )
@@ -413,55 +308,19 @@ const ChevronDoubleRightIcon = {
     )
 }
 
-// User navigation items (for regular users)
-const userNavItems = computed(() => {
-  const items = [
-    { path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
-    { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
-    { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
-    { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
-    { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
-    { path: '/profile', label: t('nav.profile'), icon: UserIcon }
-  ]
-  return authStore.isSimpleMode ? items.filter(item => !item.hideInSimpleMode) : items
-})
-
-// Personal navigation items (for admin's "My Account" section, without Dashboard)
-const personalNavItems = computed(() => {
-  const items = [
-    { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
-    { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
-    { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
-    { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
-    { path: '/profile', label: t('nav.profile'), icon: UserIcon }
-  ]
-  return authStore.isSimpleMode ? items.filter(item => !item.hideInSimpleMode) : items
-})
-
-// Admin navigation items
+// [LITE] Admin navigation items - no user management, redeem, promo
 const adminNavItems = computed(() => {
-  const baseItems = [
+  const items = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
-    { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
-    { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
-    { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
+    { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
+    { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
+    { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
-    { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
-    { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
+    { path: '/admin/settings', label: t('nav.settings'), icon: CogIcon }
   ]
-
-  // 简单模式下，在系统设置前插入 API密钥
-  if (authStore.isSimpleMode) {
-    const filtered = baseItems.filter(item => !item.hideInSimpleMode)
-    filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
-    filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
-    return filtered
-  }
-
-  baseItems.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
-  return baseItems
+  return items
 })
 
 function toggleSidebar() {

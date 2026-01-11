@@ -5,9 +5,9 @@ import (
 )
 
 // AdminHandlers contains all admin-related HTTP handlers
+// [LITE] 移除了: User, Redeem, Promo, UserAttribute
 type AdminHandlers struct {
 	Dashboard        *admin.DashboardHandler
-	User             *admin.UserHandler
 	Group            *admin.GroupHandler
 	Account          *admin.AccountHandler
 	OAuth            *admin.OAuthHandler
@@ -15,27 +15,24 @@ type AdminHandlers struct {
 	GeminiOAuth      *admin.GeminiOAuthHandler
 	AntigravityOAuth *admin.AntigravityOAuthHandler
 	Proxy            *admin.ProxyHandler
-	Redeem           *admin.RedeemHandler
-	Promo            *admin.PromoHandler
 	Setting          *admin.SettingHandler
 	System           *admin.SystemHandler
 	Subscription     *admin.SubscriptionHandler
 	Usage            *admin.UsageHandler
-	UserAttribute    *admin.UserAttributeHandler
 }
 
 // Handlers contains all HTTP handlers
+// [LITE] 保留 User, APIKey, Usage 给 Admin 使用
 type Handlers struct {
 	Auth          *AuthHandler
 	User          *UserHandler
 	APIKey        *APIKeyHandler
 	Usage         *UsageHandler
-	Redeem        *RedeemHandler
-	Subscription  *SubscriptionHandler
 	Admin         *AdminHandlers
 	Gateway       *GatewayHandler
 	OpenAIGateway *OpenAIGatewayHandler
 	Setting       *SettingHandler
+	Public        *PublicHandler
 }
 
 // BuildInfo contains build-time information

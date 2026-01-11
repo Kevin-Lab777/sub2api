@@ -15,18 +15,16 @@ import (
 )
 
 // SettingHandler 系统设置处理器
+// [LITE] 移除了 emailService 和 turnstileService
 type SettingHandler struct {
-	settingService   *service.SettingService
-	emailService     *service.EmailService
-	turnstileService *service.TurnstileService
+	settingService *service.SettingService
 }
 
 // NewSettingHandler 创建系统设置处理器
-func NewSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService) *SettingHandler {
+// [LITE] 移除了 EmailService 和 TurnstileService 参数
+func NewSettingHandler(settingService *service.SettingService) *SettingHandler {
 	return &SettingHandler{
-		settingService:   settingService,
-		emailService:     emailService,
-		turnstileService: turnstileService,
+		settingService: settingService,
 	}
 }
 
@@ -151,6 +149,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	// Turnstile 参数验证
+	// [LITE] 移除 Turnstile 验证，Lite 模式不需要验证码
 	if req.TurnstileEnabled {
 		// 检查必填字段
 		if req.TurnstileSiteKey == "" {
@@ -165,16 +164,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			req.TurnstileSecretKey = previousSettings.TurnstileSecretKey
 		}
-
-		// 当 site_key 或 secret_key 任一变化时验证（避免配置错误导致无法登录）
-		siteKeyChanged := previousSettings.TurnstileSiteKey != req.TurnstileSiteKey
-		secretKeyChanged := previousSettings.TurnstileSecretKey != req.TurnstileSecretKey
-		if siteKeyChanged || secretKeyChanged {
-			if err := h.turnstileService.ValidateSecretKey(c.Request.Context(), req.TurnstileSecretKey); err != nil {
-				response.ErrorFrom(c, err)
-				return
-			}
-		}
+		// [LITE:DELETED] Turnstile 密钥验证已移除
 	}
 
 	// LinuxDo Connect 参数验证
@@ -407,139 +397,8 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	return changed
 }
 
-// TestSMTPRequest 测试SMTP连接请求
-type TestSMTPRequest struct {
-	SMTPHost     string `json:"smtp_host" binding:"required"`
-	SMTPPort     int    `json:"smtp_port"`
-	SMTPUsername string `json:"smtp_username"`
-	SMTPPassword string `json:"smtp_password"`
-	SMTPUseTLS   bool   `json:"smtp_use_tls"`
-}
-
-// TestSMTPConnection 测试SMTP连接
-// POST /api/v1/admin/settings/test-smtp
-func (h *SettingHandler) TestSMTPConnection(c *gin.Context) {
-	var req TestSMTPRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-
-	if req.SMTPPort <= 0 {
-		req.SMTPPort = 587
-	}
-
-	// 如果未提供密码，从数据库获取已保存的密码
-	password := req.SMTPPassword
-	if password == "" {
-		savedConfig, err := h.emailService.GetSMTPConfig(c.Request.Context())
-		if err == nil && savedConfig != nil {
-			password = savedConfig.Password
-		}
-	}
-
-	config := &service.SMTPConfig{
-		Host:     req.SMTPHost,
-		Port:     req.SMTPPort,
-		Username: req.SMTPUsername,
-		Password: password,
-		UseTLS:   req.SMTPUseTLS,
-	}
-
-	err := h.emailService.TestSMTPConnectionWithConfig(config)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	response.Success(c, gin.H{"message": "SMTP connection successful"})
-}
-
-// SendTestEmailRequest 发送测试邮件请求
-type SendTestEmailRequest struct {
-	Email        string `json:"email" binding:"required,email"`
-	SMTPHost     string `json:"smtp_host" binding:"required"`
-	SMTPPort     int    `json:"smtp_port"`
-	SMTPUsername string `json:"smtp_username"`
-	SMTPPassword string `json:"smtp_password"`
-	SMTPFrom     string `json:"smtp_from_email"`
-	SMTPFromName string `json:"smtp_from_name"`
-	SMTPUseTLS   bool   `json:"smtp_use_tls"`
-}
-
-// SendTestEmail 发送测试邮件
-// POST /api/v1/admin/settings/send-test-email
-func (h *SettingHandler) SendTestEmail(c *gin.Context) {
-	var req SendTestEmailRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-
-	if req.SMTPPort <= 0 {
-		req.SMTPPort = 587
-	}
-
-	// 如果未提供密码，从数据库获取已保存的密码
-	password := req.SMTPPassword
-	if password == "" {
-		savedConfig, err := h.emailService.GetSMTPConfig(c.Request.Context())
-		if err == nil && savedConfig != nil {
-			password = savedConfig.Password
-		}
-	}
-
-	config := &service.SMTPConfig{
-		Host:     req.SMTPHost,
-		Port:     req.SMTPPort,
-		Username: req.SMTPUsername,
-		Password: password,
-		From:     req.SMTPFrom,
-		FromName: req.SMTPFromName,
-		UseTLS:   req.SMTPUseTLS,
-	}
-
-	siteName := h.settingService.GetSiteName(c.Request.Context())
-	subject := "[" + siteName + "] Test Email"
-	body := `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-        .content { padding: 40px 30px; text-align: center; }
-        .success { color: #10b981; font-size: 48px; margin-bottom: 20px; }
-        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #999; font-size: 12px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>` + siteName + `</h1>
-        </div>
-        <div class="content">
-            <div class="success">✓</div>
-            <h2>Email Configuration Successful!</h2>
-            <p>This is a test email to verify your SMTP settings are working correctly.</p>
-        </div>
-        <div class="footer">
-            <p>This is an automated test message.</p>
-        </div>
-    </div>
-</body>
-</html>
-`
-
-	if err := h.emailService.SendEmailWithConfig(config, req.Email, subject, body); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	response.Success(c, gin.H{"message": "Test email sent successfully"})
-}
+// [LITE:DELETED] TestSMTPRequest, TestSMTPConnection, SendTestEmailRequest, SendTestEmail
+// 这些 SMTP 相关的测试功能在 Lite 模式中已移除，因为 Lite 不需要邮件服务
 
 // GetAdminAPIKey 获取管理员 API Key 状态
 // GET /api/v1/admin/settings/admin-api-key

@@ -55,18 +55,14 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
-		// 简易模式：跳过余额和订阅检查
-		if cfg.RunMode == config.RunModeSimple {
-			c.Set(string(ContextKeyAPIKey), apiKey)
-			c.Set(string(ContextKeyUser), AuthSubject{
-				UserID:      apiKey.User.ID,
-				Concurrency: apiKey.User.Concurrency,
-			})
-			c.Set(string(ContextKeyUserRole), apiKey.User.Role)
-			setGroupContext(c, apiKey.Group)
-			c.Next()
-			return
-		}
+		// [LITE] 设置上下文，不再检查 RunMode
+		c.Set(string(ContextKeyAPIKey), apiKey)
+		c.Set(string(ContextKeyUser), AuthSubject{
+			UserID:      apiKey.User.ID,
+			Concurrency: apiKey.User.Concurrency,
+		})
+		c.Set(string(ContextKeyUserRole), apiKey.User.Role)
+		setGroupContext(c, apiKey.Group)
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 		if isSubscriptionType && subscriptionService != nil {
@@ -90,12 +86,8 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				return
 			}
 			c.Set(string(ContextKeySubscription), subscription)
-		} else {
-			if apiKey.User.Balance <= 0 {
-				abortWithGoogleError(c, 403, "Insufficient account balance")
-				return
-			}
 		}
+		// [LITE] 标准模式不在中间件检查余额，限额检查在 handler 中进行
 
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{

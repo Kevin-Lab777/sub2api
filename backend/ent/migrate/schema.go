@@ -20,6 +20,17 @@ var (
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "ip_whitelist", Type: field.TypeJSON, Nullable: true},
 		{Name: "ip_blacklist", Type: field.TypeJSON, Nullable: true},
+		{Name: "daily_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "weekly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "monthly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "total_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "daily_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "weekly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "monthly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "total_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "usage_reset_daily", Type: field.TypeTime, Nullable: true},
+		{Name: "usage_reset_weekly", Type: field.TypeTime, Nullable: true},
+		{Name: "usage_reset_monthly", Type: field.TypeTime, Nullable: true},
 		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt64},
 	}
@@ -31,13 +42,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "api_keys_groups_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[9]},
+				Columns:    []*schema.Column{APIKeysColumns[20]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "api_keys_users_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[10]},
+				Columns:    []*schema.Column{APIKeysColumns[21]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -46,12 +57,12 @@ var (
 			{
 				Name:    "apikey_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[10]},
+				Columns: []*schema.Column{APIKeysColumns[21]},
 			},
 			{
 				Name:    "apikey_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[9]},
+				Columns: []*schema.Column{APIKeysColumns[20]},
 			},
 			{
 				Name:    "apikey_status",
@@ -259,82 +270,6 @@ var (
 			},
 		},
 	}
-	// PromoCodesColumns holds the columns for the "promo_codes" table.
-	PromoCodesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "code", Type: field.TypeString, Unique: true, Size: 32},
-		{Name: "bonus_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "max_uses", Type: field.TypeInt, Default: 0},
-		{Name: "used_count", Type: field.TypeInt, Default: 0},
-		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
-		{Name: "expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-	}
-	// PromoCodesTable holds the schema information for the "promo_codes" table.
-	PromoCodesTable = &schema.Table{
-		Name:       "promo_codes",
-		Columns:    PromoCodesColumns,
-		PrimaryKey: []*schema.Column{PromoCodesColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "promocode_status",
-				Unique:  false,
-				Columns: []*schema.Column{PromoCodesColumns[5]},
-			},
-			{
-				Name:    "promocode_expires_at",
-				Unique:  false,
-				Columns: []*schema.Column{PromoCodesColumns[6]},
-			},
-		},
-	}
-	// PromoCodeUsagesColumns holds the columns for the "promo_code_usages" table.
-	PromoCodeUsagesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "bonus_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "used_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "promo_code_id", Type: field.TypeInt64},
-		{Name: "user_id", Type: field.TypeInt64},
-	}
-	// PromoCodeUsagesTable holds the schema information for the "promo_code_usages" table.
-	PromoCodeUsagesTable = &schema.Table{
-		Name:       "promo_code_usages",
-		Columns:    PromoCodeUsagesColumns,
-		PrimaryKey: []*schema.Column{PromoCodeUsagesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "promo_code_usages_promo_codes_usage_records",
-				Columns:    []*schema.Column{PromoCodeUsagesColumns[3]},
-				RefColumns: []*schema.Column{PromoCodesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-			{
-				Symbol:     "promo_code_usages_users_promo_code_usages",
-				Columns:    []*schema.Column{PromoCodeUsagesColumns[4]},
-				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "promocodeusage_promo_code_id",
-				Unique:  false,
-				Columns: []*schema.Column{PromoCodeUsagesColumns[3]},
-			},
-			{
-				Name:    "promocodeusage_user_id",
-				Unique:  false,
-				Columns: []*schema.Column{PromoCodeUsagesColumns[4]},
-			},
-			{
-				Name:    "promocodeusage_promo_code_id_user_id",
-				Unique:  true,
-				Columns: []*schema.Column{PromoCodeUsagesColumns[3], PromoCodeUsagesColumns[4]},
-			},
-		},
-	}
 	// ProxiesColumns holds the columns for the "proxies" table.
 	ProxiesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -364,57 +299,6 @@ var (
 				Name:    "proxy_deleted_at",
 				Unique:  false,
 				Columns: []*schema.Column{ProxiesColumns[3]},
-			},
-		},
-	}
-	// RedeemCodesColumns holds the columns for the "redeem_codes" table.
-	RedeemCodesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "code", Type: field.TypeString, Unique: true, Size: 32},
-		{Name: "type", Type: field.TypeString, Size: 20, Default: "balance"},
-		{Name: "value", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "status", Type: field.TypeString, Size: 20, Default: "unused"},
-		{Name: "used_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "validity_days", Type: field.TypeInt, Default: 30},
-		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "used_by", Type: field.TypeInt64, Nullable: true},
-	}
-	// RedeemCodesTable holds the schema information for the "redeem_codes" table.
-	RedeemCodesTable = &schema.Table{
-		Name:       "redeem_codes",
-		Columns:    RedeemCodesColumns,
-		PrimaryKey: []*schema.Column{RedeemCodesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "redeem_codes_groups_redeem_codes",
-				Columns:    []*schema.Column{RedeemCodesColumns[9]},
-				RefColumns: []*schema.Column{GroupsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "redeem_codes_users_redeem_codes",
-				Columns:    []*schema.Column{RedeemCodesColumns[10]},
-				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "redeemcode_status",
-				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[4]},
-			},
-			{
-				Name:    "redeemcode_used_by",
-				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[10]},
-			},
-			{
-				Name:    "redeemcode_group_id",
-				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[9]},
 			},
 		},
 	}
@@ -587,125 +471,6 @@ var (
 			},
 		},
 	}
-	// UserAllowedGroupsColumns holds the columns for the "user_allowed_groups" table.
-	UserAllowedGroupsColumns = []*schema.Column{
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "user_id", Type: field.TypeInt64},
-		{Name: "group_id", Type: field.TypeInt64},
-	}
-	// UserAllowedGroupsTable holds the schema information for the "user_allowed_groups" table.
-	UserAllowedGroupsTable = &schema.Table{
-		Name:       "user_allowed_groups",
-		Columns:    UserAllowedGroupsColumns,
-		PrimaryKey: []*schema.Column{UserAllowedGroupsColumns[1], UserAllowedGroupsColumns[2]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "user_allowed_groups_users_user",
-				Columns:    []*schema.Column{UserAllowedGroupsColumns[1]},
-				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-			{
-				Symbol:     "user_allowed_groups_groups_group",
-				Columns:    []*schema.Column{UserAllowedGroupsColumns[2]},
-				RefColumns: []*schema.Column{GroupsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "userallowedgroup_group_id",
-				Unique:  false,
-				Columns: []*schema.Column{UserAllowedGroupsColumns[2]},
-			},
-		},
-	}
-	// UserAttributeDefinitionsColumns holds the columns for the "user_attribute_definitions" table.
-	UserAttributeDefinitionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "key", Type: field.TypeString, Size: 100},
-		{Name: "name", Type: field.TypeString, Size: 255},
-		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "type", Type: field.TypeString, Size: 20},
-		{Name: "options", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "required", Type: field.TypeBool, Default: false},
-		{Name: "validation", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "placeholder", Type: field.TypeString, Size: 255, Default: ""},
-		{Name: "display_order", Type: field.TypeInt, Default: 0},
-		{Name: "enabled", Type: field.TypeBool, Default: true},
-	}
-	// UserAttributeDefinitionsTable holds the schema information for the "user_attribute_definitions" table.
-	UserAttributeDefinitionsTable = &schema.Table{
-		Name:       "user_attribute_definitions",
-		Columns:    UserAttributeDefinitionsColumns,
-		PrimaryKey: []*schema.Column{UserAttributeDefinitionsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "userattributedefinition_key",
-				Unique:  false,
-				Columns: []*schema.Column{UserAttributeDefinitionsColumns[4]},
-			},
-			{
-				Name:    "userattributedefinition_enabled",
-				Unique:  false,
-				Columns: []*schema.Column{UserAttributeDefinitionsColumns[13]},
-			},
-			{
-				Name:    "userattributedefinition_display_order",
-				Unique:  false,
-				Columns: []*schema.Column{UserAttributeDefinitionsColumns[12]},
-			},
-			{
-				Name:    "userattributedefinition_deleted_at",
-				Unique:  false,
-				Columns: []*schema.Column{UserAttributeDefinitionsColumns[3]},
-			},
-		},
-	}
-	// UserAttributeValuesColumns holds the columns for the "user_attribute_values" table.
-	UserAttributeValuesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "value", Type: field.TypeString, Size: 2147483647, Default: ""},
-		{Name: "user_id", Type: field.TypeInt64},
-		{Name: "attribute_id", Type: field.TypeInt64},
-	}
-	// UserAttributeValuesTable holds the schema information for the "user_attribute_values" table.
-	UserAttributeValuesTable = &schema.Table{
-		Name:       "user_attribute_values",
-		Columns:    UserAttributeValuesColumns,
-		PrimaryKey: []*schema.Column{UserAttributeValuesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "user_attribute_values_users_attribute_values",
-				Columns:    []*schema.Column{UserAttributeValuesColumns[4]},
-				RefColumns: []*schema.Column{UsersColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-			{
-				Symbol:     "user_attribute_values_user_attribute_definitions_values",
-				Columns:    []*schema.Column{UserAttributeValuesColumns[5]},
-				RefColumns: []*schema.Column{UserAttributeDefinitionsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "userattributevalue_user_id_attribute_id",
-				Unique:  true,
-				Columns: []*schema.Column{UserAttributeValuesColumns[4], UserAttributeValuesColumns[5]},
-			},
-			{
-				Name:    "userattributevalue_attribute_id",
-				Unique:  false,
-				Columns: []*schema.Column{UserAttributeValuesColumns[5]},
-			},
-		},
-	}
 	// UserSubscriptionsColumns holds the columns for the "user_subscriptions" table.
 	UserSubscriptionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -796,16 +561,10 @@ var (
 		AccountsTable,
 		AccountGroupsTable,
 		GroupsTable,
-		PromoCodesTable,
-		PromoCodeUsagesTable,
 		ProxiesTable,
-		RedeemCodesTable,
 		SettingsTable,
 		UsageLogsTable,
 		UsersTable,
-		UserAllowedGroupsTable,
-		UserAttributeDefinitionsTable,
-		UserAttributeValuesTable,
 		UserSubscriptionsTable,
 	}
 )
@@ -828,21 +587,8 @@ func init() {
 	GroupsTable.Annotation = &entsql.Annotation{
 		Table: "groups",
 	}
-	PromoCodesTable.Annotation = &entsql.Annotation{
-		Table: "promo_codes",
-	}
-	PromoCodeUsagesTable.ForeignKeys[0].RefTable = PromoCodesTable
-	PromoCodeUsagesTable.ForeignKeys[1].RefTable = UsersTable
-	PromoCodeUsagesTable.Annotation = &entsql.Annotation{
-		Table: "promo_code_usages",
-	}
 	ProxiesTable.Annotation = &entsql.Annotation{
 		Table: "proxies",
-	}
-	RedeemCodesTable.ForeignKeys[0].RefTable = GroupsTable
-	RedeemCodesTable.ForeignKeys[1].RefTable = UsersTable
-	RedeemCodesTable.Annotation = &entsql.Annotation{
-		Table: "redeem_codes",
 	}
 	SettingsTable.Annotation = &entsql.Annotation{
 		Table: "settings",
@@ -857,19 +603,6 @@ func init() {
 	}
 	UsersTable.Annotation = &entsql.Annotation{
 		Table: "users",
-	}
-	UserAllowedGroupsTable.ForeignKeys[0].RefTable = UsersTable
-	UserAllowedGroupsTable.ForeignKeys[1].RefTable = GroupsTable
-	UserAllowedGroupsTable.Annotation = &entsql.Annotation{
-		Table: "user_allowed_groups",
-	}
-	UserAttributeDefinitionsTable.Annotation = &entsql.Annotation{
-		Table: "user_attribute_definitions",
-	}
-	UserAttributeValuesTable.ForeignKeys[0].RefTable = UsersTable
-	UserAttributeValuesTable.ForeignKeys[1].RefTable = UserAttributeDefinitionsTable
-	UserAttributeValuesTable.Annotation = &entsql.Annotation{
-		Table: "user_attribute_values",
 	}
 	UserSubscriptionsTable.ForeignKeys[0].RefTable = GroupsTable
 	UserSubscriptionsTable.ForeignKeys[1].RefTable = UsersTable

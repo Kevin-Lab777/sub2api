@@ -14,14 +14,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
-	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
-	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
-	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
-	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -33,14 +28,9 @@ type UserQuery struct {
 	inters                    []Interceptor
 	predicates                []predicate.User
 	withAPIKeys               *APIKeyQuery
-	withRedeemCodes           *RedeemCodeQuery
 	withSubscriptions         *UserSubscriptionQuery
 	withAssignedSubscriptions *UserSubscriptionQuery
-	withAllowedGroups         *GroupQuery
 	withUsageLogs             *UsageLogQuery
-	withAttributeValues       *UserAttributeValueQuery
-	withPromoCodeUsages       *PromoCodeUsageQuery
-	withUserAllowedGroups     *UserAllowedGroupQuery
 	modifiers                 []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -100,28 +90,6 @@ func (_q *UserQuery) QueryAPIKeys() *APIKeyQuery {
 	return query
 }
 
-// QueryRedeemCodes chains the current query on the "redeem_codes" edge.
-func (_q *UserQuery) QueryRedeemCodes() *RedeemCodeQuery {
-	query := (&RedeemCodeClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, selector),
-			sqlgraph.To(redeemcode.Table, redeemcode.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, user.RedeemCodesTable, user.RedeemCodesColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
 // QuerySubscriptions chains the current query on the "subscriptions" edge.
 func (_q *UserQuery) QuerySubscriptions() *UserSubscriptionQuery {
 	query := (&UserSubscriptionClient{config: _q.config}).Query()
@@ -166,28 +134,6 @@ func (_q *UserQuery) QueryAssignedSubscriptions() *UserSubscriptionQuery {
 	return query
 }
 
-// QueryAllowedGroups chains the current query on the "allowed_groups" edge.
-func (_q *UserQuery) QueryAllowedGroups() *GroupQuery {
-	query := (&GroupClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, selector),
-			sqlgraph.To(group.Table, group.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, false, user.AllowedGroupsTable, user.AllowedGroupsPrimaryKey...),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
 // QueryUsageLogs chains the current query on the "usage_logs" edge.
 func (_q *UserQuery) QueryUsageLogs() *UsageLogQuery {
 	query := (&UsageLogClient{config: _q.config}).Query()
@@ -203,72 +149,6 @@ func (_q *UserQuery) QueryUsageLogs() *UsageLogQuery {
 			sqlgraph.From(user.Table, user.FieldID, selector),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.UsageLogsTable, user.UsageLogsColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryAttributeValues chains the current query on the "attribute_values" edge.
-func (_q *UserQuery) QueryAttributeValues() *UserAttributeValueQuery {
-	query := (&UserAttributeValueClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, selector),
-			sqlgraph.To(userattributevalue.Table, userattributevalue.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, user.AttributeValuesTable, user.AttributeValuesColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryPromoCodeUsages chains the current query on the "promo_code_usages" edge.
-func (_q *UserQuery) QueryPromoCodeUsages() *PromoCodeUsageQuery {
-	query := (&PromoCodeUsageClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, selector),
-			sqlgraph.To(promocodeusage.Table, promocodeusage.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, user.PromoCodeUsagesTable, user.PromoCodeUsagesColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryUserAllowedGroups chains the current query on the "user_allowed_groups" edge.
-func (_q *UserQuery) QueryUserAllowedGroups() *UserAllowedGroupQuery {
-	query := (&UserAllowedGroupClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, selector),
-			sqlgraph.To(userallowedgroup.Table, userallowedgroup.UserColumn),
-			sqlgraph.Edge(sqlgraph.O2M, true, user.UserAllowedGroupsTable, user.UserAllowedGroupsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -469,14 +349,9 @@ func (_q *UserQuery) Clone() *UserQuery {
 		inters:                    append([]Interceptor{}, _q.inters...),
 		predicates:                append([]predicate.User{}, _q.predicates...),
 		withAPIKeys:               _q.withAPIKeys.Clone(),
-		withRedeemCodes:           _q.withRedeemCodes.Clone(),
 		withSubscriptions:         _q.withSubscriptions.Clone(),
 		withAssignedSubscriptions: _q.withAssignedSubscriptions.Clone(),
-		withAllowedGroups:         _q.withAllowedGroups.Clone(),
 		withUsageLogs:             _q.withUsageLogs.Clone(),
-		withAttributeValues:       _q.withAttributeValues.Clone(),
-		withPromoCodeUsages:       _q.withPromoCodeUsages.Clone(),
-		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -491,17 +366,6 @@ func (_q *UserQuery) WithAPIKeys(opts ...func(*APIKeyQuery)) *UserQuery {
 		opt(query)
 	}
 	_q.withAPIKeys = query
-	return _q
-}
-
-// WithRedeemCodes tells the query-builder to eager-load the nodes that are connected to
-// the "redeem_codes" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *UserQuery) WithRedeemCodes(opts ...func(*RedeemCodeQuery)) *UserQuery {
-	query := (&RedeemCodeClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withRedeemCodes = query
 	return _q
 }
 
@@ -527,17 +391,6 @@ func (_q *UserQuery) WithAssignedSubscriptions(opts ...func(*UserSubscriptionQue
 	return _q
 }
 
-// WithAllowedGroups tells the query-builder to eager-load the nodes that are connected to
-// the "allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *UserQuery) WithAllowedGroups(opts ...func(*GroupQuery)) *UserQuery {
-	query := (&GroupClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withAllowedGroups = query
-	return _q
-}
-
 // WithUsageLogs tells the query-builder to eager-load the nodes that are connected to
 // the "usage_logs" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithUsageLogs(opts ...func(*UsageLogQuery)) *UserQuery {
@@ -546,39 +399,6 @@ func (_q *UserQuery) WithUsageLogs(opts ...func(*UsageLogQuery)) *UserQuery {
 		opt(query)
 	}
 	_q.withUsageLogs = query
-	return _q
-}
-
-// WithAttributeValues tells the query-builder to eager-load the nodes that are connected to
-// the "attribute_values" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *UserQuery) WithAttributeValues(opts ...func(*UserAttributeValueQuery)) *UserQuery {
-	query := (&UserAttributeValueClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withAttributeValues = query
-	return _q
-}
-
-// WithPromoCodeUsages tells the query-builder to eager-load the nodes that are connected to
-// the "promo_code_usages" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *UserQuery) WithPromoCodeUsages(opts ...func(*PromoCodeUsageQuery)) *UserQuery {
-	query := (&PromoCodeUsageClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withPromoCodeUsages = query
-	return _q
-}
-
-// WithUserAllowedGroups tells the query-builder to eager-load the nodes that are connected to
-// the "user_allowed_groups" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *UserQuery) WithUserAllowedGroups(opts ...func(*UserAllowedGroupQuery)) *UserQuery {
-	query := (&UserAllowedGroupClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withUserAllowedGroups = query
 	return _q
 }
 
@@ -660,16 +480,11 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [9]bool{
+		loadedTypes = [4]bool{
 			_q.withAPIKeys != nil,
-			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
 			_q.withAssignedSubscriptions != nil,
-			_q.withAllowedGroups != nil,
 			_q.withUsageLogs != nil,
-			_q.withAttributeValues != nil,
-			_q.withPromoCodeUsages != nil,
-			_q.withUserAllowedGroups != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -700,13 +515,6 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			return nil, err
 		}
 	}
-	if query := _q.withRedeemCodes; query != nil {
-		if err := _q.loadRedeemCodes(ctx, query, nodes,
-			func(n *User) { n.Edges.RedeemCodes = []*RedeemCode{} },
-			func(n *User, e *RedeemCode) { n.Edges.RedeemCodes = append(n.Edges.RedeemCodes, e) }); err != nil {
-			return nil, err
-		}
-	}
 	if query := _q.withSubscriptions; query != nil {
 		if err := _q.loadSubscriptions(ctx, query, nodes,
 			func(n *User) { n.Edges.Subscriptions = []*UserSubscription{} },
@@ -723,38 +531,10 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			return nil, err
 		}
 	}
-	if query := _q.withAllowedGroups; query != nil {
-		if err := _q.loadAllowedGroups(ctx, query, nodes,
-			func(n *User) { n.Edges.AllowedGroups = []*Group{} },
-			func(n *User, e *Group) { n.Edges.AllowedGroups = append(n.Edges.AllowedGroups, e) }); err != nil {
-			return nil, err
-		}
-	}
 	if query := _q.withUsageLogs; query != nil {
 		if err := _q.loadUsageLogs(ctx, query, nodes,
 			func(n *User) { n.Edges.UsageLogs = []*UsageLog{} },
 			func(n *User, e *UsageLog) { n.Edges.UsageLogs = append(n.Edges.UsageLogs, e) }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withAttributeValues; query != nil {
-		if err := _q.loadAttributeValues(ctx, query, nodes,
-			func(n *User) { n.Edges.AttributeValues = []*UserAttributeValue{} },
-			func(n *User, e *UserAttributeValue) { n.Edges.AttributeValues = append(n.Edges.AttributeValues, e) }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withPromoCodeUsages; query != nil {
-		if err := _q.loadPromoCodeUsages(ctx, query, nodes,
-			func(n *User) { n.Edges.PromoCodeUsages = []*PromoCodeUsage{} },
-			func(n *User, e *PromoCodeUsage) { n.Edges.PromoCodeUsages = append(n.Edges.PromoCodeUsages, e) }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withUserAllowedGroups; query != nil {
-		if err := _q.loadUserAllowedGroups(ctx, query, nodes,
-			func(n *User) { n.Edges.UserAllowedGroups = []*UserAllowedGroup{} },
-			func(n *User, e *UserAllowedGroup) { n.Edges.UserAllowedGroups = append(n.Edges.UserAllowedGroups, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -786,39 +566,6 @@ func (_q *UserQuery) loadAPIKeys(ctx context.Context, query *APIKeyQuery, nodes 
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
-}
-func (_q *UserQuery) loadRedeemCodes(ctx context.Context, query *RedeemCodeQuery, nodes []*User, init func(*User), assign func(*User, *RedeemCode)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[int64]*User)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(redeemcode.FieldUsedBy)
-	}
-	query.Where(predicate.RedeemCode(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(user.RedeemCodesColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.UsedBy
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "used_by" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "used_by" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
 	}
@@ -887,67 +634,6 @@ func (_q *UserQuery) loadAssignedSubscriptions(ctx context.Context, query *UserS
 	}
 	return nil
 }
-func (_q *UserQuery) loadAllowedGroups(ctx context.Context, query *GroupQuery, nodes []*User, init func(*User), assign func(*User, *Group)) error {
-	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[int64]*User)
-	nids := make(map[int64]map[*User]struct{})
-	for i, node := range nodes {
-		edgeIDs[i] = node.ID
-		byID[node.ID] = node
-		if init != nil {
-			init(node)
-		}
-	}
-	query.Where(func(s *sql.Selector) {
-		joinT := sql.Table(user.AllowedGroupsTable)
-		s.Join(joinT).On(s.C(group.FieldID), joinT.C(user.AllowedGroupsPrimaryKey[1]))
-		s.Where(sql.InValues(joinT.C(user.AllowedGroupsPrimaryKey[0]), edgeIDs...))
-		columns := s.SelectedColumns()
-		s.Select(joinT.C(user.AllowedGroupsPrimaryKey[0]))
-		s.AppendSelect(columns...)
-		s.SetDistinct(false)
-	})
-	if err := query.prepareQuery(ctx); err != nil {
-		return err
-	}
-	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
-		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
-			assign := spec.Assign
-			values := spec.ScanValues
-			spec.ScanValues = func(columns []string) ([]any, error) {
-				values, err := values(columns[1:])
-				if err != nil {
-					return nil, err
-				}
-				return append([]any{new(sql.NullInt64)}, values...), nil
-			}
-			spec.Assign = func(columns []string, values []any) error {
-				outValue := values[0].(*sql.NullInt64).Int64
-				inValue := values[1].(*sql.NullInt64).Int64
-				if nids[inValue] == nil {
-					nids[inValue] = map[*User]struct{}{byID[outValue]: {}}
-					return assign(columns[1:], values[1:])
-				}
-				nids[inValue][byID[outValue]] = struct{}{}
-				return nil
-			}
-		})
-	})
-	neighbors, err := withInterceptors[[]*Group](ctx, query, qr, query.inters)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected "allowed_groups" node returned %v`, n.ID)
-		}
-		for kn := range nodes {
-			assign(kn, n)
-		}
-	}
-	return nil
-}
 func (_q *UserQuery) loadUsageLogs(ctx context.Context, query *UsageLogQuery, nodes []*User, init func(*User), assign func(*User, *UsageLog)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[int64]*User)
@@ -973,96 +659,6 @@ func (_q *UserQuery) loadUsageLogs(ctx context.Context, query *UsageLogQuery, no
 		node, ok := nodeids[fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
-}
-func (_q *UserQuery) loadAttributeValues(ctx context.Context, query *UserAttributeValueQuery, nodes []*User, init func(*User), assign func(*User, *UserAttributeValue)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[int64]*User)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(userattributevalue.FieldUserID)
-	}
-	query.Where(predicate.UserAttributeValue(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(user.AttributeValuesColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.UserID
-		node, ok := nodeids[fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
-}
-func (_q *UserQuery) loadPromoCodeUsages(ctx context.Context, query *PromoCodeUsageQuery, nodes []*User, init func(*User), assign func(*User, *PromoCodeUsage)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[int64]*User)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(promocodeusage.FieldUserID)
-	}
-	query.Where(predicate.PromoCodeUsage(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(user.PromoCodeUsagesColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.UserID
-		node, ok := nodeids[fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
-}
-func (_q *UserQuery) loadUserAllowedGroups(ctx context.Context, query *UserAllowedGroupQuery, nodes []*User, init func(*User), assign func(*User, *UserAllowedGroup)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[int64]*User)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(userallowedgroup.FieldUserID)
-	}
-	query.Where(predicate.UserAllowedGroup(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(user.UserAllowedGroupsColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.UserID
-		node, ok := nodeids[fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n)
 		}
 		assign(node, n)
 	}

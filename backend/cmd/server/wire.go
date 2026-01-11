@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
@@ -59,13 +58,13 @@ func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
 	}
 }
 
+// [LITE] 移除了 emailQueue 参数
 func provideCleanup(
-	entClient *ent.Client,
+	entAndDB repository.EntAndDB,
 	rdb *redis.Client,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
 	pricing *service.PricingService,
-	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
@@ -77,6 +76,7 @@ func provideCleanup(
 		defer cancel()
 
 		// Cleanup steps in reverse dependency order
+		// [LITE] 移除了 EmailQueueService
 		cleanupSteps := []struct {
 			name string
 			fn   func() error
@@ -91,10 +91,6 @@ func provideCleanup(
 			}},
 			{"PricingService", func() error {
 				pricing.Stop()
-				return nil
-			}},
-			{"EmailQueueService", func() error {
-				emailQueue.Stop()
 				return nil
 			}},
 			{"BillingCacheService", func() error {
@@ -121,7 +117,7 @@ func provideCleanup(
 				return rdb.Close()
 			}},
 			{"Ent", func() error {
-				return entClient.Close()
+				return entAndDB.Client.Close()
 			}},
 		}
 

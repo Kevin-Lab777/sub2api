@@ -67,14 +67,13 @@ func (User) Fields() []ent.Field {
 func (User) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("api_keys", APIKey.Type),
-		edge.To("redeem_codes", RedeemCode.Type),
+		// [LITE:DELETED] redeem_codes edge
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("assigned_subscriptions", UserSubscription.Type),
-		edge.To("allowed_groups", Group.Type).
-			Through("user_allowed_groups", UserAllowedGroup.Type),
+		// [LITE:DELETED] allowed_groups edge
 		edge.To("usage_logs", UsageLog.Type),
-		edge.To("attribute_values", UserAttributeValue.Type),
-		edge.To("promo_code_usages", PromoCodeUsage.Type),
+		// [LITE:DELETED] attribute_values edge
+		// [LITE:DELETED] promo_code_usages edge
 	}
 }
 

@@ -125,6 +125,160 @@ func (_c *APIKeyCreate) SetIPBlacklist(v []string) *APIKeyCreate {
 	return _c
 }
 
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (_c *APIKeyCreate) SetDailyLimitUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetDailyLimitUsd(v)
+	return _c
+}
+
+// SetNillableDailyLimitUsd sets the "daily_limit_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableDailyLimitUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetDailyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (_c *APIKeyCreate) SetWeeklyLimitUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetWeeklyLimitUsd(v)
+	return _c
+}
+
+// SetNillableWeeklyLimitUsd sets the "weekly_limit_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableWeeklyLimitUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetWeeklyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetMonthlyLimitUsd sets the "monthly_limit_usd" field.
+func (_c *APIKeyCreate) SetMonthlyLimitUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetMonthlyLimitUsd(v)
+	return _c
+}
+
+// SetNillableMonthlyLimitUsd sets the "monthly_limit_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableMonthlyLimitUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetMonthlyLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetTotalLimitUsd sets the "total_limit_usd" field.
+func (_c *APIKeyCreate) SetTotalLimitUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetTotalLimitUsd(v)
+	return _c
+}
+
+// SetNillableTotalLimitUsd sets the "total_limit_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableTotalLimitUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetTotalLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetDailyUsageUsd sets the "daily_usage_usd" field.
+func (_c *APIKeyCreate) SetDailyUsageUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetDailyUsageUsd(v)
+	return _c
+}
+
+// SetNillableDailyUsageUsd sets the "daily_usage_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableDailyUsageUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetDailyUsageUsd(*v)
+	}
+	return _c
+}
+
+// SetWeeklyUsageUsd sets the "weekly_usage_usd" field.
+func (_c *APIKeyCreate) SetWeeklyUsageUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetWeeklyUsageUsd(v)
+	return _c
+}
+
+// SetNillableWeeklyUsageUsd sets the "weekly_usage_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableWeeklyUsageUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetWeeklyUsageUsd(*v)
+	}
+	return _c
+}
+
+// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
+func (_c *APIKeyCreate) SetMonthlyUsageUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetMonthlyUsageUsd(v)
+	return _c
+}
+
+// SetNillableMonthlyUsageUsd sets the "monthly_usage_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableMonthlyUsageUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetMonthlyUsageUsd(*v)
+	}
+	return _c
+}
+
+// SetTotalUsageUsd sets the "total_usage_usd" field.
+func (_c *APIKeyCreate) SetTotalUsageUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetTotalUsageUsd(v)
+	return _c
+}
+
+// SetNillableTotalUsageUsd sets the "total_usage_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableTotalUsageUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetTotalUsageUsd(*v)
+	}
+	return _c
+}
+
+// SetUsageResetDaily sets the "usage_reset_daily" field.
+func (_c *APIKeyCreate) SetUsageResetDaily(v time.Time) *APIKeyCreate {
+	_c.mutation.SetUsageResetDaily(v)
+	return _c
+}
+
+// SetNillableUsageResetDaily sets the "usage_reset_daily" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableUsageResetDaily(v *time.Time) *APIKeyCreate {
+	if v != nil {
+		_c.SetUsageResetDaily(*v)
+	}
+	return _c
+}
+
+// SetUsageResetWeekly sets the "usage_reset_weekly" field.
+func (_c *APIKeyCreate) SetUsageResetWeekly(v time.Time) *APIKeyCreate {
+	_c.mutation.SetUsageResetWeekly(v)
+	return _c
+}
+
+// SetNillableUsageResetWeekly sets the "usage_reset_weekly" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableUsageResetWeekly(v *time.Time) *APIKeyCreate {
+	if v != nil {
+		_c.SetUsageResetWeekly(*v)
+	}
+	return _c
+}
+
+// SetUsageResetMonthly sets the "usage_reset_monthly" field.
+func (_c *APIKeyCreate) SetUsageResetMonthly(v time.Time) *APIKeyCreate {
+	_c.mutation.SetUsageResetMonthly(v)
+	return _c
+}
+
+// SetNillableUsageResetMonthly sets the "usage_reset_monthly" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableUsageResetMonthly(v *time.Time) *APIKeyCreate {
+	if v != nil {
+		_c.SetUsageResetMonthly(*v)
+	}
+	return _c
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_c *APIKeyCreate) SetUser(v *User) *APIKeyCreate {
 	return _c.SetUserID(v.ID)
@@ -205,6 +359,22 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.DailyUsageUsd(); !ok {
+		v := apikey.DefaultDailyUsageUsd
+		_c.mutation.SetDailyUsageUsd(v)
+	}
+	if _, ok := _c.mutation.WeeklyUsageUsd(); !ok {
+		v := apikey.DefaultWeeklyUsageUsd
+		_c.mutation.SetWeeklyUsageUsd(v)
+	}
+	if _, ok := _c.mutation.MonthlyUsageUsd(); !ok {
+		v := apikey.DefaultMonthlyUsageUsd
+		_c.mutation.SetMonthlyUsageUsd(v)
+	}
+	if _, ok := _c.mutation.TotalUsageUsd(); !ok {
+		v := apikey.DefaultTotalUsageUsd
+		_c.mutation.SetTotalUsageUsd(v)
+	}
 	return nil
 }
 
@@ -242,6 +412,18 @@ func (_c *APIKeyCreate) check() error {
 		if err := apikey.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.DailyUsageUsd(); !ok {
+		return &ValidationError{Name: "daily_usage_usd", err: errors.New(`ent: missing required field "APIKey.daily_usage_usd"`)}
+	}
+	if _, ok := _c.mutation.WeeklyUsageUsd(); !ok {
+		return &ValidationError{Name: "weekly_usage_usd", err: errors.New(`ent: missing required field "APIKey.weekly_usage_usd"`)}
+	}
+	if _, ok := _c.mutation.MonthlyUsageUsd(); !ok {
+		return &ValidationError{Name: "monthly_usage_usd", err: errors.New(`ent: missing required field "APIKey.monthly_usage_usd"`)}
+	}
+	if _, ok := _c.mutation.TotalUsageUsd(); !ok {
+		return &ValidationError{Name: "total_usage_usd", err: errors.New(`ent: missing required field "APIKey.total_usage_usd"`)}
 	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "APIKey.user"`)}
@@ -304,6 +486,50 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IPBlacklist(); ok {
 		_spec.SetField(apikey.FieldIPBlacklist, field.TypeJSON, value)
 		_node.IPBlacklist = value
+	}
+	if value, ok := _c.mutation.DailyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldDailyLimitUsd, field.TypeFloat64, value)
+		_node.DailyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.WeeklyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldWeeklyLimitUsd, field.TypeFloat64, value)
+		_node.WeeklyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.MonthlyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldMonthlyLimitUsd, field.TypeFloat64, value)
+		_node.MonthlyLimitUsd = &value
+	}
+	if value, ok := _c.mutation.TotalLimitUsd(); ok {
+		_spec.SetField(apikey.FieldTotalLimitUsd, field.TypeFloat64, value)
+		_node.TotalLimitUsd = &value
+	}
+	if value, ok := _c.mutation.DailyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldDailyUsageUsd, field.TypeFloat64, value)
+		_node.DailyUsageUsd = value
+	}
+	if value, ok := _c.mutation.WeeklyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldWeeklyUsageUsd, field.TypeFloat64, value)
+		_node.WeeklyUsageUsd = value
+	}
+	if value, ok := _c.mutation.MonthlyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+		_node.MonthlyUsageUsd = value
+	}
+	if value, ok := _c.mutation.TotalUsageUsd(); ok {
+		_spec.SetField(apikey.FieldTotalUsageUsd, field.TypeFloat64, value)
+		_node.TotalUsageUsd = value
+	}
+	if value, ok := _c.mutation.UsageResetDaily(); ok {
+		_spec.SetField(apikey.FieldUsageResetDaily, field.TypeTime, value)
+		_node.UsageResetDaily = &value
+	}
+	if value, ok := _c.mutation.UsageResetWeekly(); ok {
+		_spec.SetField(apikey.FieldUsageResetWeekly, field.TypeTime, value)
+		_node.UsageResetWeekly = &value
+	}
+	if value, ok := _c.mutation.UsageResetMonthly(); ok {
+		_spec.SetField(apikey.FieldUsageResetMonthly, field.TypeTime, value)
+		_node.UsageResetMonthly = &value
 	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -539,6 +765,228 @@ func (u *APIKeyUpsert) ClearIPBlacklist() *APIKeyUpsert {
 	return u
 }
 
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *APIKeyUpsert) SetDailyLimitUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldDailyLimitUsd, v)
+	return u
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateDailyLimitUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldDailyLimitUsd)
+	return u
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *APIKeyUpsert) AddDailyLimitUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldDailyLimitUsd, v)
+	return u
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *APIKeyUpsert) ClearDailyLimitUsd() *APIKeyUpsert {
+	u.SetNull(apikey.FieldDailyLimitUsd)
+	return u
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *APIKeyUpsert) SetWeeklyLimitUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldWeeklyLimitUsd, v)
+	return u
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateWeeklyLimitUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldWeeklyLimitUsd)
+	return u
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *APIKeyUpsert) AddWeeklyLimitUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldWeeklyLimitUsd, v)
+	return u
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *APIKeyUpsert) ClearWeeklyLimitUsd() *APIKeyUpsert {
+	u.SetNull(apikey.FieldWeeklyLimitUsd)
+	return u
+}
+
+// SetMonthlyLimitUsd sets the "monthly_limit_usd" field.
+func (u *APIKeyUpsert) SetMonthlyLimitUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldMonthlyLimitUsd, v)
+	return u
+}
+
+// UpdateMonthlyLimitUsd sets the "monthly_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateMonthlyLimitUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldMonthlyLimitUsd)
+	return u
+}
+
+// AddMonthlyLimitUsd adds v to the "monthly_limit_usd" field.
+func (u *APIKeyUpsert) AddMonthlyLimitUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldMonthlyLimitUsd, v)
+	return u
+}
+
+// ClearMonthlyLimitUsd clears the value of the "monthly_limit_usd" field.
+func (u *APIKeyUpsert) ClearMonthlyLimitUsd() *APIKeyUpsert {
+	u.SetNull(apikey.FieldMonthlyLimitUsd)
+	return u
+}
+
+// SetTotalLimitUsd sets the "total_limit_usd" field.
+func (u *APIKeyUpsert) SetTotalLimitUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldTotalLimitUsd, v)
+	return u
+}
+
+// UpdateTotalLimitUsd sets the "total_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateTotalLimitUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldTotalLimitUsd)
+	return u
+}
+
+// AddTotalLimitUsd adds v to the "total_limit_usd" field.
+func (u *APIKeyUpsert) AddTotalLimitUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldTotalLimitUsd, v)
+	return u
+}
+
+// ClearTotalLimitUsd clears the value of the "total_limit_usd" field.
+func (u *APIKeyUpsert) ClearTotalLimitUsd() *APIKeyUpsert {
+	u.SetNull(apikey.FieldTotalLimitUsd)
+	return u
+}
+
+// SetDailyUsageUsd sets the "daily_usage_usd" field.
+func (u *APIKeyUpsert) SetDailyUsageUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldDailyUsageUsd, v)
+	return u
+}
+
+// UpdateDailyUsageUsd sets the "daily_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateDailyUsageUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldDailyUsageUsd)
+	return u
+}
+
+// AddDailyUsageUsd adds v to the "daily_usage_usd" field.
+func (u *APIKeyUpsert) AddDailyUsageUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldDailyUsageUsd, v)
+	return u
+}
+
+// SetWeeklyUsageUsd sets the "weekly_usage_usd" field.
+func (u *APIKeyUpsert) SetWeeklyUsageUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldWeeklyUsageUsd, v)
+	return u
+}
+
+// UpdateWeeklyUsageUsd sets the "weekly_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateWeeklyUsageUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldWeeklyUsageUsd)
+	return u
+}
+
+// AddWeeklyUsageUsd adds v to the "weekly_usage_usd" field.
+func (u *APIKeyUpsert) AddWeeklyUsageUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldWeeklyUsageUsd, v)
+	return u
+}
+
+// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
+func (u *APIKeyUpsert) SetMonthlyUsageUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldMonthlyUsageUsd, v)
+	return u
+}
+
+// UpdateMonthlyUsageUsd sets the "monthly_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateMonthlyUsageUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldMonthlyUsageUsd)
+	return u
+}
+
+// AddMonthlyUsageUsd adds v to the "monthly_usage_usd" field.
+func (u *APIKeyUpsert) AddMonthlyUsageUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldMonthlyUsageUsd, v)
+	return u
+}
+
+// SetTotalUsageUsd sets the "total_usage_usd" field.
+func (u *APIKeyUpsert) SetTotalUsageUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldTotalUsageUsd, v)
+	return u
+}
+
+// UpdateTotalUsageUsd sets the "total_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateTotalUsageUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldTotalUsageUsd)
+	return u
+}
+
+// AddTotalUsageUsd adds v to the "total_usage_usd" field.
+func (u *APIKeyUpsert) AddTotalUsageUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldTotalUsageUsd, v)
+	return u
+}
+
+// SetUsageResetDaily sets the "usage_reset_daily" field.
+func (u *APIKeyUpsert) SetUsageResetDaily(v time.Time) *APIKeyUpsert {
+	u.Set(apikey.FieldUsageResetDaily, v)
+	return u
+}
+
+// UpdateUsageResetDaily sets the "usage_reset_daily" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateUsageResetDaily() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldUsageResetDaily)
+	return u
+}
+
+// ClearUsageResetDaily clears the value of the "usage_reset_daily" field.
+func (u *APIKeyUpsert) ClearUsageResetDaily() *APIKeyUpsert {
+	u.SetNull(apikey.FieldUsageResetDaily)
+	return u
+}
+
+// SetUsageResetWeekly sets the "usage_reset_weekly" field.
+func (u *APIKeyUpsert) SetUsageResetWeekly(v time.Time) *APIKeyUpsert {
+	u.Set(apikey.FieldUsageResetWeekly, v)
+	return u
+}
+
+// UpdateUsageResetWeekly sets the "usage_reset_weekly" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateUsageResetWeekly() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldUsageResetWeekly)
+	return u
+}
+
+// ClearUsageResetWeekly clears the value of the "usage_reset_weekly" field.
+func (u *APIKeyUpsert) ClearUsageResetWeekly() *APIKeyUpsert {
+	u.SetNull(apikey.FieldUsageResetWeekly)
+	return u
+}
+
+// SetUsageResetMonthly sets the "usage_reset_monthly" field.
+func (u *APIKeyUpsert) SetUsageResetMonthly(v time.Time) *APIKeyUpsert {
+	u.Set(apikey.FieldUsageResetMonthly, v)
+	return u
+}
+
+// UpdateUsageResetMonthly sets the "usage_reset_monthly" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateUsageResetMonthly() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldUsageResetMonthly)
+	return u
+}
+
+// ClearUsageResetMonthly clears the value of the "usage_reset_monthly" field.
+func (u *APIKeyUpsert) ClearUsageResetMonthly() *APIKeyUpsert {
+	u.SetNull(apikey.FieldUsageResetMonthly)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -735,6 +1183,265 @@ func (u *APIKeyUpsertOne) UpdateIPBlacklist() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearIPBlacklist() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearIPBlacklist()
+	})
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *APIKeyUpsertOne) SetDailyLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetDailyLimitUsd(v)
+	})
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *APIKeyUpsertOne) AddDailyLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddDailyLimitUsd(v)
+	})
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateDailyLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateDailyLimitUsd()
+	})
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *APIKeyUpsertOne) ClearDailyLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearDailyLimitUsd()
+	})
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *APIKeyUpsertOne) SetWeeklyLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetWeeklyLimitUsd(v)
+	})
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *APIKeyUpsertOne) AddWeeklyLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateWeeklyLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateWeeklyLimitUsd()
+	})
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *APIKeyUpsertOne) ClearWeeklyLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearWeeklyLimitUsd()
+	})
+}
+
+// SetMonthlyLimitUsd sets the "monthly_limit_usd" field.
+func (u *APIKeyUpsertOne) SetMonthlyLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetMonthlyLimitUsd(v)
+	})
+}
+
+// AddMonthlyLimitUsd adds v to the "monthly_limit_usd" field.
+func (u *APIKeyUpsertOne) AddMonthlyLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddMonthlyLimitUsd(v)
+	})
+}
+
+// UpdateMonthlyLimitUsd sets the "monthly_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateMonthlyLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateMonthlyLimitUsd()
+	})
+}
+
+// ClearMonthlyLimitUsd clears the value of the "monthly_limit_usd" field.
+func (u *APIKeyUpsertOne) ClearMonthlyLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearMonthlyLimitUsd()
+	})
+}
+
+// SetTotalLimitUsd sets the "total_limit_usd" field.
+func (u *APIKeyUpsertOne) SetTotalLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetTotalLimitUsd(v)
+	})
+}
+
+// AddTotalLimitUsd adds v to the "total_limit_usd" field.
+func (u *APIKeyUpsertOne) AddTotalLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddTotalLimitUsd(v)
+	})
+}
+
+// UpdateTotalLimitUsd sets the "total_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateTotalLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateTotalLimitUsd()
+	})
+}
+
+// ClearTotalLimitUsd clears the value of the "total_limit_usd" field.
+func (u *APIKeyUpsertOne) ClearTotalLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearTotalLimitUsd()
+	})
+}
+
+// SetDailyUsageUsd sets the "daily_usage_usd" field.
+func (u *APIKeyUpsertOne) SetDailyUsageUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetDailyUsageUsd(v)
+	})
+}
+
+// AddDailyUsageUsd adds v to the "daily_usage_usd" field.
+func (u *APIKeyUpsertOne) AddDailyUsageUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddDailyUsageUsd(v)
+	})
+}
+
+// UpdateDailyUsageUsd sets the "daily_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateDailyUsageUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateDailyUsageUsd()
+	})
+}
+
+// SetWeeklyUsageUsd sets the "weekly_usage_usd" field.
+func (u *APIKeyUpsertOne) SetWeeklyUsageUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetWeeklyUsageUsd(v)
+	})
+}
+
+// AddWeeklyUsageUsd adds v to the "weekly_usage_usd" field.
+func (u *APIKeyUpsertOne) AddWeeklyUsageUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddWeeklyUsageUsd(v)
+	})
+}
+
+// UpdateWeeklyUsageUsd sets the "weekly_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateWeeklyUsageUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateWeeklyUsageUsd()
+	})
+}
+
+// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
+func (u *APIKeyUpsertOne) SetMonthlyUsageUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetMonthlyUsageUsd(v)
+	})
+}
+
+// AddMonthlyUsageUsd adds v to the "monthly_usage_usd" field.
+func (u *APIKeyUpsertOne) AddMonthlyUsageUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddMonthlyUsageUsd(v)
+	})
+}
+
+// UpdateMonthlyUsageUsd sets the "monthly_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateMonthlyUsageUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateMonthlyUsageUsd()
+	})
+}
+
+// SetTotalUsageUsd sets the "total_usage_usd" field.
+func (u *APIKeyUpsertOne) SetTotalUsageUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetTotalUsageUsd(v)
+	})
+}
+
+// AddTotalUsageUsd adds v to the "total_usage_usd" field.
+func (u *APIKeyUpsertOne) AddTotalUsageUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddTotalUsageUsd(v)
+	})
+}
+
+// UpdateTotalUsageUsd sets the "total_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateTotalUsageUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateTotalUsageUsd()
+	})
+}
+
+// SetUsageResetDaily sets the "usage_reset_daily" field.
+func (u *APIKeyUpsertOne) SetUsageResetDaily(v time.Time) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetUsageResetDaily(v)
+	})
+}
+
+// UpdateUsageResetDaily sets the "usage_reset_daily" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateUsageResetDaily() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateUsageResetDaily()
+	})
+}
+
+// ClearUsageResetDaily clears the value of the "usage_reset_daily" field.
+func (u *APIKeyUpsertOne) ClearUsageResetDaily() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearUsageResetDaily()
+	})
+}
+
+// SetUsageResetWeekly sets the "usage_reset_weekly" field.
+func (u *APIKeyUpsertOne) SetUsageResetWeekly(v time.Time) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetUsageResetWeekly(v)
+	})
+}
+
+// UpdateUsageResetWeekly sets the "usage_reset_weekly" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateUsageResetWeekly() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateUsageResetWeekly()
+	})
+}
+
+// ClearUsageResetWeekly clears the value of the "usage_reset_weekly" field.
+func (u *APIKeyUpsertOne) ClearUsageResetWeekly() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearUsageResetWeekly()
+	})
+}
+
+// SetUsageResetMonthly sets the "usage_reset_monthly" field.
+func (u *APIKeyUpsertOne) SetUsageResetMonthly(v time.Time) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetUsageResetMonthly(v)
+	})
+}
+
+// UpdateUsageResetMonthly sets the "usage_reset_monthly" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateUsageResetMonthly() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateUsageResetMonthly()
+	})
+}
+
+// ClearUsageResetMonthly clears the value of the "usage_reset_monthly" field.
+func (u *APIKeyUpsertOne) ClearUsageResetMonthly() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearUsageResetMonthly()
 	})
 }
 
@@ -1100,6 +1807,265 @@ func (u *APIKeyUpsertBulk) UpdateIPBlacklist() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearIPBlacklist() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearIPBlacklist()
+	})
+}
+
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (u *APIKeyUpsertBulk) SetDailyLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetDailyLimitUsd(v)
+	})
+}
+
+// AddDailyLimitUsd adds v to the "daily_limit_usd" field.
+func (u *APIKeyUpsertBulk) AddDailyLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddDailyLimitUsd(v)
+	})
+}
+
+// UpdateDailyLimitUsd sets the "daily_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateDailyLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateDailyLimitUsd()
+	})
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (u *APIKeyUpsertBulk) ClearDailyLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearDailyLimitUsd()
+	})
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (u *APIKeyUpsertBulk) SetWeeklyLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetWeeklyLimitUsd(v)
+	})
+}
+
+// AddWeeklyLimitUsd adds v to the "weekly_limit_usd" field.
+func (u *APIKeyUpsertBulk) AddWeeklyLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddWeeklyLimitUsd(v)
+	})
+}
+
+// UpdateWeeklyLimitUsd sets the "weekly_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateWeeklyLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateWeeklyLimitUsd()
+	})
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (u *APIKeyUpsertBulk) ClearWeeklyLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearWeeklyLimitUsd()
+	})
+}
+
+// SetMonthlyLimitUsd sets the "monthly_limit_usd" field.
+func (u *APIKeyUpsertBulk) SetMonthlyLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetMonthlyLimitUsd(v)
+	})
+}
+
+// AddMonthlyLimitUsd adds v to the "monthly_limit_usd" field.
+func (u *APIKeyUpsertBulk) AddMonthlyLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddMonthlyLimitUsd(v)
+	})
+}
+
+// UpdateMonthlyLimitUsd sets the "monthly_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateMonthlyLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateMonthlyLimitUsd()
+	})
+}
+
+// ClearMonthlyLimitUsd clears the value of the "monthly_limit_usd" field.
+func (u *APIKeyUpsertBulk) ClearMonthlyLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearMonthlyLimitUsd()
+	})
+}
+
+// SetTotalLimitUsd sets the "total_limit_usd" field.
+func (u *APIKeyUpsertBulk) SetTotalLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetTotalLimitUsd(v)
+	})
+}
+
+// AddTotalLimitUsd adds v to the "total_limit_usd" field.
+func (u *APIKeyUpsertBulk) AddTotalLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddTotalLimitUsd(v)
+	})
+}
+
+// UpdateTotalLimitUsd sets the "total_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateTotalLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateTotalLimitUsd()
+	})
+}
+
+// ClearTotalLimitUsd clears the value of the "total_limit_usd" field.
+func (u *APIKeyUpsertBulk) ClearTotalLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearTotalLimitUsd()
+	})
+}
+
+// SetDailyUsageUsd sets the "daily_usage_usd" field.
+func (u *APIKeyUpsertBulk) SetDailyUsageUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetDailyUsageUsd(v)
+	})
+}
+
+// AddDailyUsageUsd adds v to the "daily_usage_usd" field.
+func (u *APIKeyUpsertBulk) AddDailyUsageUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddDailyUsageUsd(v)
+	})
+}
+
+// UpdateDailyUsageUsd sets the "daily_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateDailyUsageUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateDailyUsageUsd()
+	})
+}
+
+// SetWeeklyUsageUsd sets the "weekly_usage_usd" field.
+func (u *APIKeyUpsertBulk) SetWeeklyUsageUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetWeeklyUsageUsd(v)
+	})
+}
+
+// AddWeeklyUsageUsd adds v to the "weekly_usage_usd" field.
+func (u *APIKeyUpsertBulk) AddWeeklyUsageUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddWeeklyUsageUsd(v)
+	})
+}
+
+// UpdateWeeklyUsageUsd sets the "weekly_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateWeeklyUsageUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateWeeklyUsageUsd()
+	})
+}
+
+// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
+func (u *APIKeyUpsertBulk) SetMonthlyUsageUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetMonthlyUsageUsd(v)
+	})
+}
+
+// AddMonthlyUsageUsd adds v to the "monthly_usage_usd" field.
+func (u *APIKeyUpsertBulk) AddMonthlyUsageUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddMonthlyUsageUsd(v)
+	})
+}
+
+// UpdateMonthlyUsageUsd sets the "monthly_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateMonthlyUsageUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateMonthlyUsageUsd()
+	})
+}
+
+// SetTotalUsageUsd sets the "total_usage_usd" field.
+func (u *APIKeyUpsertBulk) SetTotalUsageUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetTotalUsageUsd(v)
+	})
+}
+
+// AddTotalUsageUsd adds v to the "total_usage_usd" field.
+func (u *APIKeyUpsertBulk) AddTotalUsageUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddTotalUsageUsd(v)
+	})
+}
+
+// UpdateTotalUsageUsd sets the "total_usage_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateTotalUsageUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateTotalUsageUsd()
+	})
+}
+
+// SetUsageResetDaily sets the "usage_reset_daily" field.
+func (u *APIKeyUpsertBulk) SetUsageResetDaily(v time.Time) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetUsageResetDaily(v)
+	})
+}
+
+// UpdateUsageResetDaily sets the "usage_reset_daily" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateUsageResetDaily() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateUsageResetDaily()
+	})
+}
+
+// ClearUsageResetDaily clears the value of the "usage_reset_daily" field.
+func (u *APIKeyUpsertBulk) ClearUsageResetDaily() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearUsageResetDaily()
+	})
+}
+
+// SetUsageResetWeekly sets the "usage_reset_weekly" field.
+func (u *APIKeyUpsertBulk) SetUsageResetWeekly(v time.Time) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetUsageResetWeekly(v)
+	})
+}
+
+// UpdateUsageResetWeekly sets the "usage_reset_weekly" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateUsageResetWeekly() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateUsageResetWeekly()
+	})
+}
+
+// ClearUsageResetWeekly clears the value of the "usage_reset_weekly" field.
+func (u *APIKeyUpsertBulk) ClearUsageResetWeekly() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearUsageResetWeekly()
+	})
+}
+
+// SetUsageResetMonthly sets the "usage_reset_monthly" field.
+func (u *APIKeyUpsertBulk) SetUsageResetMonthly(v time.Time) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetUsageResetMonthly(v)
+	})
+}
+
+// UpdateUsageResetMonthly sets the "usage_reset_monthly" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateUsageResetMonthly() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateUsageResetMonthly()
+	})
+}
+
+// ClearUsageResetMonthly clears the value of the "usage_reset_monthly" field.
+func (u *APIKeyUpsertBulk) ClearUsageResetMonthly() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearUsageResetMonthly()
 	})
 }
 

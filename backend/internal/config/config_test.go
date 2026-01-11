@@ -8,25 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func TestNormalizeRunMode(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"simple", "simple"},
-		{"SIMPLE", "simple"},
-		{"standard", "standard"},
-		{"invalid", "standard"},
-		{"", "standard"},
-	}
-
-	for _, tt := range tests {
-		result := NormalizeRunMode(tt.input)
-		if result != tt.expected {
-			t.Errorf("NormalizeRunMode(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
-	}
-}
+// [LITE] TestNormalizeRunMode removed - always Lite mode
 
 func TestLoadDefaultSchedulingConfig(t *testing.T) {
 	viper.Reset()

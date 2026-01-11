@@ -101,15 +101,13 @@ func (Group) Fields() []ent.Field {
 func (Group) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("api_keys", APIKey.Type),
-		edge.To("redeem_codes", RedeemCode.Type),
+		// [LITE:DELETED] redeem_codes edge
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("usage_logs", UsageLog.Type),
 		edge.From("accounts", Account.Type).
 			Ref("groups").
 			Through("account_groups", AccountGroup.Type),
-		edge.From("allowed_users", User.Type).
-			Ref("allowed_groups").
-			Through("user_allowed_groups", UserAllowedGroup.Type),
+		// [LITE:DELETED] allowed_users edge
 		// 注意：fallback_group_id 直接作为字段使用，不定义 edge
 		// 这样允许多个分组指向同一个降级分组（M2O 关系）
 	}

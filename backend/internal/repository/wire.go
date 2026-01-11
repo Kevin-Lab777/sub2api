@@ -2,9 +2,7 @@ package repository
 
 import (
 	"database/sql"
-	"errors"
 
-	entsql "entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -37,20 +35,53 @@ func ProvidePricingRemoteClient(cfg *config.Config) service.PricingRemoteClient 
 	return NewPricingRemoteClient(cfg.Update.ProxyURL)
 }
 
+// EntAndDB 包含 Ent 客户端和底层 SQL DB
+// [LITE] 重构：合并 ProvideEnt 和 ProvideSQLDB 为单一结构体
+type EntAndDB struct {
+	Client *ent.Client
+	DB     *sql.DB
+}
+
+// ProvideEntAndDB 为依赖注入同时提供 Ent 客户端和 SQL DB
+// [LITE] 修复了原来 ProvideSQLDB 无法获取 driver 的问题
+func ProvideEntAndDB(cfg *config.Config) (EntAndDB, error) {
+	client, db, err := InitEnt(cfg)
+	if err != nil {
+		return EntAndDB{}, err
+	}
+	return EntAndDB{Client: client, DB: db}, nil
+}
+
+// ProvideEntClient 从 EntAndDB 提取 *ent.Client
+func ProvideEntClient(entAndDB EntAndDB) *ent.Client {
+	return entAndDB.Client
+}
+
+// ProvideSQLDB 从 EntAndDB 提取 *sql.DB
+func ProvideSQLDB(entAndDB EntAndDB) *sql.DB {
+	return entAndDB.DB
+}
+
 // ProviderSet is the Wire provider set for all repositories
+// [LITE] 移除了: NewRedeemCodeRepository, NewPromoCodeRepository,
+//
+//	NewUserAttributeDefinitionRepository, NewUserAttributeValueRepository,
+//	NewEmailCache, NewIdentityCache, NewRedeemCache, NewTurnstileVerifier
 var ProviderSet = wire.NewSet(
 	NewUserRepository,
 	NewAPIKeyRepository,
+	// [LITE] Provide APIKeyUsageRepository from the same implementation
+	ProvideAPIKeyUsageRepository,
 	NewGroupRepository,
 	NewAccountRepository,
 	NewProxyRepository,
-	NewRedeemCodeRepository,
-	NewPromoCodeRepository,
+	// [LITE:DELETED] NewRedeemCodeRepository
+	// [LITE:DELETED] NewPromoCodeRepository
 	NewUsageLogRepository,
 	NewSettingRepository,
 	NewUserSubscriptionRepository,
-	NewUserAttributeDefinitionRepository,
-	NewUserAttributeValueRepository,
+	// [LITE:DELETED] NewUserAttributeDefinitionRepository
+	// [LITE:DELETED] NewUserAttributeValueRepository
 
 	// Cache implementations
 	NewGatewayCache,
@@ -58,14 +89,14 @@ var ProviderSet = wire.NewSet(
 	NewAPIKeyCache,
 	NewTempUnschedCache,
 	ProvideConcurrencyCache,
-	NewEmailCache,
-	NewIdentityCache,
-	NewRedeemCache,
+	// [LITE:DELETED] NewEmailCache
+	// [LITE:DELETED] NewIdentityCache
+	// [LITE:DELETED] NewRedeemCache
 	NewUpdateCache,
 	NewGeminiTokenCache,
 
 	// HTTP service ports (DI Strategy A: return interface directly)
-	NewTurnstileVerifier,
+	// [LITE:DELETED] NewTurnstileVerifier
 	ProvidePricingRemoteClient,
 	ProvideGitHubReleaseClient,
 	NewProxyExitInfoProber,
@@ -76,46 +107,11 @@ var ProviderSet = wire.NewSet(
 	NewGeminiOAuthClient,
 	NewGeminiCliCodeAssistClient,
 
-	ProvideEnt,
+	ProvideEntAndDB,
+	ProvideEntClient,
 	ProvideSQLDB,
 	ProvideRedis,
 )
-
-// ProvideEnt 为依赖注入提供 Ent 客户端。
-//
-// 该函数是 InitEnt 的包装器，符合 Wire 的依赖提供函数签名要求。
-// Wire 会在编译时分析依赖关系，自动生成初始化代码。
-//
-// 依赖：config.Config
-// 提供：*ent.Client
-func ProvideEnt(cfg *config.Config) (*ent.Client, error) {
-	client, _, err := InitEnt(cfg)
-	return client, err
-}
-
-// ProvideSQLDB 从 Ent 客户端提取底层的 *sql.DB 连接。
-//
-// 某些 Repository 需要直接执行原生 SQL（如复杂的批量更新、聚合查询），
-// 此时需要访问底层的 sql.DB 而不是通过 Ent ORM。
-//
-// 设计说明：
-//   - Ent 底层使用 sql.DB，通过 Driver 接口可以访问
-//   - 这种设计允许在同一事务中混用 Ent 和原生 SQL
-//
-// 依赖：*ent.Client
-// 提供：*sql.DB
-func ProvideSQLDB(client *ent.Client) (*sql.DB, error) {
-	if client == nil {
-		return nil, errors.New("nil ent client")
-	}
-	// 从 Ent 客户端获取底层驱动
-	drv, ok := client.Driver().(*entsql.Driver)
-	if !ok {
-		return nil, errors.New("ent driver does not expose *sql.DB")
-	}
-	// 返回驱动持有的 sql.DB 实例
-	return drv.DB(), nil
-}
 
 // ProvideRedis 为依赖注入提供 Redis 客户端。
 //
@@ -130,3 +126,4 @@ func ProvideSQLDB(client *ent.Client) (*sql.DB, error) {
 func ProvideRedis(cfg *config.Config) *redis.Client {
 	return InitRedis(cfg)
 }
+

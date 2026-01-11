@@ -170,6 +170,258 @@ func (_u *APIKeyUpdate) ClearIPBlacklist() *APIKeyUpdate {
 	return _u
 }
 
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (_u *APIKeyUpdate) SetDailyLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetDailyLimitUsd()
+	_u.mutation.SetDailyLimitUsd(v)
+	return _u
+}
+
+// SetNillableDailyLimitUsd sets the "daily_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableDailyLimitUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetDailyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddDailyLimitUsd adds value to the "daily_limit_usd" field.
+func (_u *APIKeyUpdate) AddDailyLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddDailyLimitUsd(v)
+	return _u
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (_u *APIKeyUpdate) ClearDailyLimitUsd() *APIKeyUpdate {
+	_u.mutation.ClearDailyLimitUsd()
+	return _u
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (_u *APIKeyUpdate) SetWeeklyLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetWeeklyLimitUsd()
+	_u.mutation.SetWeeklyLimitUsd(v)
+	return _u
+}
+
+// SetNillableWeeklyLimitUsd sets the "weekly_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableWeeklyLimitUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetWeeklyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddWeeklyLimitUsd adds value to the "weekly_limit_usd" field.
+func (_u *APIKeyUpdate) AddWeeklyLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddWeeklyLimitUsd(v)
+	return _u
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (_u *APIKeyUpdate) ClearWeeklyLimitUsd() *APIKeyUpdate {
+	_u.mutation.ClearWeeklyLimitUsd()
+	return _u
+}
+
+// SetMonthlyLimitUsd sets the "monthly_limit_usd" field.
+func (_u *APIKeyUpdate) SetMonthlyLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetMonthlyLimitUsd()
+	_u.mutation.SetMonthlyLimitUsd(v)
+	return _u
+}
+
+// SetNillableMonthlyLimitUsd sets the "monthly_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableMonthlyLimitUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetMonthlyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddMonthlyLimitUsd adds value to the "monthly_limit_usd" field.
+func (_u *APIKeyUpdate) AddMonthlyLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddMonthlyLimitUsd(v)
+	return _u
+}
+
+// ClearMonthlyLimitUsd clears the value of the "monthly_limit_usd" field.
+func (_u *APIKeyUpdate) ClearMonthlyLimitUsd() *APIKeyUpdate {
+	_u.mutation.ClearMonthlyLimitUsd()
+	return _u
+}
+
+// SetTotalLimitUsd sets the "total_limit_usd" field.
+func (_u *APIKeyUpdate) SetTotalLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetTotalLimitUsd()
+	_u.mutation.SetTotalLimitUsd(v)
+	return _u
+}
+
+// SetNillableTotalLimitUsd sets the "total_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableTotalLimitUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetTotalLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddTotalLimitUsd adds value to the "total_limit_usd" field.
+func (_u *APIKeyUpdate) AddTotalLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddTotalLimitUsd(v)
+	return _u
+}
+
+// ClearTotalLimitUsd clears the value of the "total_limit_usd" field.
+func (_u *APIKeyUpdate) ClearTotalLimitUsd() *APIKeyUpdate {
+	_u.mutation.ClearTotalLimitUsd()
+	return _u
+}
+
+// SetDailyUsageUsd sets the "daily_usage_usd" field.
+func (_u *APIKeyUpdate) SetDailyUsageUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetDailyUsageUsd()
+	_u.mutation.SetDailyUsageUsd(v)
+	return _u
+}
+
+// SetNillableDailyUsageUsd sets the "daily_usage_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableDailyUsageUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetDailyUsageUsd(*v)
+	}
+	return _u
+}
+
+// AddDailyUsageUsd adds value to the "daily_usage_usd" field.
+func (_u *APIKeyUpdate) AddDailyUsageUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddDailyUsageUsd(v)
+	return _u
+}
+
+// SetWeeklyUsageUsd sets the "weekly_usage_usd" field.
+func (_u *APIKeyUpdate) SetWeeklyUsageUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetWeeklyUsageUsd()
+	_u.mutation.SetWeeklyUsageUsd(v)
+	return _u
+}
+
+// SetNillableWeeklyUsageUsd sets the "weekly_usage_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableWeeklyUsageUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetWeeklyUsageUsd(*v)
+	}
+	return _u
+}
+
+// AddWeeklyUsageUsd adds value to the "weekly_usage_usd" field.
+func (_u *APIKeyUpdate) AddWeeklyUsageUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddWeeklyUsageUsd(v)
+	return _u
+}
+
+// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
+func (_u *APIKeyUpdate) SetMonthlyUsageUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetMonthlyUsageUsd()
+	_u.mutation.SetMonthlyUsageUsd(v)
+	return _u
+}
+
+// SetNillableMonthlyUsageUsd sets the "monthly_usage_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableMonthlyUsageUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetMonthlyUsageUsd(*v)
+	}
+	return _u
+}
+
+// AddMonthlyUsageUsd adds value to the "monthly_usage_usd" field.
+func (_u *APIKeyUpdate) AddMonthlyUsageUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddMonthlyUsageUsd(v)
+	return _u
+}
+
+// SetTotalUsageUsd sets the "total_usage_usd" field.
+func (_u *APIKeyUpdate) SetTotalUsageUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetTotalUsageUsd()
+	_u.mutation.SetTotalUsageUsd(v)
+	return _u
+}
+
+// SetNillableTotalUsageUsd sets the "total_usage_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableTotalUsageUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetTotalUsageUsd(*v)
+	}
+	return _u
+}
+
+// AddTotalUsageUsd adds value to the "total_usage_usd" field.
+func (_u *APIKeyUpdate) AddTotalUsageUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddTotalUsageUsd(v)
+	return _u
+}
+
+// SetUsageResetDaily sets the "usage_reset_daily" field.
+func (_u *APIKeyUpdate) SetUsageResetDaily(v time.Time) *APIKeyUpdate {
+	_u.mutation.SetUsageResetDaily(v)
+	return _u
+}
+
+// SetNillableUsageResetDaily sets the "usage_reset_daily" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableUsageResetDaily(v *time.Time) *APIKeyUpdate {
+	if v != nil {
+		_u.SetUsageResetDaily(*v)
+	}
+	return _u
+}
+
+// ClearUsageResetDaily clears the value of the "usage_reset_daily" field.
+func (_u *APIKeyUpdate) ClearUsageResetDaily() *APIKeyUpdate {
+	_u.mutation.ClearUsageResetDaily()
+	return _u
+}
+
+// SetUsageResetWeekly sets the "usage_reset_weekly" field.
+func (_u *APIKeyUpdate) SetUsageResetWeekly(v time.Time) *APIKeyUpdate {
+	_u.mutation.SetUsageResetWeekly(v)
+	return _u
+}
+
+// SetNillableUsageResetWeekly sets the "usage_reset_weekly" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableUsageResetWeekly(v *time.Time) *APIKeyUpdate {
+	if v != nil {
+		_u.SetUsageResetWeekly(*v)
+	}
+	return _u
+}
+
+// ClearUsageResetWeekly clears the value of the "usage_reset_weekly" field.
+func (_u *APIKeyUpdate) ClearUsageResetWeekly() *APIKeyUpdate {
+	_u.mutation.ClearUsageResetWeekly()
+	return _u
+}
+
+// SetUsageResetMonthly sets the "usage_reset_monthly" field.
+func (_u *APIKeyUpdate) SetUsageResetMonthly(v time.Time) *APIKeyUpdate {
+	_u.mutation.SetUsageResetMonthly(v)
+	return _u
+}
+
+// SetNillableUsageResetMonthly sets the "usage_reset_monthly" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableUsageResetMonthly(v *time.Time) *APIKeyUpdate {
+	if v != nil {
+		_u.SetUsageResetMonthly(*v)
+	}
+	return _u
+}
+
+// ClearUsageResetMonthly clears the value of the "usage_reset_monthly" field.
+func (_u *APIKeyUpdate) ClearUsageResetMonthly() *APIKeyUpdate {
+	_u.mutation.ClearUsageResetMonthly()
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *APIKeyUpdate) SetUser(v *User) *APIKeyUpdate {
 	return _u.SetUserID(v.ID)
@@ -349,6 +601,84 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.IPBlacklistCleared() {
 		_spec.ClearField(apikey.FieldIPBlacklist, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.DailyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDailyLimitUsd(); ok {
+		_spec.AddField(apikey.FieldDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.DailyLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldDailyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WeeklyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWeeklyLimitUsd(); ok {
+		_spec.AddField(apikey.FieldWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.WeeklyLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldWeeklyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.MonthlyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedMonthlyLimitUsd(); ok {
+		_spec.AddField(apikey.FieldMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.MonthlyLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldMonthlyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.TotalLimitUsd(); ok {
+		_spec.SetField(apikey.FieldTotalLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTotalLimitUsd(); ok {
+		_spec.AddField(apikey.FieldTotalLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.TotalLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldTotalLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.DailyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldDailyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDailyUsageUsd(); ok {
+		_spec.AddField(apikey.FieldDailyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.WeeklyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldWeeklyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWeeklyUsageUsd(); ok {
+		_spec.AddField(apikey.FieldWeeklyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.MonthlyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedMonthlyUsageUsd(); ok {
+		_spec.AddField(apikey.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.TotalUsageUsd(); ok {
+		_spec.SetField(apikey.FieldTotalUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTotalUsageUsd(); ok {
+		_spec.AddField(apikey.FieldTotalUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.UsageResetDaily(); ok {
+		_spec.SetField(apikey.FieldUsageResetDaily, field.TypeTime, value)
+	}
+	if _u.mutation.UsageResetDailyCleared() {
+		_spec.ClearField(apikey.FieldUsageResetDaily, field.TypeTime)
+	}
+	if value, ok := _u.mutation.UsageResetWeekly(); ok {
+		_spec.SetField(apikey.FieldUsageResetWeekly, field.TypeTime, value)
+	}
+	if _u.mutation.UsageResetWeeklyCleared() {
+		_spec.ClearField(apikey.FieldUsageResetWeekly, field.TypeTime)
+	}
+	if value, ok := _u.mutation.UsageResetMonthly(); ok {
+		_spec.SetField(apikey.FieldUsageResetMonthly, field.TypeTime, value)
+	}
+	if _u.mutation.UsageResetMonthlyCleared() {
+		_spec.ClearField(apikey.FieldUsageResetMonthly, field.TypeTime)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -611,6 +941,258 @@ func (_u *APIKeyUpdateOne) ClearIPBlacklist() *APIKeyUpdateOne {
 	return _u
 }
 
+// SetDailyLimitUsd sets the "daily_limit_usd" field.
+func (_u *APIKeyUpdateOne) SetDailyLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetDailyLimitUsd()
+	_u.mutation.SetDailyLimitUsd(v)
+	return _u
+}
+
+// SetNillableDailyLimitUsd sets the "daily_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableDailyLimitUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetDailyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddDailyLimitUsd adds value to the "daily_limit_usd" field.
+func (_u *APIKeyUpdateOne) AddDailyLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddDailyLimitUsd(v)
+	return _u
+}
+
+// ClearDailyLimitUsd clears the value of the "daily_limit_usd" field.
+func (_u *APIKeyUpdateOne) ClearDailyLimitUsd() *APIKeyUpdateOne {
+	_u.mutation.ClearDailyLimitUsd()
+	return _u
+}
+
+// SetWeeklyLimitUsd sets the "weekly_limit_usd" field.
+func (_u *APIKeyUpdateOne) SetWeeklyLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetWeeklyLimitUsd()
+	_u.mutation.SetWeeklyLimitUsd(v)
+	return _u
+}
+
+// SetNillableWeeklyLimitUsd sets the "weekly_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableWeeklyLimitUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetWeeklyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddWeeklyLimitUsd adds value to the "weekly_limit_usd" field.
+func (_u *APIKeyUpdateOne) AddWeeklyLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddWeeklyLimitUsd(v)
+	return _u
+}
+
+// ClearWeeklyLimitUsd clears the value of the "weekly_limit_usd" field.
+func (_u *APIKeyUpdateOne) ClearWeeklyLimitUsd() *APIKeyUpdateOne {
+	_u.mutation.ClearWeeklyLimitUsd()
+	return _u
+}
+
+// SetMonthlyLimitUsd sets the "monthly_limit_usd" field.
+func (_u *APIKeyUpdateOne) SetMonthlyLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetMonthlyLimitUsd()
+	_u.mutation.SetMonthlyLimitUsd(v)
+	return _u
+}
+
+// SetNillableMonthlyLimitUsd sets the "monthly_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableMonthlyLimitUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetMonthlyLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddMonthlyLimitUsd adds value to the "monthly_limit_usd" field.
+func (_u *APIKeyUpdateOne) AddMonthlyLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddMonthlyLimitUsd(v)
+	return _u
+}
+
+// ClearMonthlyLimitUsd clears the value of the "monthly_limit_usd" field.
+func (_u *APIKeyUpdateOne) ClearMonthlyLimitUsd() *APIKeyUpdateOne {
+	_u.mutation.ClearMonthlyLimitUsd()
+	return _u
+}
+
+// SetTotalLimitUsd sets the "total_limit_usd" field.
+func (_u *APIKeyUpdateOne) SetTotalLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetTotalLimitUsd()
+	_u.mutation.SetTotalLimitUsd(v)
+	return _u
+}
+
+// SetNillableTotalLimitUsd sets the "total_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableTotalLimitUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetTotalLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddTotalLimitUsd adds value to the "total_limit_usd" field.
+func (_u *APIKeyUpdateOne) AddTotalLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddTotalLimitUsd(v)
+	return _u
+}
+
+// ClearTotalLimitUsd clears the value of the "total_limit_usd" field.
+func (_u *APIKeyUpdateOne) ClearTotalLimitUsd() *APIKeyUpdateOne {
+	_u.mutation.ClearTotalLimitUsd()
+	return _u
+}
+
+// SetDailyUsageUsd sets the "daily_usage_usd" field.
+func (_u *APIKeyUpdateOne) SetDailyUsageUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetDailyUsageUsd()
+	_u.mutation.SetDailyUsageUsd(v)
+	return _u
+}
+
+// SetNillableDailyUsageUsd sets the "daily_usage_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableDailyUsageUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetDailyUsageUsd(*v)
+	}
+	return _u
+}
+
+// AddDailyUsageUsd adds value to the "daily_usage_usd" field.
+func (_u *APIKeyUpdateOne) AddDailyUsageUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddDailyUsageUsd(v)
+	return _u
+}
+
+// SetWeeklyUsageUsd sets the "weekly_usage_usd" field.
+func (_u *APIKeyUpdateOne) SetWeeklyUsageUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetWeeklyUsageUsd()
+	_u.mutation.SetWeeklyUsageUsd(v)
+	return _u
+}
+
+// SetNillableWeeklyUsageUsd sets the "weekly_usage_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableWeeklyUsageUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetWeeklyUsageUsd(*v)
+	}
+	return _u
+}
+
+// AddWeeklyUsageUsd adds value to the "weekly_usage_usd" field.
+func (_u *APIKeyUpdateOne) AddWeeklyUsageUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddWeeklyUsageUsd(v)
+	return _u
+}
+
+// SetMonthlyUsageUsd sets the "monthly_usage_usd" field.
+func (_u *APIKeyUpdateOne) SetMonthlyUsageUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetMonthlyUsageUsd()
+	_u.mutation.SetMonthlyUsageUsd(v)
+	return _u
+}
+
+// SetNillableMonthlyUsageUsd sets the "monthly_usage_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableMonthlyUsageUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetMonthlyUsageUsd(*v)
+	}
+	return _u
+}
+
+// AddMonthlyUsageUsd adds value to the "monthly_usage_usd" field.
+func (_u *APIKeyUpdateOne) AddMonthlyUsageUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddMonthlyUsageUsd(v)
+	return _u
+}
+
+// SetTotalUsageUsd sets the "total_usage_usd" field.
+func (_u *APIKeyUpdateOne) SetTotalUsageUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetTotalUsageUsd()
+	_u.mutation.SetTotalUsageUsd(v)
+	return _u
+}
+
+// SetNillableTotalUsageUsd sets the "total_usage_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableTotalUsageUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetTotalUsageUsd(*v)
+	}
+	return _u
+}
+
+// AddTotalUsageUsd adds value to the "total_usage_usd" field.
+func (_u *APIKeyUpdateOne) AddTotalUsageUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddTotalUsageUsd(v)
+	return _u
+}
+
+// SetUsageResetDaily sets the "usage_reset_daily" field.
+func (_u *APIKeyUpdateOne) SetUsageResetDaily(v time.Time) *APIKeyUpdateOne {
+	_u.mutation.SetUsageResetDaily(v)
+	return _u
+}
+
+// SetNillableUsageResetDaily sets the "usage_reset_daily" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableUsageResetDaily(v *time.Time) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetUsageResetDaily(*v)
+	}
+	return _u
+}
+
+// ClearUsageResetDaily clears the value of the "usage_reset_daily" field.
+func (_u *APIKeyUpdateOne) ClearUsageResetDaily() *APIKeyUpdateOne {
+	_u.mutation.ClearUsageResetDaily()
+	return _u
+}
+
+// SetUsageResetWeekly sets the "usage_reset_weekly" field.
+func (_u *APIKeyUpdateOne) SetUsageResetWeekly(v time.Time) *APIKeyUpdateOne {
+	_u.mutation.SetUsageResetWeekly(v)
+	return _u
+}
+
+// SetNillableUsageResetWeekly sets the "usage_reset_weekly" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableUsageResetWeekly(v *time.Time) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetUsageResetWeekly(*v)
+	}
+	return _u
+}
+
+// ClearUsageResetWeekly clears the value of the "usage_reset_weekly" field.
+func (_u *APIKeyUpdateOne) ClearUsageResetWeekly() *APIKeyUpdateOne {
+	_u.mutation.ClearUsageResetWeekly()
+	return _u
+}
+
+// SetUsageResetMonthly sets the "usage_reset_monthly" field.
+func (_u *APIKeyUpdateOne) SetUsageResetMonthly(v time.Time) *APIKeyUpdateOne {
+	_u.mutation.SetUsageResetMonthly(v)
+	return _u
+}
+
+// SetNillableUsageResetMonthly sets the "usage_reset_monthly" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableUsageResetMonthly(v *time.Time) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetUsageResetMonthly(*v)
+	}
+	return _u
+}
+
+// ClearUsageResetMonthly clears the value of the "usage_reset_monthly" field.
+func (_u *APIKeyUpdateOne) ClearUsageResetMonthly() *APIKeyUpdateOne {
+	_u.mutation.ClearUsageResetMonthly()
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *APIKeyUpdateOne) SetUser(v *User) *APIKeyUpdateOne {
 	return _u.SetUserID(v.ID)
@@ -820,6 +1402,84 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if _u.mutation.IPBlacklistCleared() {
 		_spec.ClearField(apikey.FieldIPBlacklist, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.DailyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDailyLimitUsd(); ok {
+		_spec.AddField(apikey.FieldDailyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.DailyLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldDailyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.WeeklyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWeeklyLimitUsd(); ok {
+		_spec.AddField(apikey.FieldWeeklyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.WeeklyLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldWeeklyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.MonthlyLimitUsd(); ok {
+		_spec.SetField(apikey.FieldMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedMonthlyLimitUsd(); ok {
+		_spec.AddField(apikey.FieldMonthlyLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.MonthlyLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldMonthlyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.TotalLimitUsd(); ok {
+		_spec.SetField(apikey.FieldTotalLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTotalLimitUsd(); ok {
+		_spec.AddField(apikey.FieldTotalLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.TotalLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldTotalLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.DailyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldDailyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDailyUsageUsd(); ok {
+		_spec.AddField(apikey.FieldDailyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.WeeklyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldWeeklyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedWeeklyUsageUsd(); ok {
+		_spec.AddField(apikey.FieldWeeklyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.MonthlyUsageUsd(); ok {
+		_spec.SetField(apikey.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedMonthlyUsageUsd(); ok {
+		_spec.AddField(apikey.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.TotalUsageUsd(); ok {
+		_spec.SetField(apikey.FieldTotalUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedTotalUsageUsd(); ok {
+		_spec.AddField(apikey.FieldTotalUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.UsageResetDaily(); ok {
+		_spec.SetField(apikey.FieldUsageResetDaily, field.TypeTime, value)
+	}
+	if _u.mutation.UsageResetDailyCleared() {
+		_spec.ClearField(apikey.FieldUsageResetDaily, field.TypeTime)
+	}
+	if value, ok := _u.mutation.UsageResetWeekly(); ok {
+		_spec.SetField(apikey.FieldUsageResetWeekly, field.TypeTime, value)
+	}
+	if _u.mutation.UsageResetWeeklyCleared() {
+		_spec.ClearField(apikey.FieldUsageResetWeekly, field.TypeTime)
+	}
+	if value, ok := _u.mutation.UsageResetMonthly(); ok {
+		_spec.SetField(apikey.FieldUsageResetMonthly, field.TypeTime, value)
+	}
+	if _u.mutation.UsageResetMonthlyCleared() {
+		_spec.ClearField(apikey.FieldUsageResetMonthly, field.TypeTime)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

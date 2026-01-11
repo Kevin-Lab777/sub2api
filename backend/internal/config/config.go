@@ -14,9 +14,10 @@ import (
 	"github.com/spf13/viper"
 )
 
+// RunMode 运行模式常量
 const (
 	RunModeStandard = "standard"
-	RunModeSimple   = "simple"
+	RunModeLite     = "lite"
 )
 
 const DefaultCSPPolicy = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
@@ -51,7 +52,7 @@ type Config struct {
 	Gateway      GatewayConfig        `mapstructure:"gateway"`
 	Concurrency  ConcurrencyConfig    `mapstructure:"concurrency"`
 	TokenRefresh TokenRefreshConfig   `mapstructure:"token_refresh"`
-	RunMode      string               `mapstructure:"run_mode" yaml:"run_mode"`
+	RunMode      string               `mapstructure:"run_mode"` // standard or lite
 	Timezone     string               `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
 	Gemini       GeminiConfig         `mapstructure:"gemini"`
 	Update       UpdateConfig         `mapstructure:"update"`
@@ -361,15 +362,7 @@ type RateLimitConfig struct {
 	OverloadCooldownMinutes int `mapstructure:"overload_cooldown_minutes"` // 529过载冷却时间(分钟)
 }
 
-func NormalizeRunMode(value string) string {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	switch normalized {
-	case RunModeStandard, RunModeSimple:
-		return normalized
-	default:
-		return RunModeStandard
-	}
-}
+// [LITE] NormalizeRunMode function removed - always Lite mode
 
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
@@ -408,7 +401,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config error: %w", err)
 	}
 
-	cfg.RunMode = NormalizeRunMode(cfg.RunMode)
+	// [LITE] RunMode normalization removed - always Lite mode
 	cfg.Server.Mode = strings.ToLower(strings.TrimSpace(cfg.Server.Mode))
 	if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "debug"
@@ -540,7 +533,7 @@ func warnIfInsecureURL(field, raw string) {
 }
 
 func setDefaults() {
-	viper.SetDefault("run_mode", RunModeStandard)
+	// [LITE] run_mode default removed - always Lite mode
 
 	// Server
 	viper.SetDefault("server.host", "0.0.0.0")

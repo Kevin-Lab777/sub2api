@@ -733,29 +733,6 @@ func HasAPIKeysWith(preds ...predicate.APIKey) predicate.User {
 	})
 }
 
-// HasRedeemCodes applies the HasEdge predicate on the "redeem_codes" edge.
-func HasRedeemCodes() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, RedeemCodesTable, RedeemCodesColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasRedeemCodesWith applies the HasEdge predicate on the "redeem_codes" edge with a given conditions (other predicates).
-func HasRedeemCodesWith(preds ...predicate.RedeemCode) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newRedeemCodesStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasSubscriptions applies the HasEdge predicate on the "subscriptions" edge.
 func HasSubscriptions() predicate.User {
 	return predicate.User(func(s *sql.Selector) {
@@ -802,29 +779,6 @@ func HasAssignedSubscriptionsWith(preds ...predicate.UserSubscription) predicate
 	})
 }
 
-// HasAllowedGroups applies the HasEdge predicate on the "allowed_groups" edge.
-func HasAllowedGroups() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, false, AllowedGroupsTable, AllowedGroupsPrimaryKey...),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasAllowedGroupsWith applies the HasEdge predicate on the "allowed_groups" edge with a given conditions (other predicates).
-func HasAllowedGroupsWith(preds ...predicate.Group) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newAllowedGroupsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasUsageLogs applies the HasEdge predicate on the "usage_logs" edge.
 func HasUsageLogs() predicate.User {
 	return predicate.User(func(s *sql.Selector) {
@@ -840,75 +794,6 @@ func HasUsageLogs() predicate.User {
 func HasUsageLogsWith(preds ...predicate.UsageLog) predicate.User {
 	return predicate.User(func(s *sql.Selector) {
 		step := newUsageLogsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasAttributeValues applies the HasEdge predicate on the "attribute_values" edge.
-func HasAttributeValues() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, AttributeValuesTable, AttributeValuesColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasAttributeValuesWith applies the HasEdge predicate on the "attribute_values" edge with a given conditions (other predicates).
-func HasAttributeValuesWith(preds ...predicate.UserAttributeValue) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newAttributeValuesStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasPromoCodeUsages applies the HasEdge predicate on the "promo_code_usages" edge.
-func HasPromoCodeUsages() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, PromoCodeUsagesTable, PromoCodeUsagesColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasPromoCodeUsagesWith applies the HasEdge predicate on the "promo_code_usages" edge with a given conditions (other predicates).
-func HasPromoCodeUsagesWith(preds ...predicate.PromoCodeUsage) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newPromoCodeUsagesStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
-// HasUserAllowedGroups applies the HasEdge predicate on the "user_allowed_groups" edge.
-func HasUserAllowedGroups() predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, UserAllowedGroupsTable, UserAllowedGroupsColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasUserAllowedGroupsWith applies the HasEdge predicate on the "user_allowed_groups" edge with a given conditions (other predicates).
-func HasUserAllowedGroupsWith(preds ...predicate.UserAllowedGroup) predicate.User {
-	return predicate.User(func(s *sql.Selector) {
-		step := newUserAllowedGroupsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
-	"github.com/redis/go-redis/v9"
 )
 
 // ProviderSet 提供服务器层的依赖
@@ -31,7 +30,6 @@ func ProvideRouter(
 	apiKeyAuth middleware2.APIKeyAuthMiddleware,
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
-	redisClient *redis.Client,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -49,7 +47,7 @@ func ProvideRouter(
 		}
 	}
 
-	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, cfg, redisClient)
+	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, cfg)
 }
 
 // ProvideHTTPServer 提供 HTTP 服务器

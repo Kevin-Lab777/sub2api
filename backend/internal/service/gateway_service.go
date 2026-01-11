@@ -149,15 +149,16 @@ type GatewayService struct {
 	usageLogRepo        UsageLogRepository
 	userRepo            UserRepository
 	userSubRepo         UserSubscriptionRepository
+	apiKeyUsageRepo     APIKeyUsageRepository // [LITE] API Key 用量更新
 	cache               GatewayCache
 	cfg                 *config.Config
 	billingService      *BillingService
 	rateLimitService    *RateLimitService
 	billingCacheService *BillingCacheService
-	identityService     *IdentityService
-	httpUpstream        HTTPUpstream
-	deferredService     *DeferredService
-	concurrencyService  *ConcurrencyService
+	// [LITE:DELETED] identityService
+	httpUpstream       HTTPUpstream
+	deferredService    *DeferredService
+	concurrencyService *ConcurrencyService
 }
 
 // NewGatewayService creates a new GatewayService
@@ -167,13 +168,14 @@ func NewGatewayService(
 	usageLogRepo UsageLogRepository,
 	userRepo UserRepository,
 	userSubRepo UserSubscriptionRepository,
+	apiKeyUsageRepo APIKeyUsageRepository, // [LITE] API Key 用量更新
 	cache GatewayCache,
 	cfg *config.Config,
 	concurrencyService *ConcurrencyService,
 	billingService *BillingService,
 	rateLimitService *RateLimitService,
 	billingCacheService *BillingCacheService,
-	identityService *IdentityService,
+	// [LITE:DELETED] identityService parameter
 	httpUpstream HTTPUpstream,
 	deferredService *DeferredService,
 ) *GatewayService {
@@ -183,15 +185,16 @@ func NewGatewayService(
 		usageLogRepo:        usageLogRepo,
 		userRepo:            userRepo,
 		userSubRepo:         userSubRepo,
+		apiKeyUsageRepo:     apiKeyUsageRepo,
 		cache:               cache,
 		cfg:                 cfg,
 		concurrencyService:  concurrencyService,
 		billingService:      billingService,
 		rateLimitService:    rateLimitService,
 		billingCacheService: billingCacheService,
-		identityService:     identityService,
-		httpUpstream:        httpUpstream,
-		deferredService:     deferredService,
+		// [LITE:DELETED] identityService assignment
+		httpUpstream:    httpUpstream,
+		deferredService: deferredService,
 	}
 }
 
@@ -768,16 +771,8 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 		return filtered, useMixed, nil
 	}
 
-	var accounts []Account
-	var err error
-	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
-	} else if groupID != nil {
-		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
-		// 分组内无账号则返回空列表，由上层处理错误，不再回退到全平台查询
-	} else {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
-	}
+	// [LITE] 忽略分组限制，查询所有可用账号
+	accounts, err := s.accountRepo.ListSchedulableByPlatform(ctx, platform)
 	if err != nil {
 		return nil, useMixed, err
 	}
@@ -864,16 +859,8 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 	}
 
 	// 2. 获取可调度账号列表（单平台）
-	var accounts []Account
-	var err error
-	if s.cfg.RunMode == config.RunModeSimple {
-		// 简易模式：忽略 groupID，查询所有可用账号
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
-	} else if groupID != nil {
-		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
-	} else {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
-	}
+	// [LITE] 忽略 groupID，查询所有可用账号
+	accounts, err := s.accountRepo.ListSchedulableByPlatform(ctx, platform)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
@@ -1628,26 +1615,8 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		}
 	}
 
-	// OAuth账号：应用统一指纹
-	var fingerprint *Fingerprint
-	if account.IsOAuth() && s.identityService != nil {
-		// 1. 获取或创建指纹（包含随机生成的ClientID）
-		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
-		if err != nil {
-			log.Printf("Warning: failed to get fingerprint for account %d: %v", account.ID, err)
-			// 失败时降级为透传原始headers
-		} else {
-			fingerprint = fp
-
-			// 2. 重写metadata.user_id（需要指纹中的ClientID和账号的account_uuid）
-			accountUUID := account.GetExtraString("account_uuid")
-			if accountUUID != "" && fp.ClientID != "" {
-				if newBody, err := s.identityService.RewriteUserID(body, account.ID, accountUUID, fp.ClientID); err == nil && len(newBody) > 0 {
-					body = newBody
-				}
-			}
-		}
-	}
+	// [LITE:DELETED] OAuth账号指纹功能已移除
+	// 原本用于获取或创建指纹并重写user_id的代码已删除
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -1671,10 +1640,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		}
 	}
 
-	// OAuth账号：应用缓存的指纹到请求头（覆盖白名单透传的头）
-	if fingerprint != nil {
-		s.identityService.ApplyFingerprint(req, fingerprint)
-	}
+	// [LITE:DELETED] OAuth账号指纹应用代码已移除
 
 	// 确保必要的headers存在
 	if req.Header.Get("content-type") == "" {
@@ -2242,6 +2208,9 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		Usage ClaudeUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
+		// [LITE] 解析失败时仍然返回上游响应给客户端（可能是错误页面）
+		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.cfg.Security.ResponseHeaders)
+		c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
@@ -2403,12 +2372,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		log.Printf("Create usage log failed: %v", err)
 	}
 
-	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		log.Printf("[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
-		s.deferredService.ScheduleLastUsedUpdate(account.ID)
-		return nil
-	}
-
+	// [LITE] 不再有简易模式跳过计费，继续执行 API Key 限额记录
 	shouldBill := inserted || err != nil
 
 	// 根据计费类型执行扣费
@@ -2422,13 +2386,26 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 			s.billingCacheService.QueueUpdateSubscriptionUsage(user.ID, *apiKey.GroupID, cost.TotalCost)
 		}
 	} else {
-		// 余额模式：扣除用户余额（使用 ActualCost 考虑倍率后的费用）
-		if shouldBill && cost.ActualCost > 0 {
-			if err := s.userRepo.DeductBalance(ctx, user.ID, cost.ActualCost); err != nil {
-				log.Printf("Deduct balance failed: %v", err)
+		// [LITE] API Key 限额模式：如果 API Key 或 Group 有限额，记录用量而不扣余额
+		hasAPIKeyLimits := apiKey != nil && apiKey.HasAnyLimit()
+		hasGroupLimits := apiKey != nil && apiKey.Group != nil && (apiKey.Group.HasDailyLimit() || apiKey.Group.HasWeeklyLimit() || apiKey.Group.HasMonthlyLimit())
+
+		if hasAPIKeyLimits || hasGroupLimits {
+			// 限额模式：更新 API Key 用量（使用 ActualCost 考虑倍率后的费用）
+			if shouldBill && cost.ActualCost > 0 && s.apiKeyUsageRepo != nil {
+				if err := s.apiKeyUsageRepo.IncrementUsage(ctx, apiKey.ID, cost.ActualCost); err != nil {
+					log.Printf("Increment API key usage failed: %v", err)
+				}
 			}
-			// 异步更新余额缓存
-			s.billingCacheService.QueueDeductBalance(user.ID, cost.ActualCost)
+		} else {
+			// 余额模式：扣除用户余额（使用 ActualCost 考虑倍率后的费用）
+			if shouldBill && cost.ActualCost > 0 {
+				if err := s.userRepo.DeductBalance(ctx, user.ID, cost.ActualCost); err != nil {
+					log.Printf("Deduct balance failed: %v", err)
+				}
+				// 异步更新余额缓存
+				s.billingCacheService.QueueDeductBalance(user.ID, cost.ActualCost)
+			}
 		}
 	}
 
@@ -2571,18 +2548,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		}
 	}
 
-	// OAuth 账号：应用统一指纹和重写 userID
-	if account.IsOAuth() && s.identityService != nil {
-		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
-		if err == nil {
-			accountUUID := account.GetExtraString("account_uuid")
-			if accountUUID != "" && fp.ClientID != "" {
-				if newBody, err := s.identityService.RewriteUserID(body, account.ID, accountUUID, fp.ClientID); err == nil && len(newBody) > 0 {
-					body = newBody
-				}
-			}
-		}
-	}
+	// [LITE:DELETED] OAuth 账号指纹功能已移除
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -2606,13 +2572,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		}
 	}
 
-	// OAuth 账号：应用指纹到请求头
-	if account.IsOAuth() && s.identityService != nil {
-		fp, _ := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
-		if fp != nil {
-			s.identityService.ApplyFingerprint(req, fp)
-		}
-	}
+	// [LITE:DELETED] OAuth 账号指纹应用代码已移除
 
 	// 确保必要的 headers 存在
 	if req.Header.Get("content-type") == "" {

@@ -35,6 +35,28 @@ const (
 	FieldIPWhitelist = "ip_whitelist"
 	// FieldIPBlacklist holds the string denoting the ip_blacklist field in the database.
 	FieldIPBlacklist = "ip_blacklist"
+	// FieldDailyLimitUsd holds the string denoting the daily_limit_usd field in the database.
+	FieldDailyLimitUsd = "daily_limit_usd"
+	// FieldWeeklyLimitUsd holds the string denoting the weekly_limit_usd field in the database.
+	FieldWeeklyLimitUsd = "weekly_limit_usd"
+	// FieldMonthlyLimitUsd holds the string denoting the monthly_limit_usd field in the database.
+	FieldMonthlyLimitUsd = "monthly_limit_usd"
+	// FieldTotalLimitUsd holds the string denoting the total_limit_usd field in the database.
+	FieldTotalLimitUsd = "total_limit_usd"
+	// FieldDailyUsageUsd holds the string denoting the daily_usage_usd field in the database.
+	FieldDailyUsageUsd = "daily_usage_usd"
+	// FieldWeeklyUsageUsd holds the string denoting the weekly_usage_usd field in the database.
+	FieldWeeklyUsageUsd = "weekly_usage_usd"
+	// FieldMonthlyUsageUsd holds the string denoting the monthly_usage_usd field in the database.
+	FieldMonthlyUsageUsd = "monthly_usage_usd"
+	// FieldTotalUsageUsd holds the string denoting the total_usage_usd field in the database.
+	FieldTotalUsageUsd = "total_usage_usd"
+	// FieldUsageResetDaily holds the string denoting the usage_reset_daily field in the database.
+	FieldUsageResetDaily = "usage_reset_daily"
+	// FieldUsageResetWeekly holds the string denoting the usage_reset_weekly field in the database.
+	FieldUsageResetWeekly = "usage_reset_weekly"
+	// FieldUsageResetMonthly holds the string denoting the usage_reset_monthly field in the database.
+	FieldUsageResetMonthly = "usage_reset_monthly"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
@@ -79,6 +101,17 @@ var Columns = []string{
 	FieldStatus,
 	FieldIPWhitelist,
 	FieldIPBlacklist,
+	FieldDailyLimitUsd,
+	FieldWeeklyLimitUsd,
+	FieldMonthlyLimitUsd,
+	FieldTotalLimitUsd,
+	FieldDailyUsageUsd,
+	FieldWeeklyUsageUsd,
+	FieldMonthlyUsageUsd,
+	FieldTotalUsageUsd,
+	FieldUsageResetDaily,
+	FieldUsageResetWeekly,
+	FieldUsageResetMonthly,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -113,6 +146,14 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// DefaultDailyUsageUsd holds the default value on creation for the "daily_usage_usd" field.
+	DefaultDailyUsageUsd float64
+	// DefaultWeeklyUsageUsd holds the default value on creation for the "weekly_usage_usd" field.
+	DefaultWeeklyUsageUsd float64
+	// DefaultMonthlyUsageUsd holds the default value on creation for the "monthly_usage_usd" field.
+	DefaultMonthlyUsageUsd float64
+	// DefaultTotalUsageUsd holds the default value on creation for the "total_usage_usd" field.
+	DefaultTotalUsageUsd float64
 )
 
 // OrderOption defines the ordering options for the APIKey queries.
@@ -161,6 +202,61 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByDailyLimitUsd orders the results by the daily_limit_usd field.
+func ByDailyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyLimitUsd, opts...).ToFunc()
+}
+
+// ByWeeklyLimitUsd orders the results by the weekly_limit_usd field.
+func ByWeeklyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWeeklyLimitUsd, opts...).ToFunc()
+}
+
+// ByMonthlyLimitUsd orders the results by the monthly_limit_usd field.
+func ByMonthlyLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMonthlyLimitUsd, opts...).ToFunc()
+}
+
+// ByTotalLimitUsd orders the results by the total_limit_usd field.
+func ByTotalLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalLimitUsd, opts...).ToFunc()
+}
+
+// ByDailyUsageUsd orders the results by the daily_usage_usd field.
+func ByDailyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyUsageUsd, opts...).ToFunc()
+}
+
+// ByWeeklyUsageUsd orders the results by the weekly_usage_usd field.
+func ByWeeklyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWeeklyUsageUsd, opts...).ToFunc()
+}
+
+// ByMonthlyUsageUsd orders the results by the monthly_usage_usd field.
+func ByMonthlyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMonthlyUsageUsd, opts...).ToFunc()
+}
+
+// ByTotalUsageUsd orders the results by the total_usage_usd field.
+func ByTotalUsageUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalUsageUsd, opts...).ToFunc()
+}
+
+// ByUsageResetDaily orders the results by the usage_reset_daily field.
+func ByUsageResetDaily(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageResetDaily, opts...).ToFunc()
+}
+
+// ByUsageResetWeekly orders the results by the usage_reset_weekly field.
+func ByUsageResetWeekly(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageResetWeekly, opts...).ToFunc()
+}
+
+// ByUsageResetMonthly orders the results by the usage_reset_monthly field.
+func ByUsageResetMonthly(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageResetMonthly, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.

@@ -63,8 +63,18 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		IPBlacklist: k.IPBlacklist,
 		CreatedAt:   k.CreatedAt,
 		UpdatedAt:   k.UpdatedAt,
-		User:        UserFromServiceShallow(k.User),
-		Group:       GroupFromServiceShallow(k.Group),
+		// [LITE] 限额字段
+		DailyLimitUSD:   k.DailyLimitUSD,
+		WeeklyLimitUSD:  k.WeeklyLimitUSD,
+		MonthlyLimitUSD: k.MonthlyLimitUSD,
+		TotalLimitUSD:   k.TotalLimitUSD,
+		// [LITE] 用量追踪字段
+		DailyUsageUSD:   k.DailyUsageUSD,
+		WeeklyUsageUSD:  k.WeeklyUsageUSD,
+		MonthlyUsageUSD: k.MonthlyUsageUSD,
+		TotalUsageUSD:   k.TotalUsageUSD,
+		User:            UserFromServiceShallow(k.User),
+		Group:           GroupFromServiceShallow(k.Group),
 	}
 }
 
@@ -217,26 +227,7 @@ func ProxyWithAccountCountFromService(p *service.ProxyWithAccountCount) *ProxyWi
 	}
 }
 
-func RedeemCodeFromService(rc *service.RedeemCode) *RedeemCode {
-	if rc == nil {
-		return nil
-	}
-	return &RedeemCode{
-		ID:           rc.ID,
-		Code:         rc.Code,
-		Type:         rc.Type,
-		Value:        rc.Value,
-		Status:       rc.Status,
-		UsedBy:       rc.UsedBy,
-		UsedAt:       rc.UsedAt,
-		Notes:        rc.Notes,
-		CreatedAt:    rc.CreatedAt,
-		GroupID:      rc.GroupID,
-		ValidityDays: rc.ValidityDays,
-		User:         UserFromServiceShallow(rc.User),
-		Group:        GroupFromServiceShallow(rc.Group),
-	}
-}
+// [LITE:DELETED] RedeemCodeFromService function
 
 // AccountSummaryFromService returns a minimal AccountSummary for usage log display.
 // Only includes ID and Name - no sensitive fields like Credentials, Proxy, etc.
@@ -371,34 +362,5 @@ func BulkAssignResultFromService(r *service.BulkAssignResult) *BulkAssignResult 
 	}
 }
 
-func PromoCodeFromService(pc *service.PromoCode) *PromoCode {
-	if pc == nil {
-		return nil
-	}
-	return &PromoCode{
-		ID:          pc.ID,
-		Code:        pc.Code,
-		BonusAmount: pc.BonusAmount,
-		MaxUses:     pc.MaxUses,
-		UsedCount:   pc.UsedCount,
-		Status:      pc.Status,
-		ExpiresAt:   pc.ExpiresAt,
-		Notes:       pc.Notes,
-		CreatedAt:   pc.CreatedAt,
-		UpdatedAt:   pc.UpdatedAt,
-	}
-}
-
-func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
-	if u == nil {
-		return nil
-	}
-	return &PromoCodeUsage{
-		ID:          u.ID,
-		PromoCodeID: u.PromoCodeID,
-		UserID:      u.UserID,
-		BonusAmount: u.BonusAmount,
-		UsedAt:      u.UsedAt,
-		User:        UserFromServiceShallow(u.User),
-	}
-}
+// [LITE:DELETED] PromoCodeFromService function
+// [LITE:DELETED] PromoCodeUsageFromService function

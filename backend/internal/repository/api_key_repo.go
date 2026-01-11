@@ -20,6 +20,12 @@ func NewAPIKeyRepository(client *dbent.Client) service.APIKeyRepository {
 	return &apiKeyRepository{client: client}
 }
 
+// ProvideAPIKeyUsageRepository [LITE] 提供 APIKeyUsageRepository 接口
+// 使用与 APIKeyRepository 相同的实现
+func ProvideAPIKeyUsageRepository(client *dbent.Client) service.APIKeyUsageRepository {
+	return &apiKeyRepository{client: client}
+}
+
 func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 	// 默认过滤已软删除记录，避免删除后仍被查询到。
 	return r.client.APIKey.Query().Where(apikey.DeletedAtIsNil())
@@ -283,6 +289,81 @@ func (r *apiKeyRepository) CountByGroupID(ctx context.Context, groupID int64) (i
 	return int64(count), err
 }
 
+// [LITE] 用量更新方法
+
+// IncrementUsage 增加 API Key 用量（原子操作）
+func (r *apiKeyRepository) IncrementUsage(ctx context.Context, id int64, costUSD float64) error {
+	if costUSD <= 0 {
+		return nil
+	}
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		AddDailyUsageUsd(costUSD).
+		AddWeeklyUsageUsd(costUSD).
+		AddMonthlyUsageUsd(costUSD).
+		AddTotalUsageUsd(costUSD).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+// ResetDailyUsage 重置日用量
+func (r *apiKeyRepository) ResetDailyUsage(ctx context.Context, id int64, resetTime time.Time) error {
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetDailyUsageUsd(0).
+		SetUsageResetDaily(resetTime).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+// ResetWeeklyUsage 重置周用量
+func (r *apiKeyRepository) ResetWeeklyUsage(ctx context.Context, id int64, resetTime time.Time) error {
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetWeeklyUsageUsd(0).
+		SetUsageResetWeekly(resetTime).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+// ResetMonthlyUsage 重置月用量
+func (r *apiKeyRepository) ResetMonthlyUsage(ctx context.Context, id int64, resetTime time.Time) error {
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetMonthlyUsageUsd(0).
+		SetUsageResetMonthly(resetTime).
+		SetUpdatedAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
 func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 	if m == nil {
 		return nil
@@ -298,6 +379,23 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
 		GroupID:     m.GroupID,
+
+		// [LITE] 限额字段
+		DailyLimitUSD:   m.DailyLimitUsd,
+		WeeklyLimitUSD:  m.WeeklyLimitUsd,
+		MonthlyLimitUSD: m.MonthlyLimitUsd,
+		TotalLimitUSD:   m.TotalLimitUsd,
+
+		// [LITE] 用量追踪字段
+		DailyUsageUSD:   m.DailyUsageUsd,
+		WeeklyUsageUSD:  m.WeeklyUsageUsd,
+		MonthlyUsageUSD: m.MonthlyUsageUsd,
+		TotalUsageUSD:   m.TotalUsageUsd,
+
+		// [LITE] 用量重置时间字段
+		UsageResetDaily:   m.UsageResetDaily,
+		UsageResetWeekly:  m.UsageResetWeekly,
+		UsageResetMonthly: m.UsageResetMonthly,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

@@ -10,45 +10,29 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// [LITE] 简化版 AuthHandler - 只支持 Admin 登录
+
 // AuthHandler handles authentication-related requests
 type AuthHandler struct {
-	cfg          *config.Config
-	authService  *service.AuthService
-	userService  *service.UserService
-	settingSvc   *service.SettingService
-	promoService *service.PromoService
+	cfg         *config.Config
+	authService *service.AuthService
+	userService *service.UserService
+	settingSvc  *service.SettingService
 }
 
-// NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService) *AuthHandler {
+// NewAuthHandler creates a new AuthHandler [LITE] 简化版
+func NewAuthHandler(
+	cfg *config.Config,
+	authService *service.AuthService,
+	userService *service.UserService,
+	settingService *service.SettingService,
+) *AuthHandler {
 	return &AuthHandler{
-		cfg:          cfg,
-		authService:  authService,
-		userService:  userService,
-		settingSvc:   settingService,
-		promoService: promoService,
+		cfg:         cfg,
+		authService: authService,
+		userService: userService,
+		settingSvc:  settingService,
 	}
-}
-
-// RegisterRequest represents the registration request payload
-type RegisterRequest struct {
-	Email          string `json:"email" binding:"required,email"`
-	Password       string `json:"password" binding:"required,min=6"`
-	VerifyCode     string `json:"verify_code"`
-	TurnstileToken string `json:"turnstile_token"`
-	PromoCode      string `json:"promo_code"` // 注册优惠码
-}
-
-// SendVerifyCodeRequest 发送验证码请求
-type SendVerifyCodeRequest struct {
-	Email          string `json:"email" binding:"required,email"`
-	TurnstileToken string `json:"turnstile_token"`
-}
-
-// SendVerifyCodeResponse 发送验证码响应
-type SendVerifyCodeResponse struct {
-	Message   string `json:"message"`
-	Countdown int    `json:"countdown"` // 倒计时秒数
 }
 
 // LoginRequest represents the login request payload
@@ -58,71 +42,14 @@ type LoginRequest struct {
 	TurnstileToken string `json:"turnstile_token"`
 }
 
-// AuthResponse 认证响应格式（匹配前端期望）
+// AuthResponse 认证响应格式
 type AuthResponse struct {
 	AccessToken string    `json:"access_token"`
 	TokenType   string    `json:"token_type"`
 	User        *dto.User `json:"user"`
 }
 
-// Register handles user registration
-// POST /api/v1/auth/register
-func (h *AuthHandler) Register(c *gin.Context) {
-	var req RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-
-	// Turnstile 验证（当提供了邮箱验证码时跳过，因为发送验证码时已验证过）
-	if req.VerifyCode == "" {
-		if err := h.authService.VerifyTurnstile(c.Request.Context(), req.TurnstileToken, c.ClientIP()); err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-	}
-
-	token, user, err := h.authService.RegisterWithVerification(c.Request.Context(), req.Email, req.Password, req.VerifyCode, req.PromoCode)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	response.Success(c, AuthResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		User:        dto.UserFromService(user),
-	})
-}
-
-// SendVerifyCode 发送邮箱验证码
-// POST /api/v1/auth/send-verify-code
-func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
-	var req SendVerifyCodeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-
-	// Turnstile 验证
-	if err := h.authService.VerifyTurnstile(c.Request.Context(), req.TurnstileToken, c.ClientIP()); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	result, err := h.authService.SendVerifyCodeAsync(c.Request.Context(), req.Email)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	response.Success(c, SendVerifyCodeResponse{
-		Message:   "Verification code sent successfully",
-		Countdown: result.Countdown,
-	})
-}
-
-// Login handles user login
+// Login handles user login [LITE] 只允许 admin 登录
 // POST /api/v1/auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
@@ -131,11 +58,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Turnstile 验证
-	if err := h.authService.VerifyTurnstile(c.Request.Context(), req.TurnstileToken, c.ClientIP()); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
+	// [LITE] Turnstile 验证已禁用
+	// if err := h.authService.VerifyTurnstile(...); err != nil { ... }
 
 	token, user, err := h.authService.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
@@ -176,64 +100,4 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	}
 
 	response.Success(c, UserResponse{User: dto.UserFromService(user), RunMode: runMode})
-}
-
-// ValidatePromoCodeRequest 验证优惠码请求
-type ValidatePromoCodeRequest struct {
-	Code string `json:"code" binding:"required"`
-}
-
-// ValidatePromoCodeResponse 验证优惠码响应
-type ValidatePromoCodeResponse struct {
-	Valid       bool    `json:"valid"`
-	BonusAmount float64 `json:"bonus_amount,omitempty"`
-	ErrorCode   string  `json:"error_code,omitempty"`
-	Message     string  `json:"message,omitempty"`
-}
-
-// ValidatePromoCode 验证优惠码（公开接口，注册前调用）
-// POST /api/v1/auth/validate-promo-code
-func (h *AuthHandler) ValidatePromoCode(c *gin.Context) {
-	var req ValidatePromoCodeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request: "+err.Error())
-		return
-	}
-
-	promoCode, err := h.promoService.ValidatePromoCode(c.Request.Context(), req.Code)
-	if err != nil {
-		// 根据错误类型返回对应的错误码
-		errorCode := "PROMO_CODE_INVALID"
-		switch err {
-		case service.ErrPromoCodeNotFound:
-			errorCode = "PROMO_CODE_NOT_FOUND"
-		case service.ErrPromoCodeExpired:
-			errorCode = "PROMO_CODE_EXPIRED"
-		case service.ErrPromoCodeDisabled:
-			errorCode = "PROMO_CODE_DISABLED"
-		case service.ErrPromoCodeMaxUsed:
-			errorCode = "PROMO_CODE_MAX_USED"
-		case service.ErrPromoCodeAlreadyUsed:
-			errorCode = "PROMO_CODE_ALREADY_USED"
-		}
-
-		response.Success(c, ValidatePromoCodeResponse{
-			Valid:     false,
-			ErrorCode: errorCode,
-		})
-		return
-	}
-
-	if promoCode == nil {
-		response.Success(c, ValidatePromoCodeResponse{
-			Valid:     false,
-			ErrorCode: "PROMO_CODE_INVALID",
-		})
-		return
-	}
-
-	response.Success(c, ValidatePromoCodeResponse{
-		Valid:       true,
-		BonusAmount: promoCode.BonusAmount,
-	})
 }

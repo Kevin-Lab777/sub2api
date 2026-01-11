@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"net/http"
 	"strconv"
 	"time"
 
@@ -16,9 +17,10 @@ import (
 
 // UsageHandler handles admin usage-related requests
 type UsageHandler struct {
-	usageService  *service.UsageService
-	apiKeyService *service.APIKeyService
-	adminService  service.AdminService
+	usageService       *service.UsageService
+	apiKeyService      *service.APIKeyService
+	adminService       service.AdminService
+	apiKeyUsageService *service.APIKeyUsageService // [LITE] API Key 用量管理
 }
 
 // NewUsageHandler creates a new admin usage handler
@@ -26,11 +28,13 @@ func NewUsageHandler(
 	usageService *service.UsageService,
 	apiKeyService *service.APIKeyService,
 	adminService service.AdminService,
+	apiKeyUsageService *service.APIKeyUsageService, // [LITE]
 ) *UsageHandler {
 	return &UsageHandler{
-		usageService:  usageService,
-		apiKeyService: apiKeyService,
-		adminService:  adminService,
+		usageService:       usageService,
+		apiKeyService:      apiKeyService,
+		adminService:       adminService,
+		apiKeyUsageService: apiKeyUsageService,
 	}
 }
 
@@ -343,4 +347,38 @@ func (h *UsageHandler) SearchAPIKeys(c *gin.Context) {
 	}
 
 	response.Success(c, result)
+}
+
+// ResetAPIKeyUsage [LITE] 重置 API Key 用量
+// POST /api/v1/admin/api-keys/:id/reset-usage
+func (h *UsageHandler) ResetAPIKeyUsage(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid API key ID")
+		return
+	}
+
+	// 获取重置周期参数，默认为 "all"
+	period := c.DefaultQuery("period", "all")
+	validPeriods := map[string]bool{
+		"daily":   true,
+		"weekly":  true,
+		"monthly": true,
+		"all":     true,
+	}
+	if !validPeriods[period] {
+		response.BadRequest(c, "Invalid period, use: daily, weekly, monthly, or all")
+		return
+	}
+
+	if err := h.apiKeyUsageService.ResetUsage(c.Request.Context(), id, period); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Usage reset successfully",
+		"period":  period,
+	})
 }

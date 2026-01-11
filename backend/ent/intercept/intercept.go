@@ -13,16 +13,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
-	"github.com/Wei-Shaw/sub2api/ent/promocode"
-	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
-	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
-	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
-	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -190,60 +184,6 @@ func (f TraverseGroup) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.GroupQuery", q)
 }
 
-// The PromoCodeFunc type is an adapter to allow the use of ordinary function as a Querier.
-type PromoCodeFunc func(context.Context, *ent.PromoCodeQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f PromoCodeFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.PromoCodeQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.PromoCodeQuery", q)
-}
-
-// The TraversePromoCode type is an adapter to allow the use of ordinary function as Traverser.
-type TraversePromoCode func(context.Context, *ent.PromoCodeQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraversePromoCode) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraversePromoCode) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.PromoCodeQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.PromoCodeQuery", q)
-}
-
-// The PromoCodeUsageFunc type is an adapter to allow the use of ordinary function as a Querier.
-type PromoCodeUsageFunc func(context.Context, *ent.PromoCodeUsageQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f PromoCodeUsageFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.PromoCodeUsageQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.PromoCodeUsageQuery", q)
-}
-
-// The TraversePromoCodeUsage type is an adapter to allow the use of ordinary function as Traverser.
-type TraversePromoCodeUsage func(context.Context, *ent.PromoCodeUsageQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraversePromoCodeUsage) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraversePromoCodeUsage) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.PromoCodeUsageQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.PromoCodeUsageQuery", q)
-}
-
 // The ProxyFunc type is an adapter to allow the use of ordinary function as a Querier.
 type ProxyFunc func(context.Context, *ent.ProxyQuery) (ent.Value, error)
 
@@ -269,33 +209,6 @@ func (f TraverseProxy) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.ProxyQuery", q)
-}
-
-// The RedeemCodeFunc type is an adapter to allow the use of ordinary function as a Querier.
-type RedeemCodeFunc func(context.Context, *ent.RedeemCodeQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f RedeemCodeFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.RedeemCodeQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.RedeemCodeQuery", q)
-}
-
-// The TraverseRedeemCode type is an adapter to allow the use of ordinary function as Traverser.
-type TraverseRedeemCode func(context.Context, *ent.RedeemCodeQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraverseRedeemCode) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraverseRedeemCode) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.RedeemCodeQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.RedeemCodeQuery", q)
 }
 
 // The SettingFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -379,87 +292,6 @@ func (f TraverseUser) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.UserQuery", q)
 }
 
-// The UserAllowedGroupFunc type is an adapter to allow the use of ordinary function as a Querier.
-type UserAllowedGroupFunc func(context.Context, *ent.UserAllowedGroupQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f UserAllowedGroupFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.UserAllowedGroupQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserAllowedGroupQuery", q)
-}
-
-// The TraverseUserAllowedGroup type is an adapter to allow the use of ordinary function as Traverser.
-type TraverseUserAllowedGroup func(context.Context, *ent.UserAllowedGroupQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraverseUserAllowedGroup) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraverseUserAllowedGroup) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.UserAllowedGroupQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.UserAllowedGroupQuery", q)
-}
-
-// The UserAttributeDefinitionFunc type is an adapter to allow the use of ordinary function as a Querier.
-type UserAttributeDefinitionFunc func(context.Context, *ent.UserAttributeDefinitionQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f UserAttributeDefinitionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.UserAttributeDefinitionQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserAttributeDefinitionQuery", q)
-}
-
-// The TraverseUserAttributeDefinition type is an adapter to allow the use of ordinary function as Traverser.
-type TraverseUserAttributeDefinition func(context.Context, *ent.UserAttributeDefinitionQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraverseUserAttributeDefinition) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraverseUserAttributeDefinition) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.UserAttributeDefinitionQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.UserAttributeDefinitionQuery", q)
-}
-
-// The UserAttributeValueFunc type is an adapter to allow the use of ordinary function as a Querier.
-type UserAttributeValueFunc func(context.Context, *ent.UserAttributeValueQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f UserAttributeValueFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.UserAttributeValueQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserAttributeValueQuery", q)
-}
-
-// The TraverseUserAttributeValue type is an adapter to allow the use of ordinary function as Traverser.
-type TraverseUserAttributeValue func(context.Context, *ent.UserAttributeValueQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraverseUserAttributeValue) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraverseUserAttributeValue) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.UserAttributeValueQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.UserAttributeValueQuery", q)
-}
-
 // The UserSubscriptionFunc type is an adapter to allow the use of ordinary function as a Querier.
 type UserSubscriptionFunc func(context.Context, *ent.UserSubscriptionQuery) (ent.Value, error)
 
@@ -498,26 +330,14 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AccountGroupQuery, predicate.AccountGroup, accountgroup.OrderOption]{typ: ent.TypeAccountGroup, tq: q}, nil
 	case *ent.GroupQuery:
 		return &query[*ent.GroupQuery, predicate.Group, group.OrderOption]{typ: ent.TypeGroup, tq: q}, nil
-	case *ent.PromoCodeQuery:
-		return &query[*ent.PromoCodeQuery, predicate.PromoCode, promocode.OrderOption]{typ: ent.TypePromoCode, tq: q}, nil
-	case *ent.PromoCodeUsageQuery:
-		return &query[*ent.PromoCodeUsageQuery, predicate.PromoCodeUsage, promocodeusage.OrderOption]{typ: ent.TypePromoCodeUsage, tq: q}, nil
 	case *ent.ProxyQuery:
 		return &query[*ent.ProxyQuery, predicate.Proxy, proxy.OrderOption]{typ: ent.TypeProxy, tq: q}, nil
-	case *ent.RedeemCodeQuery:
-		return &query[*ent.RedeemCodeQuery, predicate.RedeemCode, redeemcode.OrderOption]{typ: ent.TypeRedeemCode, tq: q}, nil
 	case *ent.SettingQuery:
 		return &query[*ent.SettingQuery, predicate.Setting, setting.OrderOption]{typ: ent.TypeSetting, tq: q}, nil
 	case *ent.UsageLogQuery:
 		return &query[*ent.UsageLogQuery, predicate.UsageLog, usagelog.OrderOption]{typ: ent.TypeUsageLog, tq: q}, nil
 	case *ent.UserQuery:
 		return &query[*ent.UserQuery, predicate.User, user.OrderOption]{typ: ent.TypeUser, tq: q}, nil
-	case *ent.UserAllowedGroupQuery:
-		return &query[*ent.UserAllowedGroupQuery, predicate.UserAllowedGroup, userallowedgroup.OrderOption]{typ: ent.TypeUserAllowedGroup, tq: q}, nil
-	case *ent.UserAttributeDefinitionQuery:
-		return &query[*ent.UserAttributeDefinitionQuery, predicate.UserAttributeDefinition, userattributedefinition.OrderOption]{typ: ent.TypeUserAttributeDefinition, tq: q}, nil
-	case *ent.UserAttributeValueQuery:
-		return &query[*ent.UserAttributeValueQuery, predicate.UserAttributeValue, userattributevalue.OrderOption]{typ: ent.TypeUserAttributeValue, tq: q}, nil
 	case *ent.UserSubscriptionQuery:
 		return &query[*ent.UserSubscriptionQuery, predicate.UserSubscription, usersubscription.OrderOption]{typ: ent.TypeUserSubscription, tq: q}, nil
 	default:

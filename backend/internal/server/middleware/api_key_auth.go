@@ -97,18 +97,14 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
-		if cfg.RunMode == config.RunModeSimple {
-			// 简易模式：跳过余额和订阅检查，但仍需设置必要的上下文
-			c.Set(string(ContextKeyAPIKey), apiKey)
-			c.Set(string(ContextKeyUser), AuthSubject{
-				UserID:      apiKey.User.ID,
-				Concurrency: apiKey.User.Concurrency,
-			})
-			c.Set(string(ContextKeyUserRole), apiKey.User.Role)
-			setGroupContext(c, apiKey.Group)
-			c.Next()
-			return
-		}
+		// [LITE] 设置上下文，不再检查 RunMode
+		c.Set(string(ContextKeyAPIKey), apiKey)
+		c.Set(string(ContextKeyUser), AuthSubject{
+			UserID:      apiKey.User.ID,
+			Concurrency: apiKey.User.Concurrency,
+		})
+		c.Set(string(ContextKeyUserRole), apiKey.User.Role)
+		setGroupContext(c, apiKey.Group)
 
 		// 判断计费方式：订阅模式 vs 余额模式
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
@@ -149,13 +145,8 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 			// 将订阅信息存入上下文
 			c.Set(string(ContextKeySubscription), subscription)
-		} else {
-			// 余额模式：检查用户余额
-			if apiKey.User.Balance <= 0 {
-				AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
-				return
-			}
 		}
+		// [LITE] 标准模式不在中间件检查余额，限额检查在 handler 中进行
 
 		// 将API key和用户信息存入上下文
 		c.Set(string(ContextKeyAPIKey), apiKey)

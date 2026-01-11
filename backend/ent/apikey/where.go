@@ -95,6 +95,61 @@ func Status(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldStatus, v))
 }
 
+// DailyLimitUsd applies equality check predicate on the "daily_limit_usd" field. It's identical to DailyLimitUsdEQ.
+func DailyLimitUsd(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDailyLimitUsd, v))
+}
+
+// WeeklyLimitUsd applies equality check predicate on the "weekly_limit_usd" field. It's identical to WeeklyLimitUsdEQ.
+func WeeklyLimitUsd(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldWeeklyLimitUsd, v))
+}
+
+// MonthlyLimitUsd applies equality check predicate on the "monthly_limit_usd" field. It's identical to MonthlyLimitUsdEQ.
+func MonthlyLimitUsd(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldMonthlyLimitUsd, v))
+}
+
+// TotalLimitUsd applies equality check predicate on the "total_limit_usd" field. It's identical to TotalLimitUsdEQ.
+func TotalLimitUsd(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldTotalLimitUsd, v))
+}
+
+// DailyUsageUsd applies equality check predicate on the "daily_usage_usd" field. It's identical to DailyUsageUsdEQ.
+func DailyUsageUsd(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDailyUsageUsd, v))
+}
+
+// WeeklyUsageUsd applies equality check predicate on the "weekly_usage_usd" field. It's identical to WeeklyUsageUsdEQ.
+func WeeklyUsageUsd(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldWeeklyUsageUsd, v))
+}
+
+// MonthlyUsageUsd applies equality check predicate on the "monthly_usage_usd" field. It's identical to MonthlyUsageUsdEQ.
+func MonthlyUsageUsd(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldMonthlyUsageUsd, v))
+}
+
+// TotalUsageUsd applies equality check predicate on the "total_usage_usd" field. It's identical to TotalUsageUsdEQ.
+func TotalUsageUsd(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldTotalUsageUsd, v))
+}
+
+// UsageResetDaily applies equality check predicate on the "usage_reset_daily" field. It's identical to UsageResetDailyEQ.
+func UsageResetDaily(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldUsageResetDaily, v))
+}
+
+// UsageResetWeekly applies equality check predicate on the "usage_reset_weekly" field. It's identical to UsageResetWeeklyEQ.
+func UsageResetWeekly(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldUsageResetWeekly, v))
+}
+
+// UsageResetMonthly applies equality check predicate on the "usage_reset_monthly" field. It's identical to UsageResetMonthlyEQ.
+func UsageResetMonthly(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldUsageResetMonthly, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldCreatedAt, v))
@@ -488,6 +543,516 @@ func IPBlacklistIsNil() predicate.APIKey {
 // IPBlacklistNotNil applies the NotNil predicate on the "ip_blacklist" field.
 func IPBlacklistNotNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldNotNull(FieldIPBlacklist))
+}
+
+// DailyLimitUsdEQ applies the EQ predicate on the "daily_limit_usd" field.
+func DailyLimitUsdEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDailyLimitUsd, v))
+}
+
+// DailyLimitUsdNEQ applies the NEQ predicate on the "daily_limit_usd" field.
+func DailyLimitUsdNEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldDailyLimitUsd, v))
+}
+
+// DailyLimitUsdIn applies the In predicate on the "daily_limit_usd" field.
+func DailyLimitUsdIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldDailyLimitUsd, vs...))
+}
+
+// DailyLimitUsdNotIn applies the NotIn predicate on the "daily_limit_usd" field.
+func DailyLimitUsdNotIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldDailyLimitUsd, vs...))
+}
+
+// DailyLimitUsdGT applies the GT predicate on the "daily_limit_usd" field.
+func DailyLimitUsdGT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldDailyLimitUsd, v))
+}
+
+// DailyLimitUsdGTE applies the GTE predicate on the "daily_limit_usd" field.
+func DailyLimitUsdGTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldDailyLimitUsd, v))
+}
+
+// DailyLimitUsdLT applies the LT predicate on the "daily_limit_usd" field.
+func DailyLimitUsdLT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldDailyLimitUsd, v))
+}
+
+// DailyLimitUsdLTE applies the LTE predicate on the "daily_limit_usd" field.
+func DailyLimitUsdLTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldDailyLimitUsd, v))
+}
+
+// DailyLimitUsdIsNil applies the IsNil predicate on the "daily_limit_usd" field.
+func DailyLimitUsdIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldDailyLimitUsd))
+}
+
+// DailyLimitUsdNotNil applies the NotNil predicate on the "daily_limit_usd" field.
+func DailyLimitUsdNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldDailyLimitUsd))
+}
+
+// WeeklyLimitUsdEQ applies the EQ predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldWeeklyLimitUsd, v))
+}
+
+// WeeklyLimitUsdNEQ applies the NEQ predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdNEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldWeeklyLimitUsd, v))
+}
+
+// WeeklyLimitUsdIn applies the In predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldWeeklyLimitUsd, vs...))
+}
+
+// WeeklyLimitUsdNotIn applies the NotIn predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdNotIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldWeeklyLimitUsd, vs...))
+}
+
+// WeeklyLimitUsdGT applies the GT predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdGT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldWeeklyLimitUsd, v))
+}
+
+// WeeklyLimitUsdGTE applies the GTE predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdGTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldWeeklyLimitUsd, v))
+}
+
+// WeeklyLimitUsdLT applies the LT predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdLT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldWeeklyLimitUsd, v))
+}
+
+// WeeklyLimitUsdLTE applies the LTE predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdLTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldWeeklyLimitUsd, v))
+}
+
+// WeeklyLimitUsdIsNil applies the IsNil predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldWeeklyLimitUsd))
+}
+
+// WeeklyLimitUsdNotNil applies the NotNil predicate on the "weekly_limit_usd" field.
+func WeeklyLimitUsdNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldWeeklyLimitUsd))
+}
+
+// MonthlyLimitUsdEQ applies the EQ predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldMonthlyLimitUsd, v))
+}
+
+// MonthlyLimitUsdNEQ applies the NEQ predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdNEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldMonthlyLimitUsd, v))
+}
+
+// MonthlyLimitUsdIn applies the In predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldMonthlyLimitUsd, vs...))
+}
+
+// MonthlyLimitUsdNotIn applies the NotIn predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdNotIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldMonthlyLimitUsd, vs...))
+}
+
+// MonthlyLimitUsdGT applies the GT predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdGT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldMonthlyLimitUsd, v))
+}
+
+// MonthlyLimitUsdGTE applies the GTE predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdGTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldMonthlyLimitUsd, v))
+}
+
+// MonthlyLimitUsdLT applies the LT predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdLT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldMonthlyLimitUsd, v))
+}
+
+// MonthlyLimitUsdLTE applies the LTE predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdLTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldMonthlyLimitUsd, v))
+}
+
+// MonthlyLimitUsdIsNil applies the IsNil predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldMonthlyLimitUsd))
+}
+
+// MonthlyLimitUsdNotNil applies the NotNil predicate on the "monthly_limit_usd" field.
+func MonthlyLimitUsdNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldMonthlyLimitUsd))
+}
+
+// TotalLimitUsdEQ applies the EQ predicate on the "total_limit_usd" field.
+func TotalLimitUsdEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldTotalLimitUsd, v))
+}
+
+// TotalLimitUsdNEQ applies the NEQ predicate on the "total_limit_usd" field.
+func TotalLimitUsdNEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldTotalLimitUsd, v))
+}
+
+// TotalLimitUsdIn applies the In predicate on the "total_limit_usd" field.
+func TotalLimitUsdIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldTotalLimitUsd, vs...))
+}
+
+// TotalLimitUsdNotIn applies the NotIn predicate on the "total_limit_usd" field.
+func TotalLimitUsdNotIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldTotalLimitUsd, vs...))
+}
+
+// TotalLimitUsdGT applies the GT predicate on the "total_limit_usd" field.
+func TotalLimitUsdGT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldTotalLimitUsd, v))
+}
+
+// TotalLimitUsdGTE applies the GTE predicate on the "total_limit_usd" field.
+func TotalLimitUsdGTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldTotalLimitUsd, v))
+}
+
+// TotalLimitUsdLT applies the LT predicate on the "total_limit_usd" field.
+func TotalLimitUsdLT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldTotalLimitUsd, v))
+}
+
+// TotalLimitUsdLTE applies the LTE predicate on the "total_limit_usd" field.
+func TotalLimitUsdLTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldTotalLimitUsd, v))
+}
+
+// TotalLimitUsdIsNil applies the IsNil predicate on the "total_limit_usd" field.
+func TotalLimitUsdIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldTotalLimitUsd))
+}
+
+// TotalLimitUsdNotNil applies the NotNil predicate on the "total_limit_usd" field.
+func TotalLimitUsdNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldTotalLimitUsd))
+}
+
+// DailyUsageUsdEQ applies the EQ predicate on the "daily_usage_usd" field.
+func DailyUsageUsdEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDailyUsageUsd, v))
+}
+
+// DailyUsageUsdNEQ applies the NEQ predicate on the "daily_usage_usd" field.
+func DailyUsageUsdNEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldDailyUsageUsd, v))
+}
+
+// DailyUsageUsdIn applies the In predicate on the "daily_usage_usd" field.
+func DailyUsageUsdIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldDailyUsageUsd, vs...))
+}
+
+// DailyUsageUsdNotIn applies the NotIn predicate on the "daily_usage_usd" field.
+func DailyUsageUsdNotIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldDailyUsageUsd, vs...))
+}
+
+// DailyUsageUsdGT applies the GT predicate on the "daily_usage_usd" field.
+func DailyUsageUsdGT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldDailyUsageUsd, v))
+}
+
+// DailyUsageUsdGTE applies the GTE predicate on the "daily_usage_usd" field.
+func DailyUsageUsdGTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldDailyUsageUsd, v))
+}
+
+// DailyUsageUsdLT applies the LT predicate on the "daily_usage_usd" field.
+func DailyUsageUsdLT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldDailyUsageUsd, v))
+}
+
+// DailyUsageUsdLTE applies the LTE predicate on the "daily_usage_usd" field.
+func DailyUsageUsdLTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldDailyUsageUsd, v))
+}
+
+// WeeklyUsageUsdEQ applies the EQ predicate on the "weekly_usage_usd" field.
+func WeeklyUsageUsdEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldWeeklyUsageUsd, v))
+}
+
+// WeeklyUsageUsdNEQ applies the NEQ predicate on the "weekly_usage_usd" field.
+func WeeklyUsageUsdNEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldWeeklyUsageUsd, v))
+}
+
+// WeeklyUsageUsdIn applies the In predicate on the "weekly_usage_usd" field.
+func WeeklyUsageUsdIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldWeeklyUsageUsd, vs...))
+}
+
+// WeeklyUsageUsdNotIn applies the NotIn predicate on the "weekly_usage_usd" field.
+func WeeklyUsageUsdNotIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldWeeklyUsageUsd, vs...))
+}
+
+// WeeklyUsageUsdGT applies the GT predicate on the "weekly_usage_usd" field.
+func WeeklyUsageUsdGT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldWeeklyUsageUsd, v))
+}
+
+// WeeklyUsageUsdGTE applies the GTE predicate on the "weekly_usage_usd" field.
+func WeeklyUsageUsdGTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldWeeklyUsageUsd, v))
+}
+
+// WeeklyUsageUsdLT applies the LT predicate on the "weekly_usage_usd" field.
+func WeeklyUsageUsdLT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldWeeklyUsageUsd, v))
+}
+
+// WeeklyUsageUsdLTE applies the LTE predicate on the "weekly_usage_usd" field.
+func WeeklyUsageUsdLTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldWeeklyUsageUsd, v))
+}
+
+// MonthlyUsageUsdEQ applies the EQ predicate on the "monthly_usage_usd" field.
+func MonthlyUsageUsdEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldMonthlyUsageUsd, v))
+}
+
+// MonthlyUsageUsdNEQ applies the NEQ predicate on the "monthly_usage_usd" field.
+func MonthlyUsageUsdNEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldMonthlyUsageUsd, v))
+}
+
+// MonthlyUsageUsdIn applies the In predicate on the "monthly_usage_usd" field.
+func MonthlyUsageUsdIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldMonthlyUsageUsd, vs...))
+}
+
+// MonthlyUsageUsdNotIn applies the NotIn predicate on the "monthly_usage_usd" field.
+func MonthlyUsageUsdNotIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldMonthlyUsageUsd, vs...))
+}
+
+// MonthlyUsageUsdGT applies the GT predicate on the "monthly_usage_usd" field.
+func MonthlyUsageUsdGT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldMonthlyUsageUsd, v))
+}
+
+// MonthlyUsageUsdGTE applies the GTE predicate on the "monthly_usage_usd" field.
+func MonthlyUsageUsdGTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldMonthlyUsageUsd, v))
+}
+
+// MonthlyUsageUsdLT applies the LT predicate on the "monthly_usage_usd" field.
+func MonthlyUsageUsdLT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldMonthlyUsageUsd, v))
+}
+
+// MonthlyUsageUsdLTE applies the LTE predicate on the "monthly_usage_usd" field.
+func MonthlyUsageUsdLTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldMonthlyUsageUsd, v))
+}
+
+// TotalUsageUsdEQ applies the EQ predicate on the "total_usage_usd" field.
+func TotalUsageUsdEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldTotalUsageUsd, v))
+}
+
+// TotalUsageUsdNEQ applies the NEQ predicate on the "total_usage_usd" field.
+func TotalUsageUsdNEQ(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldTotalUsageUsd, v))
+}
+
+// TotalUsageUsdIn applies the In predicate on the "total_usage_usd" field.
+func TotalUsageUsdIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldTotalUsageUsd, vs...))
+}
+
+// TotalUsageUsdNotIn applies the NotIn predicate on the "total_usage_usd" field.
+func TotalUsageUsdNotIn(vs ...float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldTotalUsageUsd, vs...))
+}
+
+// TotalUsageUsdGT applies the GT predicate on the "total_usage_usd" field.
+func TotalUsageUsdGT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldTotalUsageUsd, v))
+}
+
+// TotalUsageUsdGTE applies the GTE predicate on the "total_usage_usd" field.
+func TotalUsageUsdGTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldTotalUsageUsd, v))
+}
+
+// TotalUsageUsdLT applies the LT predicate on the "total_usage_usd" field.
+func TotalUsageUsdLT(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldTotalUsageUsd, v))
+}
+
+// TotalUsageUsdLTE applies the LTE predicate on the "total_usage_usd" field.
+func TotalUsageUsdLTE(v float64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldTotalUsageUsd, v))
+}
+
+// UsageResetDailyEQ applies the EQ predicate on the "usage_reset_daily" field.
+func UsageResetDailyEQ(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldUsageResetDaily, v))
+}
+
+// UsageResetDailyNEQ applies the NEQ predicate on the "usage_reset_daily" field.
+func UsageResetDailyNEQ(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldUsageResetDaily, v))
+}
+
+// UsageResetDailyIn applies the In predicate on the "usage_reset_daily" field.
+func UsageResetDailyIn(vs ...time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldUsageResetDaily, vs...))
+}
+
+// UsageResetDailyNotIn applies the NotIn predicate on the "usage_reset_daily" field.
+func UsageResetDailyNotIn(vs ...time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldUsageResetDaily, vs...))
+}
+
+// UsageResetDailyGT applies the GT predicate on the "usage_reset_daily" field.
+func UsageResetDailyGT(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldUsageResetDaily, v))
+}
+
+// UsageResetDailyGTE applies the GTE predicate on the "usage_reset_daily" field.
+func UsageResetDailyGTE(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldUsageResetDaily, v))
+}
+
+// UsageResetDailyLT applies the LT predicate on the "usage_reset_daily" field.
+func UsageResetDailyLT(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldUsageResetDaily, v))
+}
+
+// UsageResetDailyLTE applies the LTE predicate on the "usage_reset_daily" field.
+func UsageResetDailyLTE(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldUsageResetDaily, v))
+}
+
+// UsageResetDailyIsNil applies the IsNil predicate on the "usage_reset_daily" field.
+func UsageResetDailyIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldUsageResetDaily))
+}
+
+// UsageResetDailyNotNil applies the NotNil predicate on the "usage_reset_daily" field.
+func UsageResetDailyNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldUsageResetDaily))
+}
+
+// UsageResetWeeklyEQ applies the EQ predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyEQ(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldUsageResetWeekly, v))
+}
+
+// UsageResetWeeklyNEQ applies the NEQ predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyNEQ(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldUsageResetWeekly, v))
+}
+
+// UsageResetWeeklyIn applies the In predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyIn(vs ...time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldUsageResetWeekly, vs...))
+}
+
+// UsageResetWeeklyNotIn applies the NotIn predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyNotIn(vs ...time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldUsageResetWeekly, vs...))
+}
+
+// UsageResetWeeklyGT applies the GT predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyGT(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldUsageResetWeekly, v))
+}
+
+// UsageResetWeeklyGTE applies the GTE predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyGTE(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldUsageResetWeekly, v))
+}
+
+// UsageResetWeeklyLT applies the LT predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyLT(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldUsageResetWeekly, v))
+}
+
+// UsageResetWeeklyLTE applies the LTE predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyLTE(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldUsageResetWeekly, v))
+}
+
+// UsageResetWeeklyIsNil applies the IsNil predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldUsageResetWeekly))
+}
+
+// UsageResetWeeklyNotNil applies the NotNil predicate on the "usage_reset_weekly" field.
+func UsageResetWeeklyNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldUsageResetWeekly))
+}
+
+// UsageResetMonthlyEQ applies the EQ predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyEQ(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldUsageResetMonthly, v))
+}
+
+// UsageResetMonthlyNEQ applies the NEQ predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyNEQ(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldUsageResetMonthly, v))
+}
+
+// UsageResetMonthlyIn applies the In predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyIn(vs ...time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldUsageResetMonthly, vs...))
+}
+
+// UsageResetMonthlyNotIn applies the NotIn predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyNotIn(vs ...time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldUsageResetMonthly, vs...))
+}
+
+// UsageResetMonthlyGT applies the GT predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyGT(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldUsageResetMonthly, v))
+}
+
+// UsageResetMonthlyGTE applies the GTE predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyGTE(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldUsageResetMonthly, v))
+}
+
+// UsageResetMonthlyLT applies the LT predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyLT(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldUsageResetMonthly, v))
+}
+
+// UsageResetMonthlyLTE applies the LTE predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyLTE(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldUsageResetMonthly, v))
+}
+
+// UsageResetMonthlyIsNil applies the IsNil predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldUsageResetMonthly))
+}
+
+// UsageResetMonthlyNotNil applies the NotNil predicate on the "usage_reset_monthly" field.
+func UsageResetMonthlyNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldUsageResetMonthly))
 }
 
 // HasUser applies the HasEdge predicate on the "user" edge.

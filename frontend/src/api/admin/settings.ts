@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '../client'
+import type { PublicSettings } from '@/types'
 
 /**
  * System settings interface
@@ -79,6 +80,15 @@ export interface UpdateSettingsRequest {
  */
 export async function getSettings(): Promise<SystemSettings> {
   const { data } = await apiClient.get<SystemSettings>('/admin/settings')
+  return data
+}
+
+/**
+ * Get public settings (no auth required)
+ * @returns Public settings
+ */
+export async function getPublicSettings(): Promise<PublicSettings> {
+  const { data } = await apiClient.get<PublicSettings>('/settings/public')
   return data
 }
 
@@ -177,6 +187,7 @@ export async function deleteAdminApiKey(): Promise<{ message: string }> {
 
 export const settingsAPI = {
   getSettings,
+  getPublicSettings,
   updateSettings,
   testSmtpConnection,
   sendTestEmail,

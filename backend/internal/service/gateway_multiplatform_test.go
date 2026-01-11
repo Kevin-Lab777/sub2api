@@ -15,8 +15,9 @@ import (
 )
 
 // testConfig 返回一个用于测试的默认配置
+// [LITE] RunMode removed - always Lite mode
 func testConfig() *config.Config {
-	return &config.Config{RunMode: config.RunModeStandard}
+	return &config.Config{}
 }
 
 // mockAccountRepoForPlatform 单平台测试用的 mock

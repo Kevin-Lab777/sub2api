@@ -55,20 +55,14 @@ const (
 	FieldFallbackGroupID = "fallback_group_id"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
-	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
-	EdgeRedeemCodes = "redeem_codes"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
 	EdgeSubscriptions = "subscriptions"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
-	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
-	EdgeAllowedUsers = "allowed_users"
 	// EdgeAccountGroups holds the string denoting the account_groups edge name in mutations.
 	EdgeAccountGroups = "account_groups"
-	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
-	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the group in the database.
 	Table = "groups"
 	// APIKeysTable is the table that holds the api_keys relation/edge.
@@ -78,13 +72,6 @@ const (
 	APIKeysInverseTable = "api_keys"
 	// APIKeysColumn is the table column denoting the api_keys relation/edge.
 	APIKeysColumn = "group_id"
-	// RedeemCodesTable is the table that holds the redeem_codes relation/edge.
-	RedeemCodesTable = "redeem_codes"
-	// RedeemCodesInverseTable is the table name for the RedeemCode entity.
-	// It exists in this package in order to avoid circular dependency with the "redeemcode" package.
-	RedeemCodesInverseTable = "redeem_codes"
-	// RedeemCodesColumn is the table column denoting the redeem_codes relation/edge.
-	RedeemCodesColumn = "group_id"
 	// SubscriptionsTable is the table that holds the subscriptions relation/edge.
 	SubscriptionsTable = "user_subscriptions"
 	// SubscriptionsInverseTable is the table name for the UserSubscription entity.
@@ -104,11 +91,6 @@ const (
 	// AccountsInverseTable is the table name for the Account entity.
 	// It exists in this package in order to avoid circular dependency with the "account" package.
 	AccountsInverseTable = "accounts"
-	// AllowedUsersTable is the table that holds the allowed_users relation/edge. The primary key declared below.
-	AllowedUsersTable = "user_allowed_groups"
-	// AllowedUsersInverseTable is the table name for the User entity.
-	// It exists in this package in order to avoid circular dependency with the "user" package.
-	AllowedUsersInverseTable = "users"
 	// AccountGroupsTable is the table that holds the account_groups relation/edge.
 	AccountGroupsTable = "account_groups"
 	// AccountGroupsInverseTable is the table name for the AccountGroup entity.
@@ -116,13 +98,6 @@ const (
 	AccountGroupsInverseTable = "account_groups"
 	// AccountGroupsColumn is the table column denoting the account_groups relation/edge.
 	AccountGroupsColumn = "group_id"
-	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
-	UserAllowedGroupsTable = "user_allowed_groups"
-	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
-	// It exists in this package in order to avoid circular dependency with the "userallowedgroup" package.
-	UserAllowedGroupsInverseTable = "user_allowed_groups"
-	// UserAllowedGroupsColumn is the table column denoting the user_allowed_groups relation/edge.
-	UserAllowedGroupsColumn = "group_id"
 )
 
 // Columns holds all SQL columns for group fields.
@@ -153,9 +128,6 @@ var (
 	// AccountsPrimaryKey and AccountsColumn2 are the table columns denoting the
 	// primary key for the accounts relation (M2M).
 	AccountsPrimaryKey = []string{"account_id", "group_id"}
-	// AllowedUsersPrimaryKey and AllowedUsersColumn2 are the table columns denoting the
-	// primary key for the allowed_users relation (M2M).
-	AllowedUsersPrimaryKey = []string{"user_id", "group_id"}
 )
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -323,20 +295,6 @@ func ByAPIKeys(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByRedeemCodesCount orders the results by redeem_codes count.
-func ByRedeemCodesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newRedeemCodesStep(), opts...)
-	}
-}
-
-// ByRedeemCodes orders the results by redeem_codes terms.
-func ByRedeemCodes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newRedeemCodesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // BySubscriptionsCount orders the results by subscriptions count.
 func BySubscriptionsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -379,20 +337,6 @@ func ByAccounts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
-// ByAllowedUsersCount orders the results by allowed_users count.
-func ByAllowedUsersCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newAllowedUsersStep(), opts...)
-	}
-}
-
-// ByAllowedUsers orders the results by allowed_users terms.
-func ByAllowedUsers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newAllowedUsersStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByAccountGroupsCount orders the results by account_groups count.
 func ByAccountGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -406,32 +350,11 @@ func ByAccountGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newAccountGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
-
-// ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
-func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newUserAllowedGroupsStep(), opts...)
-	}
-}
-
-// ByUserAllowedGroups orders the results by user_allowed_groups terms.
-func ByUserAllowedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newUserAllowedGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
 func newAPIKeysStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(APIKeysInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, APIKeysTable, APIKeysColumn),
-	)
-}
-func newRedeemCodesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(RedeemCodesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, RedeemCodesTable, RedeemCodesColumn),
 	)
 }
 func newSubscriptionsStep() *sqlgraph.Step {
@@ -455,24 +378,10 @@ func newAccountsStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.M2M, true, AccountsTable, AccountsPrimaryKey...),
 	)
 }
-func newAllowedUsersStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(AllowedUsersInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, true, AllowedUsersTable, AllowedUsersPrimaryKey...),
-	)
-}
 func newAccountGroupsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(AccountGroupsInverseTable, AccountGroupsColumn),
 		sqlgraph.Edge(sqlgraph.O2M, true, AccountGroupsTable, AccountGroupsColumn),
-	)
-}
-func newUserAllowedGroupsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(UserAllowedGroupsInverseTable, UserAllowedGroupsColumn),
-		sqlgraph.Edge(sqlgraph.O2M, true, UserAllowedGroupsTable, UserAllowedGroupsColumn),
 	)
 }

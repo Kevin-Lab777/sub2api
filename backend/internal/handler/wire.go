@@ -8,9 +8,9 @@ import (
 )
 
 // ProvideAdminHandlers creates the AdminHandlers struct
+// [LITE] 移除了: userHandler, redeemHandler, promoHandler, userAttributeHandler
 func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
-	userHandler *admin.UserHandler,
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
 	oauthHandler *admin.OAuthHandler,
@@ -18,17 +18,13 @@ func ProvideAdminHandlers(
 	geminiOAuthHandler *admin.GeminiOAuthHandler,
 	antigravityOAuthHandler *admin.AntigravityOAuthHandler,
 	proxyHandler *admin.ProxyHandler,
-	redeemHandler *admin.RedeemHandler,
-	promoHandler *admin.PromoHandler,
 	settingHandler *admin.SettingHandler,
 	systemHandler *admin.SystemHandler,
 	subscriptionHandler *admin.SubscriptionHandler,
 	usageHandler *admin.UsageHandler,
-	userAttributeHandler *admin.UserAttributeHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:        dashboardHandler,
-		User:             userHandler,
 		Group:            groupHandler,
 		Account:          accountHandler,
 		OAuth:            oauthHandler,
@@ -36,13 +32,10 @@ func ProvideAdminHandlers(
 		GeminiOAuth:      geminiOAuthHandler,
 		AntigravityOAuth: antigravityOAuthHandler,
 		Proxy:            proxyHandler,
-		Redeem:           redeemHandler,
-		Promo:            promoHandler,
 		Setting:          settingHandler,
 		System:           systemHandler,
 		Subscription:     subscriptionHandler,
 		Usage:            usageHandler,
-		UserAttribute:    userAttributeHandler,
 	}
 }
 
@@ -56,49 +49,56 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 	return NewSettingHandler(settingService, buildInfo.Version)
 }
 
+// [LITE] ProvidePublicHandler creates PublicHandler with version from BuildInfo
+func ProvidePublicHandler(
+	settingService *service.SettingService,
+	userService *service.UserService,
+	buildInfo BuildInfo,
+) *PublicHandler {
+	return NewPublicHandler(settingService, userService, buildInfo.Version)
+}
+
 // ProvideHandlers creates the Handlers struct
+// [LITE] 保留 User, APIKey, Usage 给 Admin 管理 API Key
 func ProvideHandlers(
-	authHandler *AuthHandler,
-	userHandler *UserHandler,
-	apiKeyHandler *APIKeyHandler,
-	usageHandler *UsageHandler,
-	redeemHandler *RedeemHandler,
-	subscriptionHandler *SubscriptionHandler,
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
 	openaiGatewayHandler *OpenAIGatewayHandler,
 	settingHandler *SettingHandler,
+	publicHandler *PublicHandler,
+	authHandler *AuthHandler,
+	userHandler *UserHandler,
+	apiKeyHandler *APIKeyHandler,
+	usageHandler *UsageHandler,
 ) *Handlers {
 	return &Handlers{
-		Auth:          authHandler,
-		User:          userHandler,
-		APIKey:        apiKeyHandler,
-		Usage:         usageHandler,
-		Redeem:        redeemHandler,
-		Subscription:  subscriptionHandler,
 		Admin:         adminHandlers,
 		Gateway:       gatewayHandler,
 		OpenAIGateway: openaiGatewayHandler,
 		Setting:       settingHandler,
+		Public:        publicHandler,
+		Auth:          authHandler,
+		User:          userHandler,
+		APIKey:        apiKeyHandler,
+		Usage:         usageHandler,
 	}
 }
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
 	// Top-level handlers
-	NewAuthHandler,
-	NewUserHandler,
-	NewAPIKeyHandler,
-	NewUsageHandler,
-	NewRedeemHandler,
-	NewSubscriptionHandler,
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,
 	ProvideSettingHandler,
+	ProvidePublicHandler,
+	NewAuthHandler,
+	// [LITE] User handlers for API Key management
+	NewUserHandler,
+	NewAPIKeyHandler,
+	NewUsageHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
-	admin.NewUserHandler,
 	admin.NewGroupHandler,
 	admin.NewAccountHandler,
 	admin.NewOAuthHandler,
@@ -106,13 +106,10 @@ var ProviderSet = wire.NewSet(
 	admin.NewGeminiOAuthHandler,
 	admin.NewAntigravityOAuthHandler,
 	admin.NewProxyHandler,
-	admin.NewRedeemHandler,
-	admin.NewPromoHandler,
 	admin.NewSettingHandler,
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
 	admin.NewUsageHandler,
-	admin.NewUserAttributeHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

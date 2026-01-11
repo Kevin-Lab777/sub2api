@@ -1,16 +1,13 @@
 /**
  * Authentication API endpoints
- * Handles user login, registration, and logout operations
+ * [LITE] Simplified - Admin login only
  */
 
 import { apiClient } from './client'
 import type {
   LoginRequest,
-  RegisterRequest,
   AuthResponse,
   CurrentUserResponse,
-  SendVerifyCodeRequest,
-  SendVerifyCodeResponse,
   PublicSettings
 } from '@/types'
 
@@ -37,27 +34,12 @@ export function clearAuthToken(): void {
 }
 
 /**
- * User login
- * @param credentials - Username and password
+ * Admin login
+ * @param credentials - Email and password
  * @returns Authentication response with token and user data
  */
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   const { data } = await apiClient.post<AuthResponse>('/auth/login', credentials)
-
-  // Store token and user data
-  setAuthToken(data.access_token)
-  localStorage.setItem('auth_user', JSON.stringify(data.user))
-
-  return data
-}
-
-/**
- * User registration
- * @param userData - Registration data (username, email, password)
- * @returns Authentication response with token and user data
- */
-export async function register(userData: RegisterRequest): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>('/auth/register', userData)
 
   // Store token and user data
   setAuthToken(data.access_token)
@@ -80,8 +62,6 @@ export async function getCurrentUser() {
  */
 export function logout(): void {
   clearAuthToken()
-  // Optionally redirect to login page
-  // window.location.href = '/login';
 }
 
 /**
@@ -94,57 +74,22 @@ export function isAuthenticated(): boolean {
 
 /**
  * Get public settings (no auth required)
- * @returns Public settings including registration and Turnstile config
+ * @returns Public settings
  */
 export async function getPublicSettings(): Promise<PublicSettings> {
   const { data } = await apiClient.get<PublicSettings>('/settings/public')
   return data
 }
 
-/**
- * Send verification code to email
- * @param request - Email and optional Turnstile token
- * @returns Response with countdown seconds
- */
-export async function sendVerifyCode(
-  request: SendVerifyCodeRequest
-): Promise<SendVerifyCodeResponse> {
-  const { data } = await apiClient.post<SendVerifyCodeResponse>('/auth/send-verify-code', request)
-  return data
-}
-
-/**
- * Validate promo code response
- */
-export interface ValidatePromoCodeResponse {
-  valid: boolean
-  bonus_amount?: number
-  error_code?: string
-  message?: string
-}
-
-/**
- * Validate promo code (public endpoint, no auth required)
- * @param code - Promo code to validate
- * @returns Validation result with bonus amount if valid
- */
-export async function validatePromoCode(code: string): Promise<ValidatePromoCodeResponse> {
-  const { data } = await apiClient.post<ValidatePromoCodeResponse>('/auth/validate-promo-code', { code })
-  return data
-}
-
 export const authAPI = {
   login,
-  register,
   getCurrentUser,
   logout,
   isAuthenticated,
   setAuthToken,
   getAuthToken,
   clearAuthToken,
-  getPublicSettings,
-  sendVerifyCode,
-  validatePromoCode
+  getPublicSettings
 }
 
 export default authAPI

@@ -21,9 +21,10 @@ func NewAdminAuthMiddleware(
 }
 
 // adminAuth 管理员认证中间件实现
-// 支持两种认证方式（通过不同的 header 区分）：
-// 1. Admin API Key: x-api-key: <admin-api-key>
-// 2. JWT Token: Authorization: Bearer <jwt-token> (需要管理员角色)
+// 支持三种认证方式：
+// 1. x-api-key: <admin-api-key>
+// 2. Authorization: Bearer <admin-api-key>
+// 3. Authorization: Bearer <jwt-token> (JWT token for admin user)
 func adminAuth(
 	authService *service.AuthService,
 	userService *service.UserService,
@@ -40,15 +41,25 @@ func adminAuth(
 			return
 		}
 
-		// 检查 Authorization header（JWT 认证）
+		// 检查 Authorization: Bearer <token>
 		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" {
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) == 2 && parts[0] == "Bearer" {
-				if !validateJWTForAdmin(c, parts[1], authService, userService) {
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			if token != "" {
+				// 先尝试作为 Admin API Key 验证
+				if validateAdminAPIKeyNoAbort(c, token, settingService, userService) {
+					c.Next()
 					return
 				}
-				c.Next()
+
+				// 再尝试作为 JWT token 验证
+				if validateJWTForAdmin(c, token, authService, userService) {
+					c.Next()
+					return
+				}
+
+				// 都失败了
+				AbortWithError(c, 401, "INVALID_TOKEN", "Invalid token")
 				return
 			}
 		}
@@ -58,7 +69,7 @@ func adminAuth(
 	}
 }
 
-// validateAdminAPIKey 验证管理员 API Key
+// validateAdminAPIKey 验证管理员 API Key（失败时会 abort）
 func validateAdminAPIKey(
 	c *gin.Context,
 	key string,
@@ -71,13 +82,11 @@ func validateAdminAPIKey(
 		return false
 	}
 
-	// 未配置或不匹配，统一返回相同错误（避免信息泄露）
 	if storedKey == "" || subtle.ConstantTimeCompare([]byte(key), []byte(storedKey)) != 1 {
 		AbortWithError(c, 401, "INVALID_ADMIN_KEY", "Invalid admin API key")
 		return false
 	}
 
-	// 获取真实的管理员用户
 	admin, err := userService.GetFirstAdmin(c.Request.Context())
 	if err != nil {
 		AbortWithError(c, 500, "INTERNAL_ERROR", "No admin user found")
@@ -93,40 +102,70 @@ func validateAdminAPIKey(
 	return true
 }
 
-// validateJWTForAdmin 验证 JWT 并检查管理员权限
-func validateJWTForAdmin(
+// validateAdminAPIKeyNoAbort 验证管理员 API Key（失败时不 abort，返回 false）
+func validateAdminAPIKeyNoAbort(
 	c *gin.Context,
-	token string,
-	authService *service.AuthService,
+	key string,
+	settingService *service.SettingService,
 	userService *service.UserService,
 ) bool {
-	// 验证 JWT token
-	claims, err := authService.ValidateToken(token)
+	storedKey, err := settingService.GetAdminAPIKey(c.Request.Context())
 	if err != nil {
-		if errors.Is(err, service.ErrTokenExpired) {
-			AbortWithError(c, 401, "TOKEN_EXPIRED", "Token has expired")
-			return false
-		}
-		AbortWithError(c, 401, "INVALID_TOKEN", "Invalid token")
 		return false
 	}
 
-	// 从数据库获取用户
+	if storedKey == "" || subtle.ConstantTimeCompare([]byte(key), []byte(storedKey)) != 1 {
+		return false
+	}
+
+	admin, err := userService.GetFirstAdmin(c.Request.Context())
+	if err != nil {
+		return false
+	}
+
+	c.Set(string(ContextKeyUser), AuthSubject{
+		UserID:      admin.ID,
+		Concurrency: admin.Concurrency,
+	})
+	c.Set(string(ContextKeyUserRole), admin.Role)
+	c.Set("auth_method", "admin_api_key")
+	return true
+}
+
+// validateJWTForAdmin 验证 JWT token 并检查是否为 admin
+func validateJWTForAdmin(
+	c *gin.Context,
+	tokenString string,
+	authService *service.AuthService,
+	userService *service.UserService,
+) bool {
+	// 验证 token
+	claims, err := authService.ValidateToken(tokenString)
+	if err != nil {
+		if errors.Is(err, service.ErrTokenExpired) {
+			return false
+		}
+		return false
+	}
+
+	// 获取用户
 	user, err := userService.GetByID(c.Request.Context(), claims.UserID)
 	if err != nil {
-		AbortWithError(c, 401, "USER_NOT_FOUND", "User not found")
 		return false
 	}
 
 	// 检查用户状态
 	if !user.IsActive() {
-		AbortWithError(c, 401, "USER_INACTIVE", "User account is not active")
 		return false
 	}
 
-	// 检查管理员权限
-	if !user.IsAdmin() {
-		AbortWithError(c, 403, "FORBIDDEN", "Admin access required")
+	// 检查 token version
+	if claims.TokenVersion != user.TokenVersion {
+		return false
+	}
+
+	// 检查是否为 admin
+	if user.Role != service.RoleAdmin {
 		return false
 	}
 
@@ -136,6 +175,5 @@ func validateJWTForAdmin(
 	})
 	c.Set(string(ContextKeyUserRole), user.Role)
 	c.Set("auth_method", "jwt")
-
 	return true
 }

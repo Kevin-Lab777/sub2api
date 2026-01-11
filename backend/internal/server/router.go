@@ -9,7 +9,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/web"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
 
 // SetupRouter 配置路由器中间件和路由
@@ -22,7 +21,6 @@ func SetupRouter(
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
 	cfg *config.Config,
-	redisClient *redis.Client,
 ) *gin.Engine {
 	// 应用中间件
 	r.Use(middleware2.Logger())
@@ -35,7 +33,7 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, cfg, redisClient)
+	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, cfg)
 
 	return r
 }
@@ -50,7 +48,6 @@ func registerRoutes(
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
 	cfg *config.Config,
-	redisClient *redis.Client,
 ) {
 	// 通用路由（健康检查、状态等）
 	routes.RegisterCommonRoutes(r)
@@ -58,9 +55,15 @@ func registerRoutes(
 	// API v1
 	v1 := r.Group("/api/v1")
 
-	// 注册各模块路由
-	routes.RegisterAuthRoutes(v1, h, jwtAuth, redisClient)
+	// 注册认证路由 (登录、/auth/me)
+	routes.RegisterAuthRoutes(v1, h, jwtAuth)
+
+	// [LITE] 注册用户路由 (API Key 管理等，Admin 使用)
 	routes.RegisterUserRoutes(v1, h, jwtAuth)
+
+	// 注册管理员路由
 	routes.RegisterAdminRoutes(v1, h, adminAuth)
+
+	// 注册网关路由
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, cfg)
 }

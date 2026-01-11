@@ -13,11 +13,18 @@ import (
 )
 
 // 错误定义
-// 注：ErrInsufficientBalance在redeem_service.go中定义
+// [LITE] ErrInsufficientBalance 从 redeem_service.go 迁移
 // 注：ErrDailyLimitExceeded/ErrWeeklyLimitExceeded/ErrMonthlyLimitExceeded在subscription_service.go中定义
 var (
+	ErrInsufficientBalance       = infraerrors.Forbidden("INSUFFICIENT_BALANCE", "insufficient balance")
 	ErrSubscriptionInvalid       = infraerrors.Forbidden("SUBSCRIPTION_INVALID", "subscription is invalid or expired")
 	ErrBillingServiceUnavailable = infraerrors.ServiceUnavailable("BILLING_SERVICE_ERROR", "Billing service temporarily unavailable. Please retry later.")
+
+	// [LITE] API Key 限额相关错误
+	ErrAPIKeyDailyLimitExceeded   = infraerrors.Forbidden("API_KEY_DAILY_LIMIT_EXCEEDED", "daily usage limit exceeded")
+	ErrAPIKeyWeeklyLimitExceeded  = infraerrors.Forbidden("API_KEY_WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
+	ErrAPIKeyMonthlyLimitExceeded = infraerrors.Forbidden("API_KEY_MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
+	ErrAPIKeyTotalLimitExceeded   = infraerrors.Forbidden("API_KEY_TOTAL_LIMIT_EXCEEDED", "total usage limit exceeded")
 )
 
 // subscriptionCacheData 订阅缓存数据结构（内部使用）
@@ -446,13 +453,9 @@ func (s *BillingCacheService) InvalidateSubscription(ctx context.Context, userID
 // ============================================
 
 // CheckBillingEligibility 检查用户是否有资格发起请求
-// 余额模式：检查缓存余额 > 0
-// 订阅模式：检查缓存用量未超过限额（Group限额从参数传入）
+// [LITE] 标准模式：检查 API Key 限额
 func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription) error {
-	// 简易模式：跳过所有计费检查
-	if s.cfg.RunMode == config.RunModeSimple {
-		return nil
-	}
+	// [LITE] 直接检查 API Key 限额，不再有简易模式跳过
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
 		return ErrBillingServiceUnavailable
 	}
@@ -464,7 +467,64 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return s.checkSubscriptionEligibility(ctx, user.ID, group, subscription)
 	}
 
-	return s.checkBalanceEligibility(ctx, user.ID)
+	// [LITE] 标准分组模式：检查 API Key 限额
+	// 优先使用 API Key 自身限额，如果没有设置则使用 Group 限额
+	if apiKey != nil {
+		return s.checkAPIKeyLimitEligibility(ctx, apiKey, group)
+	}
+
+	// [LITE] 没有 API Key 时，无限制通过（不检查余额）
+	return nil
+}
+
+// [LITE] checkAPIKeyLimitEligibility 检查 API Key 限额
+// 优先级：API Key 限额 > Group 限额 > 余额检查
+func (s *BillingCacheService) checkAPIKeyLimitEligibility(ctx context.Context, apiKey *APIKey, group *Group) error {
+	// 检查 API Key 自身限额
+	if apiKey.HasAnyLimit() {
+		// 日限额
+		if apiKey.IsDailyLimitExceeded() {
+			return ErrAPIKeyDailyLimitExceeded
+		}
+		// 周限额
+		if apiKey.IsWeeklyLimitExceeded() {
+			return ErrAPIKeyWeeklyLimitExceeded
+		}
+		// 月限额
+		if apiKey.IsMonthlyLimitExceeded() {
+			return ErrAPIKeyMonthlyLimitExceeded
+		}
+		// 总限额
+		if apiKey.IsTotalLimitExceeded() {
+			return ErrAPIKeyTotalLimitExceeded
+		}
+		// 有限额但未超限，通过检查
+		return nil
+	}
+
+	// API Key 没有设置限额，检查 Group 限额
+	if group != nil {
+		// 日限额
+		if group.HasDailyLimit() && apiKey.DailyUsageUSD >= *group.DailyLimitUSD {
+			return ErrAPIKeyDailyLimitExceeded
+		}
+		// 周限额
+		if group.HasWeeklyLimit() && apiKey.WeeklyUsageUSD >= *group.WeeklyLimitUSD {
+			return ErrAPIKeyWeeklyLimitExceeded
+		}
+		// 月限额
+		if group.HasMonthlyLimit() && apiKey.MonthlyUsageUSD >= *group.MonthlyLimitUSD {
+			return ErrAPIKeyMonthlyLimitExceeded
+		}
+		// 有 Group 限额但未超限，通过检查
+		if group.HasDailyLimit() || group.HasWeeklyLimit() || group.HasMonthlyLimit() {
+			return nil
+		}
+	}
+
+	// [LITE] 既没有 API Key 限额，也没有 Group 限额，无限制通过
+	// 不再回退到余额检查
+	return nil
 }
 
 // checkBalanceEligibility 检查余额模式资格

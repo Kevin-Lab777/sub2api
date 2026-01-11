@@ -12,6 +12,9 @@ var (
 	ErrUserNotFound      = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
 	ErrPasswordIncorrect = infraerrors.BadRequest("PASSWORD_INCORRECT", "current password is incorrect")
 	ErrInsufficientPerms = infraerrors.Forbidden("INSUFFICIENT_PERMISSIONS", "insufficient permissions")
+	// [LITE] 从 auth_service.go 迁移
+	ErrEmailExists   = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
+	ErrUserNotActive = infraerrors.Forbidden("USER_NOT_ACTIVE", "user account is not active")
 )
 
 // UserListFilters contains all filter options for listing users

@@ -6,7 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
 import { authAPI } from '@/api'
-import type { User, LoginRequest, RegisterRequest } from '@/types'
+import type { User, LoginRequest } from '@/types'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 const AUTH_USER_KEY = 'auth_user'
@@ -31,6 +31,9 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
+
+  // [LITE] Lite mode - hide user management, redeem, promo
+  const isLiteMode = computed(() => true)
 
   // ==================== Actions ====================
 
@@ -125,62 +128,6 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * User registration
-   * @param userData - Registration data (username, email, password)
-   * @returns Promise resolving to the newly registered and authenticated user
-   * @throws Error if registration fails
-   */
-  async function register(userData: RegisterRequest): Promise<User> {
-    try {
-      const response = await authAPI.register(userData)
-
-      // Store token and user
-      token.value = response.access_token
-
-      // Extract run_mode if present
-      if (response.user.run_mode) {
-        runMode.value = response.user.run_mode
-      }
-      const { run_mode: _run_mode, ...userDataWithoutRunMode } = response.user
-      user.value = userDataWithoutRunMode
-
-      // Persist to localStorage
-      localStorage.setItem(AUTH_TOKEN_KEY, response.access_token)
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userDataWithoutRunMode))
-
-      // Start auto-refresh interval
-      startAutoRefresh()
-
-      return userDataWithoutRunMode
-    } catch (error) {
-      // Clear any partial state on error
-      clearAuth()
-      throw error
-    }
-  }
-
-  /**
-   * 直接设置 token（用于 OAuth/SSO 回调），并加载当前用户信息。
-   * @param newToken - 后端签发的 JWT access token
-   */
-  async function setToken(newToken: string): Promise<User> {
-    // Clear any previous state first (avoid mixing sessions)
-    clearAuth()
-
-    token.value = newToken
-    localStorage.setItem(AUTH_TOKEN_KEY, newToken)
-
-    try {
-      const userData = await refreshUser()
-      startAutoRefresh()
-      return userData
-    } catch (error) {
-      clearAuth()
-      throw error
-    }
-  }
-
-  /**
    * User logout
    * Clears all authentication state and persisted data
    */
@@ -250,11 +197,10 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     isSimpleMode,
+    isLiteMode,
 
     // Actions
     login,
-    register,
-    setToken,
     logout,
     checkAuth,
     refreshUser

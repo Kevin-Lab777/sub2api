@@ -9,17 +9,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/ent/promocode"
-	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
-	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
-	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
-	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -88,6 +82,22 @@ func init() {
 	apikey.DefaultStatus = apikeyDescStatus.Default.(string)
 	// apikey.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	apikey.StatusValidator = apikeyDescStatus.Validators[0].(func(string) error)
+	// apikeyDescDailyUsageUsd is the schema descriptor for daily_usage_usd field.
+	apikeyDescDailyUsageUsd := apikeyFields[11].Descriptor()
+	// apikey.DefaultDailyUsageUsd holds the default value on creation for the daily_usage_usd field.
+	apikey.DefaultDailyUsageUsd = apikeyDescDailyUsageUsd.Default.(float64)
+	// apikeyDescWeeklyUsageUsd is the schema descriptor for weekly_usage_usd field.
+	apikeyDescWeeklyUsageUsd := apikeyFields[12].Descriptor()
+	// apikey.DefaultWeeklyUsageUsd holds the default value on creation for the weekly_usage_usd field.
+	apikey.DefaultWeeklyUsageUsd = apikeyDescWeeklyUsageUsd.Default.(float64)
+	// apikeyDescMonthlyUsageUsd is the schema descriptor for monthly_usage_usd field.
+	apikeyDescMonthlyUsageUsd := apikeyFields[13].Descriptor()
+	// apikey.DefaultMonthlyUsageUsd holds the default value on creation for the monthly_usage_usd field.
+	apikey.DefaultMonthlyUsageUsd = apikeyDescMonthlyUsageUsd.Default.(float64)
+	// apikeyDescTotalUsageUsd is the schema descriptor for total_usage_usd field.
+	apikeyDescTotalUsageUsd := apikeyFields[14].Descriptor()
+	// apikey.DefaultTotalUsageUsd holds the default value on creation for the total_usage_usd field.
+	apikey.DefaultTotalUsageUsd = apikeyDescTotalUsageUsd.Default.(float64)
 	accountMixin := schema.Account{}.Mixin()
 	accountMixinHooks1 := accountMixin[1].Hooks()
 	account.Hooks[0] = accountMixinHooks1[0]
@@ -276,60 +286,6 @@ func init() {
 	groupDescClaudeCodeOnly := groupFields[14].Descriptor()
 	// group.DefaultClaudeCodeOnly holds the default value on creation for the claude_code_only field.
 	group.DefaultClaudeCodeOnly = groupDescClaudeCodeOnly.Default.(bool)
-	promocodeFields := schema.PromoCode{}.Fields()
-	_ = promocodeFields
-	// promocodeDescCode is the schema descriptor for code field.
-	promocodeDescCode := promocodeFields[0].Descriptor()
-	// promocode.CodeValidator is a validator for the "code" field. It is called by the builders before save.
-	promocode.CodeValidator = func() func(string) error {
-		validators := promocodeDescCode.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(code string) error {
-			for _, fn := range fns {
-				if err := fn(code); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
-	// promocodeDescBonusAmount is the schema descriptor for bonus_amount field.
-	promocodeDescBonusAmount := promocodeFields[1].Descriptor()
-	// promocode.DefaultBonusAmount holds the default value on creation for the bonus_amount field.
-	promocode.DefaultBonusAmount = promocodeDescBonusAmount.Default.(float64)
-	// promocodeDescMaxUses is the schema descriptor for max_uses field.
-	promocodeDescMaxUses := promocodeFields[2].Descriptor()
-	// promocode.DefaultMaxUses holds the default value on creation for the max_uses field.
-	promocode.DefaultMaxUses = promocodeDescMaxUses.Default.(int)
-	// promocodeDescUsedCount is the schema descriptor for used_count field.
-	promocodeDescUsedCount := promocodeFields[3].Descriptor()
-	// promocode.DefaultUsedCount holds the default value on creation for the used_count field.
-	promocode.DefaultUsedCount = promocodeDescUsedCount.Default.(int)
-	// promocodeDescStatus is the schema descriptor for status field.
-	promocodeDescStatus := promocodeFields[4].Descriptor()
-	// promocode.DefaultStatus holds the default value on creation for the status field.
-	promocode.DefaultStatus = promocodeDescStatus.Default.(string)
-	// promocode.StatusValidator is a validator for the "status" field. It is called by the builders before save.
-	promocode.StatusValidator = promocodeDescStatus.Validators[0].(func(string) error)
-	// promocodeDescCreatedAt is the schema descriptor for created_at field.
-	promocodeDescCreatedAt := promocodeFields[7].Descriptor()
-	// promocode.DefaultCreatedAt holds the default value on creation for the created_at field.
-	promocode.DefaultCreatedAt = promocodeDescCreatedAt.Default.(func() time.Time)
-	// promocodeDescUpdatedAt is the schema descriptor for updated_at field.
-	promocodeDescUpdatedAt := promocodeFields[8].Descriptor()
-	// promocode.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	promocode.DefaultUpdatedAt = promocodeDescUpdatedAt.Default.(func() time.Time)
-	// promocode.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	promocode.UpdateDefaultUpdatedAt = promocodeDescUpdatedAt.UpdateDefault.(func() time.Time)
-	promocodeusageFields := schema.PromoCodeUsage{}.Fields()
-	_ = promocodeusageFields
-	// promocodeusageDescUsedAt is the schema descriptor for used_at field.
-	promocodeusageDescUsedAt := promocodeusageFields[3].Descriptor()
-	// promocodeusage.DefaultUsedAt holds the default value on creation for the used_at field.
-	promocodeusage.DefaultUsedAt = promocodeusageDescUsedAt.Default.(func() time.Time)
 	proxyMixin := schema.Proxy{}.Mixin()
 	proxyMixinHooks1 := proxyMixin[1].Hooks()
 	proxy.Hooks[0] = proxyMixinHooks1[0]
@@ -417,50 +373,6 @@ func init() {
 	proxy.DefaultStatus = proxyDescStatus.Default.(string)
 	// proxy.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	proxy.StatusValidator = proxyDescStatus.Validators[0].(func(string) error)
-	redeemcodeFields := schema.RedeemCode{}.Fields()
-	_ = redeemcodeFields
-	// redeemcodeDescCode is the schema descriptor for code field.
-	redeemcodeDescCode := redeemcodeFields[0].Descriptor()
-	// redeemcode.CodeValidator is a validator for the "code" field. It is called by the builders before save.
-	redeemcode.CodeValidator = func() func(string) error {
-		validators := redeemcodeDescCode.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(code string) error {
-			for _, fn := range fns {
-				if err := fn(code); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
-	// redeemcodeDescType is the schema descriptor for type field.
-	redeemcodeDescType := redeemcodeFields[1].Descriptor()
-	// redeemcode.DefaultType holds the default value on creation for the type field.
-	redeemcode.DefaultType = redeemcodeDescType.Default.(string)
-	// redeemcode.TypeValidator is a validator for the "type" field. It is called by the builders before save.
-	redeemcode.TypeValidator = redeemcodeDescType.Validators[0].(func(string) error)
-	// redeemcodeDescValue is the schema descriptor for value field.
-	redeemcodeDescValue := redeemcodeFields[2].Descriptor()
-	// redeemcode.DefaultValue holds the default value on creation for the value field.
-	redeemcode.DefaultValue = redeemcodeDescValue.Default.(float64)
-	// redeemcodeDescStatus is the schema descriptor for status field.
-	redeemcodeDescStatus := redeemcodeFields[3].Descriptor()
-	// redeemcode.DefaultStatus holds the default value on creation for the status field.
-	redeemcode.DefaultStatus = redeemcodeDescStatus.Default.(string)
-	// redeemcode.StatusValidator is a validator for the "status" field. It is called by the builders before save.
-	redeemcode.StatusValidator = redeemcodeDescStatus.Validators[0].(func(string) error)
-	// redeemcodeDescCreatedAt is the schema descriptor for created_at field.
-	redeemcodeDescCreatedAt := redeemcodeFields[7].Descriptor()
-	// redeemcode.DefaultCreatedAt holds the default value on creation for the created_at field.
-	redeemcode.DefaultCreatedAt = redeemcodeDescCreatedAt.Default.(func() time.Time)
-	// redeemcodeDescValidityDays is the schema descriptor for validity_days field.
-	redeemcodeDescValidityDays := redeemcodeFields[9].Descriptor()
-	// redeemcode.DefaultValidityDays holds the default value on creation for the validity_days field.
-	redeemcode.DefaultValidityDays = redeemcodeDescValidityDays.Default.(int)
 	settingFields := schema.Setting{}.Fields()
 	_ = settingFields
 	// settingDescKey is the schema descriptor for key field.
@@ -690,134 +602,6 @@ func init() {
 	userDescNotes := userFields[7].Descriptor()
 	// user.DefaultNotes holds the default value on creation for the notes field.
 	user.DefaultNotes = userDescNotes.Default.(string)
-	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()
-	_ = userallowedgroupFields
-	// userallowedgroupDescCreatedAt is the schema descriptor for created_at field.
-	userallowedgroupDescCreatedAt := userallowedgroupFields[2].Descriptor()
-	// userallowedgroup.DefaultCreatedAt holds the default value on creation for the created_at field.
-	userallowedgroup.DefaultCreatedAt = userallowedgroupDescCreatedAt.Default.(func() time.Time)
-	userattributedefinitionMixin := schema.UserAttributeDefinition{}.Mixin()
-	userattributedefinitionMixinHooks1 := userattributedefinitionMixin[1].Hooks()
-	userattributedefinition.Hooks[0] = userattributedefinitionMixinHooks1[0]
-	userattributedefinitionMixinInters1 := userattributedefinitionMixin[1].Interceptors()
-	userattributedefinition.Interceptors[0] = userattributedefinitionMixinInters1[0]
-	userattributedefinitionMixinFields0 := userattributedefinitionMixin[0].Fields()
-	_ = userattributedefinitionMixinFields0
-	userattributedefinitionFields := schema.UserAttributeDefinition{}.Fields()
-	_ = userattributedefinitionFields
-	// userattributedefinitionDescCreatedAt is the schema descriptor for created_at field.
-	userattributedefinitionDescCreatedAt := userattributedefinitionMixinFields0[0].Descriptor()
-	// userattributedefinition.DefaultCreatedAt holds the default value on creation for the created_at field.
-	userattributedefinition.DefaultCreatedAt = userattributedefinitionDescCreatedAt.Default.(func() time.Time)
-	// userattributedefinitionDescUpdatedAt is the schema descriptor for updated_at field.
-	userattributedefinitionDescUpdatedAt := userattributedefinitionMixinFields0[1].Descriptor()
-	// userattributedefinition.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	userattributedefinition.DefaultUpdatedAt = userattributedefinitionDescUpdatedAt.Default.(func() time.Time)
-	// userattributedefinition.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	userattributedefinition.UpdateDefaultUpdatedAt = userattributedefinitionDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// userattributedefinitionDescKey is the schema descriptor for key field.
-	userattributedefinitionDescKey := userattributedefinitionFields[0].Descriptor()
-	// userattributedefinition.KeyValidator is a validator for the "key" field. It is called by the builders before save.
-	userattributedefinition.KeyValidator = func() func(string) error {
-		validators := userattributedefinitionDescKey.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(key string) error {
-			for _, fn := range fns {
-				if err := fn(key); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
-	// userattributedefinitionDescName is the schema descriptor for name field.
-	userattributedefinitionDescName := userattributedefinitionFields[1].Descriptor()
-	// userattributedefinition.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	userattributedefinition.NameValidator = func() func(string) error {
-		validators := userattributedefinitionDescName.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(name string) error {
-			for _, fn := range fns {
-				if err := fn(name); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
-	// userattributedefinitionDescDescription is the schema descriptor for description field.
-	userattributedefinitionDescDescription := userattributedefinitionFields[2].Descriptor()
-	// userattributedefinition.DefaultDescription holds the default value on creation for the description field.
-	userattributedefinition.DefaultDescription = userattributedefinitionDescDescription.Default.(string)
-	// userattributedefinitionDescType is the schema descriptor for type field.
-	userattributedefinitionDescType := userattributedefinitionFields[3].Descriptor()
-	// userattributedefinition.TypeValidator is a validator for the "type" field. It is called by the builders before save.
-	userattributedefinition.TypeValidator = func() func(string) error {
-		validators := userattributedefinitionDescType.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(_type string) error {
-			for _, fn := range fns {
-				if err := fn(_type); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
-	// userattributedefinitionDescOptions is the schema descriptor for options field.
-	userattributedefinitionDescOptions := userattributedefinitionFields[4].Descriptor()
-	// userattributedefinition.DefaultOptions holds the default value on creation for the options field.
-	userattributedefinition.DefaultOptions = userattributedefinitionDescOptions.Default.([]map[string]interface{})
-	// userattributedefinitionDescRequired is the schema descriptor for required field.
-	userattributedefinitionDescRequired := userattributedefinitionFields[5].Descriptor()
-	// userattributedefinition.DefaultRequired holds the default value on creation for the required field.
-	userattributedefinition.DefaultRequired = userattributedefinitionDescRequired.Default.(bool)
-	// userattributedefinitionDescValidation is the schema descriptor for validation field.
-	userattributedefinitionDescValidation := userattributedefinitionFields[6].Descriptor()
-	// userattributedefinition.DefaultValidation holds the default value on creation for the validation field.
-	userattributedefinition.DefaultValidation = userattributedefinitionDescValidation.Default.(map[string]interface{})
-	// userattributedefinitionDescPlaceholder is the schema descriptor for placeholder field.
-	userattributedefinitionDescPlaceholder := userattributedefinitionFields[7].Descriptor()
-	// userattributedefinition.DefaultPlaceholder holds the default value on creation for the placeholder field.
-	userattributedefinition.DefaultPlaceholder = userattributedefinitionDescPlaceholder.Default.(string)
-	// userattributedefinition.PlaceholderValidator is a validator for the "placeholder" field. It is called by the builders before save.
-	userattributedefinition.PlaceholderValidator = userattributedefinitionDescPlaceholder.Validators[0].(func(string) error)
-	// userattributedefinitionDescDisplayOrder is the schema descriptor for display_order field.
-	userattributedefinitionDescDisplayOrder := userattributedefinitionFields[8].Descriptor()
-	// userattributedefinition.DefaultDisplayOrder holds the default value on creation for the display_order field.
-	userattributedefinition.DefaultDisplayOrder = userattributedefinitionDescDisplayOrder.Default.(int)
-	// userattributedefinitionDescEnabled is the schema descriptor for enabled field.
-	userattributedefinitionDescEnabled := userattributedefinitionFields[9].Descriptor()
-	// userattributedefinition.DefaultEnabled holds the default value on creation for the enabled field.
-	userattributedefinition.DefaultEnabled = userattributedefinitionDescEnabled.Default.(bool)
-	userattributevalueMixin := schema.UserAttributeValue{}.Mixin()
-	userattributevalueMixinFields0 := userattributevalueMixin[0].Fields()
-	_ = userattributevalueMixinFields0
-	userattributevalueFields := schema.UserAttributeValue{}.Fields()
-	_ = userattributevalueFields
-	// userattributevalueDescCreatedAt is the schema descriptor for created_at field.
-	userattributevalueDescCreatedAt := userattributevalueMixinFields0[0].Descriptor()
-	// userattributevalue.DefaultCreatedAt holds the default value on creation for the created_at field.
-	userattributevalue.DefaultCreatedAt = userattributevalueDescCreatedAt.Default.(func() time.Time)
-	// userattributevalueDescUpdatedAt is the schema descriptor for updated_at field.
-	userattributevalueDescUpdatedAt := userattributevalueMixinFields0[1].Descriptor()
-	// userattributevalue.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	userattributevalue.DefaultUpdatedAt = userattributevalueDescUpdatedAt.Default.(func() time.Time)
-	// userattributevalue.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	userattributevalue.UpdateDefaultUpdatedAt = userattributevalueDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// userattributevalueDescValue is the schema descriptor for value field.
-	userattributevalueDescValue := userattributevalueFields[2].Descriptor()
-	// userattributevalue.DefaultValue holds the default value on creation for the value field.
-	userattributevalue.DefaultValue = userattributevalueDescValue.Default.(string)
 	usersubscriptionMixin := schema.UserSubscription{}.Mixin()
 	usersubscriptionMixinHooks1 := usersubscriptionMixin[1].Hooks()
 	usersubscription.Hooks[0] = usersubscriptionMixinHooks1[0]

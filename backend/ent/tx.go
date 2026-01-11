@@ -22,26 +22,14 @@ type Tx struct {
 	AccountGroup *AccountGroupClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
-	// PromoCode is the client for interacting with the PromoCode builders.
-	PromoCode *PromoCodeClient
-	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
-	PromoCodeUsage *PromoCodeUsageClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
-	// RedeemCode is the client for interacting with the RedeemCode builders.
-	RedeemCode *RedeemCodeClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
 	// UsageLog is the client for interacting with the UsageLog builders.
 	UsageLog *UsageLogClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
-	// UserAllowedGroup is the client for interacting with the UserAllowedGroup builders.
-	UserAllowedGroup *UserAllowedGroupClient
-	// UserAttributeDefinition is the client for interacting with the UserAttributeDefinition builders.
-	UserAttributeDefinition *UserAttributeDefinitionClient
-	// UserAttributeValue is the client for interacting with the UserAttributeValue builders.
-	UserAttributeValue *UserAttributeValueClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
 	UserSubscription *UserSubscriptionClient
 
@@ -179,16 +167,10 @@ func (tx *Tx) init() {
 	tx.Account = NewAccountClient(tx.config)
 	tx.AccountGroup = NewAccountGroupClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
-	tx.PromoCode = NewPromoCodeClient(tx.config)
-	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)
 	tx.Proxy = NewProxyClient(tx.config)
-	tx.RedeemCode = NewRedeemCodeClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
 	tx.UsageLog = NewUsageLogClient(tx.config)
 	tx.User = NewUserClient(tx.config)
-	tx.UserAllowedGroup = NewUserAllowedGroupClient(tx.config)
-	tx.UserAttributeDefinition = NewUserAttributeDefinitionClient(tx.config)
-	tx.UserAttributeValue = NewUserAttributeValueClient(tx.config)
 	tx.UserSubscription = NewUserSubscriptionClient(tx.config)
 }
 
