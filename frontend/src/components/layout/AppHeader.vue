@@ -198,9 +198,9 @@ const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 
-// 只在标准模式的管理员下显示新手引导按钮
+// [LITE] 管理员始终显示新手引导按钮
 const showOnboardingButton = computed(() => {
-  return !authStore.isSimpleMode && user.value?.role === 'admin'
+  return user.value?.role === 'admin'
 })
 
 const userInitials = computed(() => {

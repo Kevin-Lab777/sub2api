@@ -4,7 +4,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed, readonly } from 'vue'
+import { ref, computed } from 'vue'
 import { authAPI } from '@/api'
 import type { User, LoginRequest } from '@/types'
 
@@ -17,7 +17,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const user = ref<User | null>(null)
   const token = ref<string | null>(null)
-  const runMode = ref<'standard' | 'simple'>('standard')
+  // [LITE] runMode removed - always Lite mode
   let refreshIntervalId: ReturnType<typeof setInterval> | null = null
 
   // ==================== Computed ====================
@@ -30,9 +30,7 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.role === 'admin'
   })
 
-  const isSimpleMode = computed(() => runMode.value === 'simple')
-
-  // [LITE] Lite mode - hide user management, redeem, promo
+  // [LITE] Always Lite mode - hide user management, redeem, promo
   const isLiteMode = computed(() => true)
 
   // ==================== Actions ====================
@@ -104,22 +102,16 @@ export const useAuthStore = defineStore('auth', () => {
 
       // Store token and user
       token.value = response.access_token
-
-      // Extract run_mode if present
-      if (response.user.run_mode) {
-        runMode.value = response.user.run_mode
-      }
-      const { run_mode: _run_mode, ...userData } = response.user
-      user.value = userData
+      user.value = response.user
 
       // Persist to localStorage
       localStorage.setItem(AUTH_TOKEN_KEY, response.access_token)
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.user))
 
       // Start auto-refresh interval
       startAutoRefresh()
 
-      return userData
+      return response.user
     } catch (error) {
       // Clear any partial state on error
       clearAuth()
@@ -152,16 +144,12 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       const response = await authAPI.getCurrentUser()
-      if (response.data.run_mode) {
-        runMode.value = response.data.run_mode
-      }
-      const { run_mode: _run_mode, ...userData } = response.data
-      user.value = userData
+      user.value = response.data
 
       // Update localStorage
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(response.data))
 
-      return userData
+      return response.data
     } catch (error) {
       // If refresh fails with 401, clear auth state
       if ((error as { status?: number }).status === 401) {
@@ -191,12 +179,10 @@ export const useAuthStore = defineStore('auth', () => {
     // State
     user,
     token,
-    runMode: readonly(runMode),
 
     // Computed
     isAuthenticated,
     isAdmin,
-    isSimpleMode,
     isLiteMode,
 
     // Actions

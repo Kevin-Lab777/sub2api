@@ -126,7 +126,6 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
 import { useTableLoader } from '@/composables/useTableLoader'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -152,7 +151,6 @@ import type { Account, Proxy, Group } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
-const authStore = useAuthStore()
 
 const proxies = ref<Proxy[]>([])
 const groups = ref<Group[]>([])
@@ -190,9 +188,8 @@ const cols = computed(() => {
     { key: 'schedulable', label: t('admin.accounts.columns.schedulable'), sortable: true },
     { key: 'today_stats', label: t('admin.accounts.columns.todayStats'), sortable: false }
   ]
-  if (!authStore.isSimpleMode) {
-    c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false })
-  }
+  // [LITE] 始终显示分组列
+  c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false })
   c.push(
     { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
     { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },

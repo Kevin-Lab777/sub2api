@@ -82,11 +82,11 @@ export interface PublicSettings {
 export interface AuthResponse {
   access_token: string
   token_type: string
-  user: User & { run_mode?: 'standard' | 'simple' }
+  user: User // [LITE] run_mode removed - always Lite mode
 }
 
 export interface CurrentUserResponse extends User {
-  run_mode?: 'standard' | 'simple'
+  // [LITE] run_mode removed - always Lite mode
 }
 
 // ==================== Subscription Types ====================

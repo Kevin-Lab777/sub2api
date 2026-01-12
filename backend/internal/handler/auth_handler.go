@@ -89,15 +89,6 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 		return
 	}
 
-	type UserResponse struct {
-		*dto.User
-		RunMode string `json:"run_mode"`
-	}
-
-	runMode := config.RunModeStandard
-	if h.cfg != nil {
-		runMode = h.cfg.RunMode
-	}
-
-	response.Success(c, UserResponse{User: dto.UserFromService(user), RunMode: runMode})
+	// [LITE] run_mode removed - always Lite mode
+	response.Success(c, dto.UserFromService(user))
 }

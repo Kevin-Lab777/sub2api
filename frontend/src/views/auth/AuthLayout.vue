@@ -72,7 +72,7 @@ import { ref, computed, onMounted } from 'vue'
 import { adminAPI } from '@/api'
 import { sanitizeUrl } from '@/utils/url'
 
-const siteName = ref('Sub2API')
+const siteName = ref('Sub2API Lite')
 const siteLogo = ref('')
 const siteSubtitle = ref('Subscription to API Conversion Platform')
 
@@ -81,7 +81,7 @@ const currentYear = computed(() => new Date().getFullYear())
 onMounted(async () => {
   try {
     const settings = await adminAPI.settings.getPublicSettings()
-    siteName.value = settings.site_name || 'Sub2API'
+    siteName.value = settings.site_name || 'Sub2API Lite'
     siteLogo.value = sanitizeUrl(settings.site_logo || '', { allowRelative: true })
     siteSubtitle.value = settings.site_subtitle || 'Subscription to API Conversion Platform'
   } catch (error) {

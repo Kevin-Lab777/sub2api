@@ -1000,7 +1000,7 @@ const form = reactive<SettingsForm>({
   email_verify_enabled: false,
   default_balance: 0,
   default_concurrency: 1,
-  site_name: 'Sub2API',
+  site_name: 'Sub2API Lite',
   site_logo: '',
   site_subtitle: 'Subscription to API Conversion Platform',
   api_base_url: '',

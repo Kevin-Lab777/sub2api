@@ -94,8 +94,8 @@ export function useOnboardingTour(options: OnboardingOptions) {
   const startTour = async (startIndex = 0) => {
     // 动态获取当前用户角色和步骤
     const isAdmin = userStore.user?.role === 'admin'
-    const isSimpleMode = userStore.isSimpleMode
-    const steps = isAdmin ? getAdminSteps(t, isSimpleMode) : getUserSteps(t)
+    // [LITE] 没有 simple mode，始终显示完整步骤
+    const steps = isAdmin ? getAdminSteps(t, false) : getUserSteps(t)
 
     // 确保 DOM 就绪
     await nextTick()
@@ -531,12 +531,9 @@ export function useOnboardingTour(options: OnboardingOptions) {
       return
     }
 
-    // 简易模式下禁用新手引导
-    if (userStore.isSimpleMode) {
-      return
-    }
+    // [LITE] 移除 simple mode 检查，Lite 版本始终启用新手引导
 
-    // 只在管理员+标准模式下自动启动
+    // 只在管理员下自动启动
     const isAdmin = userStore.user?.role === 'admin'
     if (!isAdmin) {
       return

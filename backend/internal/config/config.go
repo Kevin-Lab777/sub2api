@@ -14,11 +14,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// RunMode 运行模式常量
-const (
-	RunModeStandard = "standard"
-	RunModeLite     = "lite"
-)
+// [LITE] RunMode constants removed - Lite mode is always active
 
 const DefaultCSPPolicy = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
@@ -56,10 +52,10 @@ type Config struct {
 	DashboardAgg DashboardAggregationConfig `mapstructure:"dashboard_aggregation"`
 	Concurrency  ConcurrencyConfig          `mapstructure:"concurrency"`
 	TokenRefresh TokenRefreshConfig         `mapstructure:"token_refresh"`
-	RunMode      string                     `mapstructure:"run_mode" yaml:"run_mode"` // [LITE] always lite mode
-	Timezone     string                     `mapstructure:"timezone"`                 // e.g. "Asia/Shanghai", "UTC"
-	Gemini       GeminiConfig               `mapstructure:"gemini"`
-	Update       UpdateConfig               `mapstructure:"update"`
+	// [LITE] RunMode field removed - Lite mode is always active
+	Timezone string       `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
+	Gemini   GeminiConfig `mapstructure:"gemini"`
+	Update   UpdateConfig `mapstructure:"update"`
 }
 
 type GeminiConfig struct {
