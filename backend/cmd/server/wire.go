@@ -58,10 +58,15 @@ func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
 	}
 }
 
-// [LITE] 移除了 emailQueue 参数
+// [LITE] 移除了 emailQueue, opsAlertEvaluator, opsScheduledReport 参数
 func provideCleanup(
 	entAndDB repository.EntAndDB,
 	rdb *redis.Client,
+	opsMetricsCollector *service.OpsMetricsCollector,
+	opsAggregation *service.OpsAggregationService,
+	// [LITE:DELETED] opsAlertEvaluator *service.OpsAlertEvaluatorService,
+	opsCleanup *service.OpsCleanupService,
+	// [LITE:DELETED] opsScheduledReport *service.OpsScheduledReportService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
 	pricing *service.PricingService,
@@ -76,11 +81,29 @@ func provideCleanup(
 		defer cancel()
 
 		// Cleanup steps in reverse dependency order
-		// [LITE] 移除了 EmailQueueService
+		// [LITE] 移除了 EmailQueueService, OpsAlertEvaluatorService, OpsScheduledReportService
 		cleanupSteps := []struct {
 			name string
 			fn   func() error
 		}{
+			{"OpsCleanupService", func() error {
+				if opsCleanup != nil {
+					opsCleanup.Stop()
+				}
+				return nil
+			}},
+			{"OpsAggregationService", func() error {
+				if opsAggregation != nil {
+					opsAggregation.Stop()
+				}
+				return nil
+			}},
+			{"OpsMetricsCollector", func() error {
+				if opsMetricsCollector != nil {
+					opsMetricsCollector.Stop()
+				}
+				return nil
+			}},
 			{"TokenRefreshService", func() error {
 				tokenRefresh.Stop()
 				return nil

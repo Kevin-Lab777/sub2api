@@ -80,6 +80,7 @@ var ProviderSet = wire.NewSet(
 	NewUsageLogRepository,
 	NewDashboardAggregationRepository,
 	NewSettingRepository,
+	NewOpsRepository,
 	NewUserSubscriptionRepository,
 	// [LITE:DELETED] NewUserAttributeDefinitionRepository
 	// [LITE:DELETED] NewUserAttributeValueRepository
@@ -89,6 +90,7 @@ var ProviderSet = wire.NewSet(
 	NewBillingCache,
 	NewAPIKeyCache,
 	NewTempUnschedCache,
+	NewTimeoutCounterCache,
 	ProvideConcurrencyCache,
 	NewDashboardCache,
 	// [LITE:DELETED] NewEmailCache

@@ -23,6 +23,7 @@ func SetupRouter(
 	apiKeyAuth middleware2.APIKeyAuthMiddleware,
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
+	opsService *service.OpsService,
 	settingService *service.SettingService,
 	cfg *config.Config,
 	redisClient *redis.Client,
@@ -46,7 +47,7 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, cfg)
+	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, cfg, redisClient)
 
 	return r
 }
@@ -60,7 +61,9 @@ func registerRoutes(
 	apiKeyAuth middleware2.APIKeyAuthMiddleware,
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
+	opsService *service.OpsService,
 	cfg *config.Config,
+	redisClient *redis.Client,
 ) {
 	// 通用路由（健康检查、状态等）
 	routes.RegisterCommonRoutes(r)
@@ -68,7 +71,7 @@ func registerRoutes(
 	// API v1
 	v1 := r.Group("/api/v1")
 
-	// 注册认证路由 (登录、/auth/me)
+	// [LITE] 注册认证路由 (登录、/auth/me) - 不传 redisClient，Lite 版本不需要速率限制
 	routes.RegisterAuthRoutes(v1, h, jwtAuth)
 
 	// [LITE] 注册用户路由 (API Key 管理等，Admin 使用)
@@ -78,5 +81,5 @@ func registerRoutes(
 	routes.RegisterAdminRoutes(v1, h, adminAuth)
 
 	// 注册网关路由
-	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, cfg)
+	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, cfg)
 }

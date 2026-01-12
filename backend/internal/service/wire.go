@@ -1,10 +1,12 @@
 package service
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/Kevin-Lab777/sub2api/internal/config"
 	"github.com/google/wire"
+	"github.com/redis/go-redis/v9"
 )
 
 // BuildInfo contains build information
@@ -26,29 +28,6 @@ func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient)
 // ProvideUpdateService creates UpdateService with BuildInfo
 func ProvideUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, buildInfo BuildInfo) *UpdateService {
 	return NewUpdateService(cache, githubClient, buildInfo.Version, buildInfo.BuildType)
-}
-
-// [LITE:DELETED] ProvideEmailQueueService
-
-// ProvideTokenRefreshService creates and starts TokenRefreshService
-func ProvideTokenRefreshService(
-	accountRepo AccountRepository,
-	oauthService *OAuthService,
-	openaiOAuthService *OpenAIOAuthService,
-	geminiOAuthService *GeminiOAuthService,
-	antigravityOAuthService *AntigravityOAuthService,
-	cfg *config.Config,
-) *TokenRefreshService {
-	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cfg)
-	svc.Start()
-	return svc
-}
-
-// ProvideDashboardAggregationService 创建并启动仪表盘聚合服务
-func ProvideDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, cfg *config.Config) *DashboardAggregationService {
-	svc := NewDashboardAggregationService(repo, timingWheel, cfg)
-	svc.Start()
-	return svc
 }
 
 // ProvideAccountExpiryService creates and starts AccountExpiryService.
@@ -81,22 +60,105 @@ func ProvideConcurrencyService(cache ConcurrencyCache, accountRepo AccountReposi
 	return svc
 }
 
+// ProvideRateLimitService creates RateLimitService with optional dependencies.
+func ProvideRateLimitService(
+	accountRepo AccountRepository,
+	usageRepo UsageLogRepository,
+	cfg *config.Config,
+	geminiQuotaService *GeminiQuotaService,
+	tempUnschedCache TempUnschedCache,
+	timeoutCounterCache TimeoutCounterCache,
+	settingService *SettingService,
+) *RateLimitService {
+	svc := NewRateLimitService(accountRepo, usageRepo, cfg, geminiQuotaService, tempUnschedCache)
+	svc.SetTimeoutCounterCache(timeoutCounterCache)
+	svc.SetSettingService(settingService)
+	return svc
+}
+
+// ProvideOpsMetricsCollector creates and starts OpsMetricsCollector.
+func ProvideOpsMetricsCollector(
+	opsRepo OpsRepository,
+	settingRepo SettingRepository,
+	accountRepo AccountRepository,
+	concurrencyService *ConcurrencyService,
+	db *sql.DB,
+	redisClient *redis.Client,
+	cfg *config.Config,
+) *OpsMetricsCollector {
+	collector := NewOpsMetricsCollector(opsRepo, settingRepo, accountRepo, concurrencyService, db, redisClient, cfg)
+	collector.Start()
+	return collector
+}
+
+// ProvideOpsAggregationService creates and starts OpsAggregationService (hourly/daily pre-aggregation).
+func ProvideOpsAggregationService(
+	opsRepo OpsRepository,
+	settingRepo SettingRepository,
+	db *sql.DB,
+	redisClient *redis.Client,
+	cfg *config.Config,
+) *OpsAggregationService {
+	svc := NewOpsAggregationService(opsRepo, settingRepo, db, redisClient, cfg)
+	svc.Start()
+	return svc
+}
+
+// [LITE:DELETED] ProvideOpsAlertEvaluatorService - depends on EmailService
+
+// ProvideOpsCleanupService creates and starts OpsCleanupService (cron scheduled).
+func ProvideOpsCleanupService(
+	opsRepo OpsRepository,
+	db *sql.DB,
+	redisClient *redis.Client,
+	cfg *config.Config,
+) *OpsCleanupService {
+	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg)
+	svc.Start()
+	return svc
+}
+
+// [LITE:DELETED] ProvideOpsScheduledReportService - depends on EmailService
+
+// ProvideTokenRefreshService creates and starts TokenRefreshService
+func ProvideTokenRefreshService(
+	accountRepo AccountRepository,
+	oauthService *OAuthService,
+	openaiOAuthService *OpenAIOAuthService,
+	geminiOAuthService *GeminiOAuthService,
+	antigravityOAuthService *AntigravityOAuthService,
+	cfg *config.Config,
+) *TokenRefreshService {
+	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cfg)
+	svc.Start()
+	return svc
+}
+
+// ProvideDashboardAggregationService 创建并启动仪表盘聚合服务
+func ProvideDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, cfg *config.Config) *DashboardAggregationService {
+	svc := NewDashboardAggregationService(repo, timingWheel, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
 func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
 	return apiKeyService
 }
 
 // ProviderSet is the Wire provider set for all services
+// [LITE] 移除了 RedeemService, PromoService, EmailService, TurnstileService, IdentityService, UserAttributeService
 var ProviderSet = wire.NewSet(
 	// Core services
 	NewAuthService,
 	NewUserService,
 	NewAPIKeyService,
-	NewAPIKeyUsageService,              // [LITE] API Key 用量管理服务
-	ProvideAPIKeyAuthCacheInvalidator,  // 上游新增：API Key 认证缓存失效
+	ProvideAPIKeyAuthCacheInvalidator,
 	NewGroupService,
 	NewAccountService,
 	NewProxyService,
+	// [LITE:DELETED] NewRedeemService,
+	// [LITE:DELETED] NewPromoService,
 	NewUsageService,
 	NewDashboardService,
 	ProvidePricingService,
@@ -114,12 +176,23 @@ var ProviderSet = wire.NewSet(
 	NewGeminiMessagesCompatService,
 	NewAntigravityTokenProvider,
 	NewAntigravityGatewayService,
-	NewRateLimitService,
+	ProvideRateLimitService,
 	NewAccountUsageService,
 	NewAccountTestService,
 	NewSettingService,
+	NewAPIKeyUsageService, // [LITE] API Key 用量管理服务
+	NewOpsService,
+	ProvideOpsMetricsCollector,
+	ProvideOpsAggregationService,
+	// [LITE:DELETED] ProvideOpsAlertEvaluatorService - depends on EmailService
+	ProvideOpsCleanupService,
+	// [LITE:DELETED] ProvideOpsScheduledReportService - depends on EmailService
+	// [LITE:DELETED] NewEmailService,
+	// [LITE:DELETED] ProvideEmailQueueService,
+	// [LITE:DELETED] NewTurnstileService,
 	NewSubscriptionService,
 	ProvideConcurrencyService,
+	// [LITE:DELETED] NewIdentityService,
 	NewCRSSyncService,
 	ProvideUpdateService,
 	ProvideTokenRefreshService,
@@ -128,5 +201,6 @@ var ProviderSet = wire.NewSet(
 	ProvideDashboardAggregationService,
 	ProvideDeferredService,
 	NewAntigravityQuotaFetcher,
+	// [LITE:DELETED] NewUserAttributeService,
 	NewUsageCache,
 )

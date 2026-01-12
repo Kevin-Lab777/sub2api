@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -17,11 +18,26 @@ type dashboardAggregationRepository struct {
 
 // NewDashboardAggregationRepository 创建仪表盘预聚合仓储。
 func NewDashboardAggregationRepository(sqlDB *sql.DB) service.DashboardAggregationRepository {
+	if sqlDB == nil {
+		return nil
+	}
+	if !isPostgresDriver(sqlDB) {
+		log.Printf("[DashboardAggregation] 检测到非 PostgreSQL 驱动，已自动禁用预聚合")
+		return nil
+	}
 	return newDashboardAggregationRepositoryWithSQL(sqlDB)
 }
 
 func newDashboardAggregationRepositoryWithSQL(sqlq sqlExecutor) *dashboardAggregationRepository {
 	return &dashboardAggregationRepository{sql: sqlq}
+}
+
+func isPostgresDriver(db *sql.DB) bool {
+	if db == nil {
+		return false
+	}
+	_, ok := db.Driver().(*pq.Driver)
+	return ok
 }
 
 func (r *dashboardAggregationRepository) AggregateRange(ctx context.Context, start, end time.Time) error {
@@ -83,21 +99,19 @@ func (r *dashboardAggregationRepository) UpdateAggregationWatermark(ctx context.
 }
 
 func (r *dashboardAggregationRepository) CleanupAggregates(ctx context.Context, hourlyCutoff, dailyCutoff time.Time) error {
-	// [LITE] PostgreSQL 不支持在一个 prepared statement 中执行多条命令，需要分开执行
-	queries := []struct {
-		sql  string
-		args []any
-	}{
-		{"DELETE FROM usage_dashboard_hourly WHERE bucket_start < $1", []any{hourlyCutoff.UTC()}},
-		{"DELETE FROM usage_dashboard_hourly_users WHERE bucket_start < $1", []any{hourlyCutoff.UTC()}},
-		{"DELETE FROM usage_dashboard_daily WHERE bucket_date < $1::date", []any{dailyCutoff.UTC()}},
-		{"DELETE FROM usage_dashboard_daily_users WHERE bucket_date < $1::date", []any{dailyCutoff.UTC()}},
+	hourlyCutoffUTC := hourlyCutoff.UTC()
+	dailyCutoffUTC := dailyCutoff.UTC()
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_hourly WHERE bucket_start < $1", hourlyCutoffUTC); err != nil {
+		return err
 	}
-
-	for _, q := range queries {
-		if _, err := r.sql.ExecContext(ctx, q.sql, q.args...); err != nil {
-			return err
-		}
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_hourly_users WHERE bucket_start < $1", hourlyCutoffUTC); err != nil {
+		return err
+	}
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_daily WHERE bucket_date < $1::date", dailyCutoffUTC); err != nil {
+		return err
+	}
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_daily_users WHERE bucket_date < $1::date", dailyCutoffUTC); err != nil {
+		return err
 	}
 	return nil
 }
