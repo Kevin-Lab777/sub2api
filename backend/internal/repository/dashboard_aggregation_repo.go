@@ -83,13 +83,23 @@ func (r *dashboardAggregationRepository) UpdateAggregationWatermark(ctx context.
 }
 
 func (r *dashboardAggregationRepository) CleanupAggregates(ctx context.Context, hourlyCutoff, dailyCutoff time.Time) error {
-	_, err := r.sql.ExecContext(ctx, `
-		DELETE FROM usage_dashboard_hourly WHERE bucket_start < $1;
-		DELETE FROM usage_dashboard_hourly_users WHERE bucket_start < $1;
-		DELETE FROM usage_dashboard_daily WHERE bucket_date < $2::date;
-		DELETE FROM usage_dashboard_daily_users WHERE bucket_date < $2::date;
-	`, hourlyCutoff.UTC(), dailyCutoff.UTC())
-	return err
+	// [LITE] PostgreSQL 不支持在一个 prepared statement 中执行多条命令，需要分开执行
+	queries := []struct {
+		sql  string
+		args []any
+	}{
+		{"DELETE FROM usage_dashboard_hourly WHERE bucket_start < $1", []any{hourlyCutoff.UTC()}},
+		{"DELETE FROM usage_dashboard_hourly_users WHERE bucket_start < $1", []any{hourlyCutoff.UTC()}},
+		{"DELETE FROM usage_dashboard_daily WHERE bucket_date < $1::date", []any{dailyCutoff.UTC()}},
+		{"DELETE FROM usage_dashboard_daily_users WHERE bucket_date < $1::date", []any{dailyCutoff.UTC()}},
+	}
+
+	for _, q := range queries {
+		if _, err := r.sql.ExecContext(ctx, q.sql, q.args...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *dashboardAggregationRepository) CleanupUsageLogs(ctx context.Context, cutoff time.Time) error {

@@ -1,4 +1,4 @@
-# Sub2API
+# Sub2API Lite
 
 <div align="center">
 
@@ -8,7 +8,7 @@
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 
-**AI API 网关平台 - 订阅配额分发管理**
+**AI API 网关平台 - 轻量版 (个人/小团队)**
 
 [English](README.md) | 中文
 
@@ -16,25 +16,53 @@
 
 ---
 
-## 在线体验
+## 关于 Lite 版本
 
-体验地址：**https://v2.pincc.ai/**
+Sub2API Lite 是基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 的轻量化版本，专为**个人开发者和小团队**设计。
 
-演示账号（共享演示环境；自建部署不会自动创建该账号）：
+### 与原版的区别
 
-| 邮箱 | 密码 |
-|------|------|
-| admin@sub2api.com | admin123 |
+| 功能 | 原版 Standard | Lite 版本 |
+|------|--------------|-----------|
+| 用户注册/登录 | ✅ 多用户系统 | ❌ 仅管理员 |
+| 兑换码系统 | ✅ | ❌ 移除 |
+| 优惠码系统 | ✅ | ❌ 移除 |
+| 用户属性 | ✅ | ❌ 移除 |
+| LinuxDO OAuth | ✅ | ❌ 移除 |
+| 邮件验证 | ✅ | ❌ 移除 |
+| **计费模式** | 扣用户余额 | **限额控制（不扣余额）** |
+| 订阅系统 | ✅ | ✅ 保留 |
+| 账号/代理/分组管理 | ✅ | ✅ 保留 |
+| API Key 管理 | ✅ | ✅ 增强（支持限额） |
+
+### Lite 限额控制
+
+Lite 版本使用**限额控制**替代余额扣费：
+
+```
+请求进入 → API Key 有限额？ → 检查限额
+                ↓ 没有
+          Group 有限额？ → 检查限额
+                ↓ 没有
+          无限制通过 ✅
+```
+
+API Key 支持设置：
+- 日限额 (`daily_limit_usd`)
+- 周限额 (`weekly_limit_usd`)
+- 月限额 (`monthly_limit_usd`)
+
+---
 
 ## 项目概述
 
-Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅（如 Claude Code $200/月）的 API 配额。用户通过平台生成的 API Key 调用上游 AI 服务，平台负责鉴权、计费、负载均衡和请求转发。
+Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅（如 Claude Code $200/月）的 API 配额。管理员通过平台生成 API Key 分发给用户，平台负责鉴权、限额控制、负载均衡和请求转发。
 
 ## 核心功能
 
 - **多账号管理** - 支持多种上游账号类型（OAuth、API Key）
-- **API Key 分发** - 为用户生成和管理 API Key
-- **精确计费** - Token 级别的用量追踪和成本计算
+- **API Key 分发** - 生成和管理 API Key，支持限额控制
+- **限额控制** - API Key/分组级别的日/周/月用量限制
 - **智能调度** - 智能账号选择，支持粘性会话
 - **并发控制** - 用户级和账号级并发限制
 - **速率限制** - 可配置的请求和 Token 速率限制
@@ -73,7 +101,7 @@ Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅（
 #### 安装步骤
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | sudo bash
 ```
 
 脚本会自动：
@@ -123,7 +151,7 @@ sudo journalctl -u sub2api -f
 sudo systemctl restart sub2api
 
 # 卸载
-curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | sudo bash -s -- uninstall -y
 ```
 
 ---
@@ -140,58 +168,42 @@ curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/ins
 #### 安装步骤
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/Kevin-Lab777/sub2api.git
-cd sub2api
+# 1. 创建目录并下载文件
+mkdir sub2api && cd sub2api
+curl -O https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/.env.example
 
-# 2. 进入 deploy 目录
-cd deploy
+# 2. 创建 .env 配置文件
+mv .env.example .env
 
-# 3. 复制环境配置文件
-cp .env.example .env
-
-# 4. 编辑配置（设置密码等）
+# 3. 编辑配置
 nano .env
 ```
 
 **`.env` 必须配置项：**
 
 ```bash
+# 系统架构（必须修改！）
+# amd64: Intel/AMD 处理器 (大多数服务器, Intel Mac)
+# arm64: ARM 处理器 (Apple Silicon M1/M2/M3, AWS Graviton)
+ARCH=amd64
+
 # PostgreSQL 密码（必须修改！）
 POSTGRES_PASSWORD=your_secure_password_here
 
 # 可选：管理员账号
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=your_admin_password
-
-# 可选：自定义端口
-SERVER_PORT=8080
-
-# 可选：安全配置
-# 启用 URL 白名单验证（false 则跳过白名单检查，仅做基本格式校验）
-SECURITY_URL_ALLOWLIST_ENABLED=false
-
-# 关闭白名单时，是否允许 http:// URL（默认 false，只允许 https://）
-# ⚠️ 警告：允许 HTTP 会暴露 API 密钥（明文传输）
-#          仅建议在以下场景使用：
-#          - 开发/测试环境
-#          - 内部可信网络
-#          - 本地测试服务器（http://localhost）
-# 生产环境：保持 false 或仅使用 HTTPS URL
-SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=false
-
-# 是否允许私有 IP 地址用于上游/定价/CRS（内网部署时使用）
-SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=false
 ```
 
 ```bash
-# 5. 启动所有服务
+# 4. 启动所有服务
 docker-compose up -d
 
-# 6. 查看状态
+# 5. 查看状态
 docker-compose ps
 
-# 7. 查看日志
+# 6. 查看日志
 docker-compose logs -f sub2api
 ```
 
@@ -372,16 +384,6 @@ cd backend
 go generate ./ent
 go generate ./cmd/server
 ```
-
----
-
-## 简易模式
-
-简易模式适合个人开发者或内部团队快速使用，不依赖完整 SaaS 功能。
-
-- 启用方式：设置环境变量 `RUN_MODE=simple`
-- 功能差异：隐藏 SaaS 相关功能，跳过计费流程
-- 安全注意事项：生产环境需同时设置 `SIMPLE_MODE_CONFIRM=true` 才允许启动
 
 ---
 

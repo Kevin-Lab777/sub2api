@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Sub2API Installation Script
-# Sub2API 安装脚本
-# Usage: curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | bash
+# Sub2API Lite Installation Script
+# Sub2API Lite 安装脚本
+# Usage: curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | bash
 #
 
 set -e
@@ -48,7 +48,7 @@ declare -A MSG_ZH=(
     ["enter_choice"]="请输入选择 (默认: 1)"
 
     # Installation
-    ["install_title"]="Sub2API 安装脚本"
+    ["install_title"]="Sub2API Lite 安装脚本"
     ["run_as_root"]="请使用 root 权限运行 (使用 sudo)"
     ["detected_platform"]="检测到平台"
     ["unsupported_arch"]="不支持的架构"
@@ -173,7 +173,7 @@ declare -A MSG_EN=(
     ["enter_choice"]="Enter your choice (default: 1)"
 
     # Installation
-    ["install_title"]="Sub2API Installation Script"
+    ["install_title"]="Sub2API Lite Installation Script"
     ["run_as_root"]="Please run as root (use sudo)"
     ["detected_platform"]="Detected platform"
     ["unsupported_arch"]="Unsupported architecture"
@@ -654,7 +654,7 @@ install_service() {
     # Create service file with configured host and port
     cat > /etc/systemd/system/sub2api.service << EOF
 [Unit]
-Description=Sub2API - AI API Gateway Platform
+Description=Sub2API Lite - AI API Gateway Platform
 Documentation=https://github.com/Kevin-Lab777/sub2api
 After=network.target postgresql.service redis.service
 Wants=postgresql.service redis.service

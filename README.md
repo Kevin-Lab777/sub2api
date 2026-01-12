@@ -1,4 +1,4 @@
-# Sub2API
+# Sub2API Lite
 
 <div align="center">
 
@@ -8,7 +8,7 @@
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 
-**AI API Gateway Platform for Subscription Quota Distribution**
+**AI API Gateway Platform - Lite Version (Personal/Small Team)**
 
 English | [中文](README_CN.md)
 
@@ -16,25 +16,53 @@ English | [中文](README_CN.md)
 
 ---
 
-## Demo
+## About Lite Version
 
-Try Sub2API online: **https://v2.pincc.ai/**
+Sub2API Lite is a lightweight version based on [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api), designed for **individual developers and small teams**.
 
-Demo credentials (shared demo environment; **not** created automatically for self-hosted installs):
+### Differences from Original
 
-| Email | Password |
-|-------|----------|
-| admin@sub2api.com | admin123 |
+| Feature | Original Standard | Lite Version |
+|---------|------------------|--------------|
+| User Registration/Login | ✅ Multi-user system | ❌ Admin only |
+| Redeem Code System | ✅ | ❌ Removed |
+| Promo Code System | ✅ | ❌ Removed |
+| User Attributes | ✅ | ❌ Removed |
+| LinuxDO OAuth | ✅ | ❌ Removed |
+| Email Verification | ✅ | ❌ Removed |
+| **Billing Mode** | Deduct user balance | **Quota control (no balance)** |
+| Subscription System | ✅ | ✅ Kept |
+| Account/Proxy/Group Management | ✅ | ✅ Kept |
+| API Key Management | ✅ | ✅ Enhanced (with quotas) |
+
+### Lite Quota Control
+
+Lite version uses **quota control** instead of balance deduction:
+
+```
+Request → API Key has quota? → Check quota
+               ↓ No
+         Group has quota? → Check quota
+               ↓ No
+         Unlimited access ✅
+```
+
+API Key supports:
+- Daily quota (`daily_limit_usd`)
+- Weekly quota (`weekly_limit_usd`)
+- Monthly quota (`monthly_limit_usd`)
+
+---
 
 ## Overview
 
-Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions (like Claude Code $200/month). Users can access upstream AI services through platform-generated API Keys, while the platform handles authentication, billing, load balancing, and request forwarding.
+Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions (like Claude Code $200/month). Admins generate API Keys for users through the platform, while the platform handles authentication, quota control, load balancing, and request forwarding.
 
 ## Features
 
 - **Multi-Account Management** - Support multiple upstream account types (OAuth, API Key)
-- **API Key Distribution** - Generate and manage API Keys for users
-- **Precise Billing** - Token-level usage tracking and cost calculation
+- **API Key Distribution** - Generate and manage API Keys with quota control
+- **Quota Control** - API Key/Group level daily/weekly/monthly usage limits
 - **Smart Scheduling** - Intelligent account selection with sticky sessions
 - **Concurrency Control** - Per-user and per-account concurrency limits
 - **Rate Limiting** - Configurable request and token rate limits
@@ -73,7 +101,7 @@ One-click installation script that downloads pre-built binaries from GitHub Rele
 #### Installation Steps
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | sudo bash
 ```
 
 The script will:
@@ -123,7 +151,7 @@ sudo journalctl -u sub2api -f
 sudo systemctl restart sub2api
 
 # Uninstall
-curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | sudo bash -s -- uninstall -y
 ```
 
 ---
@@ -140,58 +168,42 @@ Deploy with Docker Compose, including PostgreSQL and Redis containers.
 #### Installation Steps
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/Kevin-Lab777/sub2api.git
-cd sub2api
+# 1. Create a directory and download files
+mkdir sub2api && cd sub2api
+curl -O https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/.env.example
 
-# 2. Enter the deploy directory
-cd deploy
+# 2. Create .env from example
+mv .env.example .env
 
-# 3. Copy environment configuration
-cp .env.example .env
-
-# 4. Edit configuration (set your passwords)
+# 3. Edit configuration
 nano .env
 ```
 
 **Required configuration in `.env`:**
 
 ```bash
-# PostgreSQL password (REQUIRED - change this!)
+# System architecture (REQUIRED!)
+# amd64: Intel/AMD processors (most servers, Intel Macs)
+# arm64: ARM processors (Apple Silicon M1/M2/M3, AWS Graviton)
+ARCH=amd64
+
+# PostgreSQL password (REQUIRED!)
 POSTGRES_PASSWORD=your_secure_password_here
 
 # Optional: Admin account
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=your_admin_password
-
-# Optional: Custom port
-SERVER_PORT=8080
-
-# Optional: Security configuration
-# Enable URL allowlist validation (false to skip allowlist checks, only basic format validation)
-SECURITY_URL_ALLOWLIST_ENABLED=false
-
-# Allow insecure HTTP URLs when allowlist is disabled (default: false, requires https)
-# ⚠️ WARNING: Enabling this allows HTTP (plaintext) URLs which can expose API keys
-#             Only recommended for:
-#             - Development/testing environments
-#             - Internal networks with trusted endpoints
-#             - When using local test servers (http://localhost)
-# PRODUCTION: Keep this false or use HTTPS URLs only
-SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=false
-
-# Allow private IP addresses for upstream/pricing/CRS (for internal deployments)
-SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=false
 ```
 
 ```bash
-# 5. Start all services
+# 4. Start all services
 docker-compose up -d
 
-# 6. Check status
+# 5. Check status
 docker-compose ps
 
-# 7. View logs
+# 6. View logs
 docker-compose logs -f sub2api
 ```
 
@@ -372,16 +384,6 @@ cd backend
 go generate ./ent
 go generate ./cmd/server
 ```
-
----
-
-## Simple Mode
-
-Simple Mode is designed for individual developers or internal teams who want quick access without full SaaS features.
-
-- Enable: Set environment variable `RUN_MODE=simple`
-- Difference: Hides SaaS-related features and skips billing process
-- Security note: In production, you must also set `SIMPLE_MODE_CONFIRM=true` to allow startup
 
 ---
 
