@@ -180,9 +180,11 @@ type BulkUpdateAccountResult struct {
 
 // BulkUpdateAccountsResult is the aggregated response for bulk updates.
 type BulkUpdateAccountsResult struct {
-	Success int                       `json:"success"`
-	Failed  int                       `json:"failed"`
-	Results []BulkUpdateAccountResult `json:"results"`
+	Success    int                       `json:"success"`
+	Failed     int                       `json:"failed"`
+	SuccessIDs []int64                   `json:"success_ids"`
+	FailedIDs  []int64                   `json:"failed_ids"`
+	Results    []BulkUpdateAccountResult `json:"results"`
 }
 
 type CreateProxyInput struct {
@@ -232,14 +234,15 @@ type ProxyExitInfoProber interface {
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
-	userRepo            UserRepository
-	groupRepo           GroupRepository
-	accountRepo         AccountRepository
-	proxyRepo           ProxyRepository
-	apiKeyRepo          APIKeyRepository
+	userRepo             UserRepository
+	groupRepo            GroupRepository
+	accountRepo          AccountRepository
+	proxyRepo            ProxyRepository
+	apiKeyRepo           APIKeyRepository
 	// [LITE:DELETED] redeemCodeRepo
-	billingCacheService *BillingCacheService
-	proxyProber         ProxyExitInfoProber
+	billingCacheService  *BillingCacheService
+	proxyProber          ProxyExitInfoProber
+	authCacheInvalidator APIKeyAuthCacheInvalidator // 上游新增
 }
 
 // NewAdminService creates a new AdminService
@@ -252,16 +255,18 @@ func NewAdminService(
 	// [LITE:DELETED] redeemCodeRepo parameter
 	billingCacheService *BillingCacheService,
 	proxyProber ProxyExitInfoProber,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
 ) AdminService {
 	return &adminServiceImpl{
-		userRepo:            userRepo,
-		groupRepo:           groupRepo,
-		accountRepo:         accountRepo,
-		proxyRepo:           proxyRepo,
-		apiKeyRepo:          apiKeyRepo,
+		userRepo:             userRepo,
+		groupRepo:            groupRepo,
+		accountRepo:          accountRepo,
+		proxyRepo:            proxyRepo,
+		apiKeyRepo:           apiKeyRepo,
 		// [LITE:DELETED] redeemCodeRepo assignment
-		billingCacheService: billingCacheService,
-		proxyProber:         proxyProber,
+		billingCacheService:  billingCacheService,
+		proxyProber:          proxyProber,
+		authCacheInvalidator: authCacheInvalidator, // 上游新增
 	}
 }
 
@@ -310,7 +315,10 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		return nil, errors.New("cannot disable admin user")
 	}
 
-	// [LITE:DELETED] oldConcurrency tracking (no longer needed without RedeemCode audit)
+	// 上游新增：用于 authCacheInvalidator 检测变化
+	oldConcurrency := user.Concurrency
+	oldStatus := user.Status
+	oldRole := user.Role
 
 	if input.Email != "" {
 		user.Email = input.Email
@@ -343,6 +351,11 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
+	if s.authCacheInvalidator != nil {
+		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole {
+			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
+		}
+	}
 
 	// [LITE:DELETED] concurrency adjustment audit logging via RedeemCode
 
@@ -361,6 +374,9 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 	if err := s.userRepo.Delete(ctx, id); err != nil {
 		log.Printf("delete user failed: user_id=%d err=%v", id, err)
 		return err
+	}
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, id)
 	}
 	return nil
 }
@@ -389,6 +405,10 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
+	}
+	balanceDiff := user.Balance - currentBalance
+	if s.authCacheInvalidator != nil && balanceDiff != 0 {
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
 
 	if s.billingCacheService != nil {
@@ -623,10 +643,21 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if err := s.groupRepo.Update(ctx, group); err != nil {
 		return nil, err
 	}
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, id)
+	}
 	return group, nil
 }
 
 func (s *adminServiceImpl) DeleteGroup(ctx context.Context, id int64) error {
+	var groupKeys []string
+	if s.authCacheInvalidator != nil {
+		keys, err := s.apiKeyRepo.ListKeysByGroupID(ctx, id)
+		if err == nil {
+			groupKeys = keys
+		}
+	}
+
 	affectedUserIDs, err := s.groupRepo.DeleteCascade(ctx, id)
 	if err != nil {
 		return err
@@ -644,6 +675,11 @@ func (s *adminServiceImpl) DeleteGroup(ctx context.Context, id int64) error {
 				}
 			}
 		}()
+	}
+	if s.authCacheInvalidator != nil {
+		for _, key := range groupKeys {
+			s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, key)
+		}
 	}
 
 	return nil
@@ -833,7 +869,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // It merges credentials/extra keys instead of overwriting the whole object.
 func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error) {
 	result := &BulkUpdateAccountsResult{
-		Results: make([]BulkUpdateAccountResult, 0, len(input.AccountIDs)),
+		SuccessIDs: make([]int64, 0, len(input.AccountIDs)),
+		FailedIDs:  make([]int64, 0, len(input.AccountIDs)),
+		Results:    make([]BulkUpdateAccountResult, 0, len(input.AccountIDs)),
 	}
 
 	if len(input.AccountIDs) == 0 {
@@ -897,6 +935,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 						entry.Success = false
 						entry.Error = err.Error()
 						result.Failed++
+						result.FailedIDs = append(result.FailedIDs, accountID)
 						result.Results = append(result.Results, entry)
 						continue
 					}
@@ -906,6 +945,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 					entry.Success = false
 					entry.Error = err.Error()
 					result.Failed++
+					result.FailedIDs = append(result.FailedIDs, accountID)
 					result.Results = append(result.Results, entry)
 					continue
 				}
@@ -915,6 +955,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 				entry.Success = false
 				entry.Error = err.Error()
 				result.Failed++
+				result.FailedIDs = append(result.FailedIDs, accountID)
 				result.Results = append(result.Results, entry)
 				continue
 			}
@@ -922,6 +963,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 
 		entry.Success = true
 		result.Success++
+		result.SuccessIDs = append(result.SuccessIDs, accountID)
 		result.Results = append(result.Results, entry)
 	}
 

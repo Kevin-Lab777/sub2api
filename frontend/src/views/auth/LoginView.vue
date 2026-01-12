@@ -300,7 +300,8 @@ async function handleLogin(): Promise<void> {
     appStore.showSuccess(t('auth.loginSuccess'))
 
     // Redirect to dashboard or intended route
-    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+    // [LITE] 默认跳转到 /admin/dashboard 而不是 /dashboard
+    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/admin/dashboard'
     await router.push(redirectTo)
   } catch (error: unknown) {
     // Reset Turnstile on error

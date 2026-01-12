@@ -361,6 +361,12 @@ export default {
         note: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。',
         noteWindows: '按 Win+R，输入 %userprofile%\\.codex 打开配置目录。如目录不存在，请先手动创建。',
       },
+      cliTabs: {
+        claudeCode: 'Claude Code',
+        geminiCli: 'Gemini CLI',
+        codexCli: 'Codex CLI',
+        opencode: 'OpenCode',
+      },
       antigravity: {
         description: '为 Antigravity 分组配置 API 访问。请根据您使用的客户端选择对应的配置方式。',
         claudeCode: 'Claude Code',
@@ -372,6 +378,11 @@ export default {
         description: '将以下环境变量添加到您的终端配置文件或直接在终端中运行，以配置 Gemini CLI 访问。',
         modelComment: '如果你有 Gemini 3 权限可以填：gemini-3-pro-preview',
         note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
+      },
+      opencode: {
+        title: 'OpenCode 配置示例',
+        subtitle: 'opencode.json',
+        hint: '示例仅用于演示分组配置，模型与选项可按需调整。',
       },
     },
     customKeyLabel: '自定义密钥',
@@ -1241,6 +1252,8 @@ export default {
       accountDeletedSuccess: '账号删除成功',
       bulkSchedulableEnabled: '成功启用 {count} 个账号的调度',
       bulkSchedulableDisabled: '成功停止 {count} 个账号的调度',
+      bulkSchedulablePartial: '部分调度更新成功：成功 {success} 个，失败 {failed} 个',
+      bulkSchedulableResultUnknown: '批量调度结果不完整，请稍后重试或刷新列表',
       bulkActions: {
         selected: '已选择 {count} 个账号',
         selectCurrentPage: '本页全选',
@@ -2043,7 +2056,11 @@ export default {
         logoHint: 'PNG、JPG 或 SVG 格式，最大 300KB。建议：80x80px 正方形图片。',
         logoSizeError: '图片大小超过 300KB 限制（{size}KB）',
         logoTypeError: '请选择图片文件',
-        logoReadError: '读取图片文件失败'
+        logoReadError: '读取图片文件失败',
+        homeContent: '首页内容',
+        homeContentPlaceholder: '在此输入首页内容，支持 Markdown & HTML 代码。如果输入的是一个链接，则会使用该链接作为 iframe 的 src 属性。',
+        homeContentHint: '自定义首页内容，支持 Markdown/HTML。如果输入的是链接（以 http:// 或 https:// 开头），则会使用该链接作为 iframe 的 src 属性，这允许你设置任意网页作为首页。设置后首页的状态信息将不再显示。',
+        homeContentIframeWarning: '⚠️ iframe 模式提示：部分网站设置了 X-Frame-Options 或 CSP 安全策略，禁止被嵌入到 iframe 中。如果页面显示空白或报错，请确认目标网站允许被嵌入，或考虑使用 HTML 模式自行构建页面内容。'
       },
       smtp: {
         title: 'SMTP 设置',

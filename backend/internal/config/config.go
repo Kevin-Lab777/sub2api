@@ -37,25 +37,28 @@ const (
 )
 
 type Config struct {
-	Server       ServerConfig         `mapstructure:"server"`
-	CORS         CORSConfig           `mapstructure:"cors"`
-	Security     SecurityConfig       `mapstructure:"security"`
-	Billing      BillingConfig        `mapstructure:"billing"`
-	Turnstile    TurnstileConfig      `mapstructure:"turnstile"`
-	Database     DatabaseConfig       `mapstructure:"database"`
-	Redis        RedisConfig          `mapstructure:"redis"`
-	JWT          JWTConfig            `mapstructure:"jwt"`
-	LinuxDo      LinuxDoConnectConfig `mapstructure:"linuxdo_connect"`
-	Default      DefaultConfig        `mapstructure:"default"`
-	RateLimit    RateLimitConfig      `mapstructure:"rate_limit"`
-	Pricing      PricingConfig        `mapstructure:"pricing"`
-	Gateway      GatewayConfig        `mapstructure:"gateway"`
-	Concurrency  ConcurrencyConfig    `mapstructure:"concurrency"`
-	TokenRefresh TokenRefreshConfig   `mapstructure:"token_refresh"`
-	RunMode      string               `mapstructure:"run_mode"` // standard or lite
-	Timezone     string               `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
-	Gemini       GeminiConfig         `mapstructure:"gemini"`
-	Update       UpdateConfig         `mapstructure:"update"`
+	Server       ServerConfig               `mapstructure:"server"`
+	CORS         CORSConfig                 `mapstructure:"cors"`
+	Security     SecurityConfig             `mapstructure:"security"`
+	Billing      BillingConfig              `mapstructure:"billing"`
+	Turnstile    TurnstileConfig            `mapstructure:"turnstile"`
+	Database     DatabaseConfig             `mapstructure:"database"`
+	Redis        RedisConfig                `mapstructure:"redis"`
+	JWT          JWTConfig                  `mapstructure:"jwt"`
+	LinuxDo      LinuxDoConnectConfig       `mapstructure:"linuxdo_connect"`
+	Default      DefaultConfig              `mapstructure:"default"`
+	RateLimit    RateLimitConfig            `mapstructure:"rate_limit"`
+	Pricing      PricingConfig              `mapstructure:"pricing"`
+	Gateway      GatewayConfig              `mapstructure:"gateway"`
+	APIKeyAuth   APIKeyAuthCacheConfig      `mapstructure:"api_key_auth_cache"`
+	Dashboard    DashboardCacheConfig       `mapstructure:"dashboard_cache"`
+	DashboardAgg DashboardAggregationConfig `mapstructure:"dashboard_aggregation"`
+	Concurrency  ConcurrencyConfig          `mapstructure:"concurrency"`
+	TokenRefresh TokenRefreshConfig         `mapstructure:"token_refresh"`
+	RunMode      string                     `mapstructure:"run_mode" yaml:"run_mode"` // [LITE] always lite mode
+	Timezone     string                     `mapstructure:"timezone"`                 // e.g. "Asia/Shanghai", "UTC"
+	Gemini       GeminiConfig               `mapstructure:"gemini"`
+	Update       UpdateConfig               `mapstructure:"update"`
 }
 
 // UpdateConfig 在线更新相关配置
@@ -275,6 +278,13 @@ type DatabaseConfig struct {
 }
 
 func (d *DatabaseConfig) DSN() string {
+	// 当密码为空时不包含 password 参数，避免 libpq 解析错误
+	if d.Password == "" {
+		return fmt.Sprintf(
+			"host=%s port=%d user=%s dbname=%s sslmode=%s",
+			d.Host, d.Port, d.User, d.DBName, d.SSLMode,
+		)
+	}
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode,
@@ -285,6 +295,13 @@ func (d *DatabaseConfig) DSN() string {
 func (d *DatabaseConfig) DSNWithTimezone(tz string) string {
 	if tz == "" {
 		tz = "Asia/Shanghai"
+	}
+	// 当密码为空时不包含 password 参数，避免 libpq 解析错误
+	if d.Password == "" {
+		return fmt.Sprintf(
+			"host=%s port=%d user=%s dbname=%s sslmode=%s TimeZone=%s",
+			d.Host, d.Port, d.User, d.DBName, d.SSLMode, tz,
+		)
 	}
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
@@ -364,6 +381,55 @@ type RateLimitConfig struct {
 
 // [LITE] NormalizeRunMode function removed - always Lite mode
 
+// APIKeyAuthCacheConfig API Key 认证缓存配置
+type APIKeyAuthCacheConfig struct {
+	L1Size             int  `mapstructure:"l1_size"`
+	L1TTLSeconds       int  `mapstructure:"l1_ttl_seconds"`
+	L2TTLSeconds       int  `mapstructure:"l2_ttl_seconds"`
+	NegativeTTLSeconds int  `mapstructure:"negative_ttl_seconds"`
+	JitterPercent      int  `mapstructure:"jitter_percent"`
+	Singleflight       bool `mapstructure:"singleflight"`
+}
+
+// DashboardCacheConfig 仪表盘统计缓存配置
+type DashboardCacheConfig struct {
+	// Enabled: 是否启用仪表盘缓存
+	Enabled bool `mapstructure:"enabled"`
+	// KeyPrefix: Redis key 前缀，用于多环境隔离
+	KeyPrefix string `mapstructure:"key_prefix"`
+	// StatsFreshTTLSeconds: 缓存命中认为"新鲜"的时间窗口（秒）
+	StatsFreshTTLSeconds int `mapstructure:"stats_fresh_ttl_seconds"`
+	// StatsTTLSeconds: Redis 缓存总 TTL（秒）
+	StatsTTLSeconds int `mapstructure:"stats_ttl_seconds"`
+	// StatsRefreshTimeoutSeconds: 异步刷新超时（秒）
+	StatsRefreshTimeoutSeconds int `mapstructure:"stats_refresh_timeout_seconds"`
+}
+
+// DashboardAggregationConfig 仪表盘预聚合配置
+type DashboardAggregationConfig struct {
+	// Enabled: 是否启用预聚合作业
+	Enabled bool `mapstructure:"enabled"`
+	// IntervalSeconds: 聚合刷新间隔（秒）
+	IntervalSeconds int `mapstructure:"interval_seconds"`
+	// LookbackSeconds: 回看窗口（秒）
+	LookbackSeconds int `mapstructure:"lookback_seconds"`
+	// BackfillEnabled: 是否允许全量回填
+	BackfillEnabled bool `mapstructure:"backfill_enabled"`
+	// BackfillMaxDays: 回填最大跨度（天）
+	BackfillMaxDays int `mapstructure:"backfill_max_days"`
+	// Retention: 各表保留窗口（天）
+	Retention DashboardAggregationRetentionConfig `mapstructure:"retention"`
+	// RecomputeDays: 启动时重算最近 N 天
+	RecomputeDays int `mapstructure:"recompute_days"`
+}
+
+// DashboardAggregationRetentionConfig 预聚合保留窗口
+type DashboardAggregationRetentionConfig struct {
+	UsageLogsDays int `mapstructure:"usage_logs_days"`
+	HourlyDays    int `mapstructure:"hourly_days"`
+	DailyDays     int `mapstructure:"daily_days"`
+}
+
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -419,6 +485,7 @@ func Load() (*Config, error) {
 	cfg.LinuxDo.UserInfoEmailPath = strings.TrimSpace(cfg.LinuxDo.UserInfoEmailPath)
 	cfg.LinuxDo.UserInfoIDPath = strings.TrimSpace(cfg.LinuxDo.UserInfoIDPath)
 	cfg.LinuxDo.UserInfoUsernamePath = strings.TrimSpace(cfg.LinuxDo.UserInfoUsernamePath)
+	cfg.Dashboard.KeyPrefix = strings.TrimSpace(cfg.Dashboard.KeyPrefix)
 	cfg.CORS.AllowedOrigins = normalizeStringSlice(cfg.CORS.AllowedOrigins)
 	cfg.Security.ResponseHeaders.AdditionalAllowed = normalizeStringSlice(cfg.Security.ResponseHeaders.AdditionalAllowed)
 	cfg.Security.ResponseHeaders.ForceRemove = normalizeStringSlice(cfg.Security.ResponseHeaders.ForceRemove)
@@ -648,6 +715,32 @@ func setDefaults() {
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
 
+	// API Key auth cache
+	viper.SetDefault("api_key_auth_cache.l1_size", 65535)
+	viper.SetDefault("api_key_auth_cache.l1_ttl_seconds", 15)
+	viper.SetDefault("api_key_auth_cache.l2_ttl_seconds", 300)
+	viper.SetDefault("api_key_auth_cache.negative_ttl_seconds", 30)
+	viper.SetDefault("api_key_auth_cache.jitter_percent", 10)
+	viper.SetDefault("api_key_auth_cache.singleflight", true)
+
+	// Dashboard cache
+	viper.SetDefault("dashboard_cache.enabled", true)
+	viper.SetDefault("dashboard_cache.key_prefix", "sub2api:")
+	viper.SetDefault("dashboard_cache.stats_fresh_ttl_seconds", 15)
+	viper.SetDefault("dashboard_cache.stats_ttl_seconds", 30)
+	viper.SetDefault("dashboard_cache.stats_refresh_timeout_seconds", 30)
+
+	// Dashboard aggregation
+	viper.SetDefault("dashboard_aggregation.enabled", true)
+	viper.SetDefault("dashboard_aggregation.interval_seconds", 60)
+	viper.SetDefault("dashboard_aggregation.lookback_seconds", 120)
+	viper.SetDefault("dashboard_aggregation.backfill_enabled", false)
+	viper.SetDefault("dashboard_aggregation.backfill_max_days", 31)
+	viper.SetDefault("dashboard_aggregation.retention.usage_logs_days", 90)
+	viper.SetDefault("dashboard_aggregation.retention.hourly_days", 180)
+	viper.SetDefault("dashboard_aggregation.retention.daily_days", 730)
+	viper.SetDefault("dashboard_aggregation.recompute_days", 2)
+
 	// Gateway
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久
 	viper.SetDefault("gateway.log_upstream_error_body", false)
@@ -805,6 +898,78 @@ func (c *Config) Validate() error {
 	}
 	if c.Redis.MinIdleConns > c.Redis.PoolSize {
 		return fmt.Errorf("redis.min_idle_conns cannot exceed redis.pool_size")
+	}
+	if c.Dashboard.Enabled {
+		if c.Dashboard.StatsFreshTTLSeconds <= 0 {
+			return fmt.Errorf("dashboard_cache.stats_fresh_ttl_seconds must be positive")
+		}
+		if c.Dashboard.StatsTTLSeconds <= 0 {
+			return fmt.Errorf("dashboard_cache.stats_ttl_seconds must be positive")
+		}
+		if c.Dashboard.StatsRefreshTimeoutSeconds <= 0 {
+			return fmt.Errorf("dashboard_cache.stats_refresh_timeout_seconds must be positive")
+		}
+		if c.Dashboard.StatsFreshTTLSeconds > c.Dashboard.StatsTTLSeconds {
+			return fmt.Errorf("dashboard_cache.stats_fresh_ttl_seconds must be <= dashboard_cache.stats_ttl_seconds")
+		}
+	} else {
+		if c.Dashboard.StatsFreshTTLSeconds < 0 {
+			return fmt.Errorf("dashboard_cache.stats_fresh_ttl_seconds must be non-negative")
+		}
+		if c.Dashboard.StatsTTLSeconds < 0 {
+			return fmt.Errorf("dashboard_cache.stats_ttl_seconds must be non-negative")
+		}
+		if c.Dashboard.StatsRefreshTimeoutSeconds < 0 {
+			return fmt.Errorf("dashboard_cache.stats_refresh_timeout_seconds must be non-negative")
+		}
+	}
+	if c.DashboardAgg.Enabled {
+		if c.DashboardAgg.IntervalSeconds <= 0 {
+			return fmt.Errorf("dashboard_aggregation.interval_seconds must be positive")
+		}
+		if c.DashboardAgg.LookbackSeconds < 0 {
+			return fmt.Errorf("dashboard_aggregation.lookback_seconds must be non-negative")
+		}
+		if c.DashboardAgg.BackfillMaxDays < 0 {
+			return fmt.Errorf("dashboard_aggregation.backfill_max_days must be non-negative")
+		}
+		if c.DashboardAgg.BackfillEnabled && c.DashboardAgg.BackfillMaxDays == 0 {
+			return fmt.Errorf("dashboard_aggregation.backfill_max_days must be positive")
+		}
+		if c.DashboardAgg.Retention.UsageLogsDays <= 0 {
+			return fmt.Errorf("dashboard_aggregation.retention.usage_logs_days must be positive")
+		}
+		if c.DashboardAgg.Retention.HourlyDays <= 0 {
+			return fmt.Errorf("dashboard_aggregation.retention.hourly_days must be positive")
+		}
+		if c.DashboardAgg.Retention.DailyDays <= 0 {
+			return fmt.Errorf("dashboard_aggregation.retention.daily_days must be positive")
+		}
+		if c.DashboardAgg.RecomputeDays < 0 {
+			return fmt.Errorf("dashboard_aggregation.recompute_days must be non-negative")
+		}
+	} else {
+		if c.DashboardAgg.IntervalSeconds < 0 {
+			return fmt.Errorf("dashboard_aggregation.interval_seconds must be non-negative")
+		}
+		if c.DashboardAgg.LookbackSeconds < 0 {
+			return fmt.Errorf("dashboard_aggregation.lookback_seconds must be non-negative")
+		}
+		if c.DashboardAgg.BackfillMaxDays < 0 {
+			return fmt.Errorf("dashboard_aggregation.backfill_max_days must be non-negative")
+		}
+		if c.DashboardAgg.Retention.UsageLogsDays < 0 {
+			return fmt.Errorf("dashboard_aggregation.retention.usage_logs_days must be non-negative")
+		}
+		if c.DashboardAgg.Retention.HourlyDays < 0 {
+			return fmt.Errorf("dashboard_aggregation.retention.hourly_days must be non-negative")
+		}
+		if c.DashboardAgg.Retention.DailyDays < 0 {
+			return fmt.Errorf("dashboard_aggregation.retention.daily_days must be non-negative")
+		}
+		if c.DashboardAgg.RecomputeDays < 0 {
+			return fmt.Errorf("dashboard_aggregation.recompute_days must be non-negative")
+		}
 	}
 	if c.Gateway.MaxBodySize <= 0 {
 		return fmt.Errorf("gateway.max_body_size must be positive")

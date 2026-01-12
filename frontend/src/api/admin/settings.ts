@@ -23,6 +23,7 @@ export interface SystemSettings {
   api_base_url: string
   contact_info: string
   doc_url: string
+  home_content: string
   // SMTP settings
   smtp_host: string
   smtp_port: number
@@ -56,6 +57,7 @@ export interface UpdateSettingsRequest {
   api_base_url?: string
   contact_info?: string
   doc_url?: string
+  home_content?: string
   smtp_host?: string
   smtp_port?: number
   smtp_username?: string
