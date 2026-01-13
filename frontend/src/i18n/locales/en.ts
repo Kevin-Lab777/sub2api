@@ -142,6 +142,7 @@ export default {
     disabled: 'Disabled',
     total: 'Total',
     balance: 'Balance',
+    todayUsage: "Today's Usage",
     available: 'Available',
     copiedToClipboard: 'Copied to clipboard',
     copyFailed: 'Failed to copy',

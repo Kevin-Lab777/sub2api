@@ -139,6 +139,7 @@ export default {
     disabled: '已禁用',
     total: '总计',
     balance: '余额',
+    todayUsage: '今日使用',
     available: '可用',
     copiedToClipboard: '已复制到剪贴板',
     copyFailed: '复制失败',

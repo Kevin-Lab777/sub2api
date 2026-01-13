@@ -58,6 +58,19 @@
 
     <!-- Bottom Section -->
     <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
+      <!-- Profile Link -->
+      <router-link
+        to="/profile"
+        class="sidebar-link mb-2 w-full"
+        :class="{ 'sidebar-link-active': isActive('/profile') }"
+        :title="sidebarCollapsed ? t('nav.profile') : undefined"
+      >
+        <component :is="UserIcon" class="h-5 w-5 flex-shrink-0" />
+        <transition name="fade">
+          <span v-if="!sidebarCollapsed">{{ t('nav.profile') }}</span>
+        </transition>
+      </router-link>
+
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"
@@ -304,6 +317,21 @@ const ChevronDoubleRightIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'm5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5'
+        })
+      ]
+    )
+}
+
+const UserIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z'
         })
       ]
     )

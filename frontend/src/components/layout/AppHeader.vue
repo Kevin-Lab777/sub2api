@@ -26,10 +26,11 @@
         <!-- Language Switcher -->
         <LocaleSwitcher />
 
-        <!-- Balance Display -->
+        <!-- [LITE] Today Usage Display -->
         <div
-          v-if="user"
+          v-if="user && todayCost !== null"
           class="hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
+          :title="t('common.todayUsage')"
         >
           <svg
             class="h-4 w-4 text-primary-600 dark:text-primary-400"
@@ -41,11 +42,11 @@
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
-              d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"
+              d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
             />
           </svg>
           <span class="text-sm font-semibold text-primary-700 dark:text-primary-300">
-            ${{ user.balance?.toFixed(2) || '0.00' }}
+            ${{ todayCost.toFixed(2) }}
           </span>
         </div>
 
@@ -83,13 +84,13 @@
                 <div class="text-xs text-gray-500 dark:text-dark-400">{{ user.email }}</div>
               </div>
 
-              <!-- Balance (mobile only) -->
-              <div class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
+              <!-- [LITE] Today Usage (mobile only) -->
+              <div v-if="todayCost !== null" class="border-b border-gray-100 px-4 py-2 dark:border-dark-700 sm:hidden">
                 <div class="text-xs text-gray-500 dark:text-dark-400">
-                  {{ t('common.balance') }}
+                  {{ t('common.todayUsage') }}
                 </div>
                 <div class="text-sm font-semibold text-primary-600 dark:text-primary-400">
-                  ${{ user.balance?.toFixed(2) || '0.00' }}
+                  ${{ todayCost.toFixed(2) }}
                 </div>
               </div>
 
@@ -183,6 +184,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
+import { usageAPI } from '@/api'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 
@@ -197,6 +199,9 @@ const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
+
+// [LITE] 今日使用额度
+const todayCost = ref<number | null>(null)
 
 // [LITE] 管理员始终显示新手引导按钮
 const showOnboardingButton = computed(() => {
@@ -267,8 +272,22 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
+// [LITE] 获取今日使用额度
+async function fetchTodayCost() {
+  try {
+    const stats = await usageAPI.getDashboardStats()
+    todayCost.value = stats.today_cost
+  } catch (error) {
+    console.error('Failed to fetch usage stats:', error)
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  // [LITE] 获取今日使用额度
+  if (user.value) {
+    fetchTodayCost()
+  }
 })
 
 onBeforeUnmount(() => {

@@ -12,6 +12,9 @@ export { authAPI } from './auth'
 // Admin APIs
 export { adminAPI } from './admin'
 
+// [LITE] User profile API (for password change)
+export { userAPI } from './user'
+
 // [LITE] API Keys management for Admin
 export { keysAPI } from './keys'
 export { usageAPI } from './usage'
