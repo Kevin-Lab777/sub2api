@@ -98,6 +98,8 @@ var ProviderSet = wire.NewSet(
 	// [LITE:DELETED] NewRedeemCache
 	NewUpdateCache,
 	NewGeminiTokenCache,
+	NewSchedulerCache,
+	NewSchedulerOutboxRepository,
 
 	// HTTP service ports (DI Strategy A: return interface directly)
 	// [LITE:DELETED] NewTurnstileVerifier

@@ -529,6 +529,11 @@ func compareVersions(current, latest string) int {
 
 func parseVersion(v string) [3]int {
 	v = strings.TrimPrefix(v, "v")
+	// [LITE] 支持 "0.1.49 Lite" 和 "0.1.50-lite" 格式
+	// 移除后缀：取空格或 "-" 前的版本号
+	if idx := strings.IndexAny(v, " -"); idx != -1 {
+		v = v[:idx]
+	}
 	parts := strings.Split(v, ".")
 	result := [3]int{0, 0, 0}
 	for i := 0; i < len(parts) && i < 3; i++ {

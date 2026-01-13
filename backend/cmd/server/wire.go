@@ -67,6 +67,7 @@ func provideCleanup(
 	// [LITE:DELETED] opsAlertEvaluator *service.OpsAlertEvaluatorService,
 	opsCleanup *service.OpsCleanupService,
 	// [LITE:DELETED] opsScheduledReport *service.OpsScheduledReportService,
+	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
 	pricing *service.PricingService,
@@ -101,6 +102,12 @@ func provideCleanup(
 			{"OpsMetricsCollector", func() error {
 				if opsMetricsCollector != nil {
 					opsMetricsCollector.Stop()
+				}
+				return nil
+			}},
+			{"SchedulerSnapshotService", func() error {
+				if schedulerSnapshot != nil {
+					schedulerSnapshot.Stop()
 				}
 				return nil
 			}},

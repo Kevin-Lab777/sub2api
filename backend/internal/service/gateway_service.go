@@ -152,6 +152,7 @@ type GatewayService struct {
 	apiKeyUsageRepo     APIKeyUsageRepository // [LITE] API Key 用量更新
 	cache               GatewayCache
 	cfg                 *config.Config
+	schedulerSnapshot   *SchedulerSnapshotService
 	billingService      *BillingService
 	rateLimitService    *RateLimitService
 	billingCacheService *BillingCacheService
@@ -171,6 +172,7 @@ func NewGatewayService(
 	apiKeyUsageRepo APIKeyUsageRepository, // [LITE] API Key 用量更新
 	cache GatewayCache,
 	cfg *config.Config,
+	schedulerSnapshot *SchedulerSnapshotService,
 	concurrencyService *ConcurrencyService,
 	billingService *BillingService,
 	rateLimitService *RateLimitService,
@@ -188,6 +190,7 @@ func NewGatewayService(
 		apiKeyUsageRepo:     apiKeyUsageRepo,
 		cache:               cache,
 		cfg:                 cfg,
+		schedulerSnapshot:   schedulerSnapshot,
 		concurrencyService:  concurrencyService,
 		billingService:      billingService,
 		rateLimitService:    rateLimitService,
@@ -748,6 +751,9 @@ func (s *GatewayService) resolvePlatform(ctx context.Context, groupID *int64, gr
 }
 
 func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, bool, error) {
+	if s.schedulerSnapshot != nil {
+		return s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
+	}
 	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
 	if useMixed {
 		platforms := []string{platform, PlatformAntigravity}
@@ -816,6 +822,13 @@ func (s *GatewayService) tryAcquireAccountSlot(ctx context.Context, accountID in
 	return s.concurrencyService.AcquireAccountSlot(ctx, accountID, maxConcurrency)
 }
 
+func (s *GatewayService) getSchedulableAccount(ctx context.Context, accountID int64) (*Account, error) {
+	if s.schedulerSnapshot != nil {
+		return s.schedulerSnapshot.GetAccount(ctx, accountID)
+	}
+	return s.accountRepo.GetByID(ctx, accountID)
+}
+
 func sortAccountsByPriorityAndLastUsed(accounts []*Account, preferOAuth bool) {
 	sort.SliceStable(accounts, func(i, j int) bool {
 		a, b := accounts[i], accounts[j]
@@ -846,7 +859,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 		accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 		if err == nil && accountID > 0 {
 			if _, excluded := excludedIDs[accountID]; !excluded {
-				account, err := s.accountRepo.GetByID(ctx, accountID)
+				account, err := s.getSchedulableAccount(ctx, accountID)
 				// 检查账号分组归属和平台匹配（确保粘性会话不会跨分组或跨平台）
 				if err == nil && s.isAccountInGroup(account, groupID) && account.Platform == platform && account.IsSchedulableForModel(requestedModel) && (requestedModel == "" || s.isModelSupportedByAccount(account, requestedModel)) {
 					if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, stickySessionTTL); err != nil {
@@ -922,7 +935,6 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 // selectAccountWithMixedScheduling 选择账户（支持混合调度）
 // 查询原生平台账户 + 启用 mixed_scheduling 的 antigravity 账户
 func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, nativePlatform string) (*Account, error) {
-	platforms := []string{nativePlatform, PlatformAntigravity}
 	preferOAuth := nativePlatform == PlatformGemini
 
 	// 1. 查询粘性会话
@@ -930,7 +942,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 		accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 		if err == nil && accountID > 0 {
 			if _, excluded := excludedIDs[accountID]; !excluded {
-				account, err := s.accountRepo.GetByID(ctx, accountID)
+				account, err := s.getSchedulableAccount(ctx, accountID)
 				// 检查账号分组归属和有效性：原生平台直接匹配，antigravity 需要启用混合调度
 				if err == nil && s.isAccountInGroup(account, groupID) && account.IsSchedulableForModel(requestedModel) && (requestedModel == "" || s.isModelSupportedByAccount(account, requestedModel)) {
 					if account.Platform == nativePlatform || (account.Platform == PlatformAntigravity && account.IsMixedSchedulingEnabled()) {
@@ -945,13 +957,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 	}
 
 	// 2. 获取可调度账号列表
-	var accounts []Account
-	var err error
-	if groupID != nil {
-		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatforms(ctx, *groupID, platforms)
-	} else {
-		accounts, err = s.accountRepo.ListSchedulableByPlatforms(ctx, platforms)
-	}
+	accounts, _, err := s.listSchedulableAccounts(ctx, groupID, nativePlatform, false)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
@@ -1213,6 +1219,9 @@ func enforceCacheControlLimit(body []byte) []byte {
 		return body
 	}
 
+	// 清理 thinking 块中的非法 cache_control（thinking 块不支持该字段）
+	removeCacheControlFromThinkingBlocks(data)
+
 	// 计算当前 cache_control 块数量
 	count := countCacheControlBlocks(data)
 	if count <= maxCacheControlBlocks {
@@ -1240,6 +1249,7 @@ func enforceCacheControlLimit(body []byte) []byte {
 }
 
 // countCacheControlBlocks 统计 system 和 messages 中的 cache_control 块数量
+// 注意：thinking 块不支持 cache_control，统计时跳过
 func countCacheControlBlocks(data map[string]any) int {
 	count := 0
 
@@ -1247,6 +1257,10 @@ func countCacheControlBlocks(data map[string]any) int {
 	if system, ok := data["system"].([]any); ok {
 		for _, item := range system {
 			if m, ok := item.(map[string]any); ok {
+				// thinking 块不支持 cache_control，跳过
+				if blockType, _ := m["type"].(string); blockType == "thinking" {
+					continue
+				}
 				if _, has := m["cache_control"]; has {
 					count++
 				}
@@ -1261,6 +1275,10 @@ func countCacheControlBlocks(data map[string]any) int {
 				if content, ok := msgMap["content"].([]any); ok {
 					for _, item := range content {
 						if m, ok := item.(map[string]any); ok {
+							// thinking 块不支持 cache_control，跳过
+							if blockType, _ := m["type"].(string); blockType == "thinking" {
+								continue
+							}
 							if _, has := m["cache_control"]; has {
 								count++
 							}
@@ -1276,6 +1294,7 @@ func countCacheControlBlocks(data map[string]any) int {
 
 // removeCacheControlFromMessages 从 messages 中移除一个 cache_control（从头开始）
 // 返回 true 表示成功移除，false 表示没有可移除的
+// 注意：跳过 thinking 块（它不支持 cache_control）
 func removeCacheControlFromMessages(data map[string]any) bool {
 	messages, ok := data["messages"].([]any)
 	if !ok {
@@ -1293,6 +1312,10 @@ func removeCacheControlFromMessages(data map[string]any) bool {
 		}
 		for _, item := range content {
 			if m, ok := item.(map[string]any); ok {
+				// thinking 块不支持 cache_control，跳过
+				if blockType, _ := m["type"].(string); blockType == "thinking" {
+					continue
+				}
 				if _, has := m["cache_control"]; has {
 					delete(m, "cache_control")
 					return true
@@ -1305,6 +1328,7 @@ func removeCacheControlFromMessages(data map[string]any) bool {
 
 // removeCacheControlFromSystem 从 system 中移除一个 cache_control（从尾部开始，保护注入的 prompt）
 // 返回 true 表示成功移除，false 表示没有可移除的
+// 注意：跳过 thinking 块（它不支持 cache_control）
 func removeCacheControlFromSystem(data map[string]any) bool {
 	system, ok := data["system"].([]any)
 	if !ok {
@@ -1314,6 +1338,10 @@ func removeCacheControlFromSystem(data map[string]any) bool {
 	// 从尾部开始移除，保护开头注入的 Claude Code prompt
 	for i := len(system) - 1; i >= 0; i-- {
 		if m, ok := system[i].(map[string]any); ok {
+			// thinking 块不支持 cache_control，跳过
+			if blockType, _ := m["type"].(string); blockType == "thinking" {
+				continue
+			}
 			if _, has := m["cache_control"]; has {
 				delete(m, "cache_control")
 				return true
@@ -1321,6 +1349,44 @@ func removeCacheControlFromSystem(data map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// removeCacheControlFromThinkingBlocks 强制清理所有 thinking 块中的非法 cache_control
+// thinking 块不支持 cache_control 字段，这个函数确保所有 thinking 块都不含该字段
+func removeCacheControlFromThinkingBlocks(data map[string]any) {
+	// 清理 system 中的 thinking 块
+	if system, ok := data["system"].([]any); ok {
+		for _, item := range system {
+			if m, ok := item.(map[string]any); ok {
+				if blockType, _ := m["type"].(string); blockType == "thinking" {
+					if _, has := m["cache_control"]; has {
+						delete(m, "cache_control")
+						log.Printf("[Warning] Removed illegal cache_control from thinking block in system")
+					}
+				}
+			}
+		}
+	}
+
+	// 清理 messages 中的 thinking 块
+	if messages, ok := data["messages"].([]any); ok {
+		for msgIdx, msg := range messages {
+			if msgMap, ok := msg.(map[string]any); ok {
+				if content, ok := msgMap["content"].([]any); ok {
+					for contentIdx, item := range content {
+						if m, ok := item.(map[string]any); ok {
+							if blockType, _ := m["type"].(string); blockType == "thinking" {
+								if _, has := m["cache_control"]; has {
+									delete(m, "cache_control")
+									log.Printf("[Warning] Removed illegal cache_control from thinking block in messages[%d].content[%d]", msgIdx, contentIdx)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 // Forward 转发请求到Claude API
