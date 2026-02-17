@@ -17,10 +17,14 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Kevin-Lab777/sub2api/ent/account"
 	"github.com/Kevin-Lab777/sub2api/ent/accountgroup"
+	"github.com/Kevin-Lab777/sub2api/ent/announcement"
+	"github.com/Kevin-Lab777/sub2api/ent/announcementread"
 	"github.com/Kevin-Lab777/sub2api/ent/apikey"
+	"github.com/Kevin-Lab777/sub2api/ent/errorpassthroughrule"
 	"github.com/Kevin-Lab777/sub2api/ent/group"
 	"github.com/Kevin-Lab777/sub2api/ent/proxy"
 	"github.com/Kevin-Lab777/sub2api/ent/setting"
+	"github.com/Kevin-Lab777/sub2api/ent/usagecleanuptask"
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
 	"github.com/Kevin-Lab777/sub2api/ent/usersubscription"
@@ -39,12 +43,20 @@ type Client struct {
 	Account *AccountClient
 	// AccountGroup is the client for interacting with the AccountGroup builders.
 	AccountGroup *AccountGroupClient
+	// Announcement is the client for interacting with the Announcement builders.
+	Announcement *AnnouncementClient
+	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
+	AnnouncementRead *AnnouncementReadClient
+	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
+	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
+	UsageCleanupTask *UsageCleanupTaskClient
 	// UsageLog is the client for interacting with the UsageLog builders.
 	UsageLog *UsageLogClient
 	// User is the client for interacting with the User builders.
@@ -65,9 +77,13 @@ func (c *Client) init() {
 	c.APIKey = NewAPIKeyClient(c.config)
 	c.Account = NewAccountClient(c.config)
 	c.AccountGroup = NewAccountGroupClient(c.config)
+	c.Announcement = NewAnnouncementClient(c.config)
+	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
+	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
 	c.Setting = NewSettingClient(c.config)
+	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
 	c.User = NewUserClient(c.config)
 	c.UserSubscription = NewUserSubscriptionClient(c.config)
@@ -161,17 +177,21 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		APIKey:           NewAPIKeyClient(cfg),
-		Account:          NewAccountClient(cfg),
-		AccountGroup:     NewAccountGroupClient(cfg),
-		Group:            NewGroupClient(cfg),
-		Proxy:            NewProxyClient(cfg),
-		Setting:          NewSettingClient(cfg),
-		UsageLog:         NewUsageLogClient(cfg),
-		User:             NewUserClient(cfg),
-		UserSubscription: NewUserSubscriptionClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		APIKey:               NewAPIKeyClient(cfg),
+		Account:              NewAccountClient(cfg),
+		AccountGroup:         NewAccountGroupClient(cfg),
+		Announcement:         NewAnnouncementClient(cfg),
+		AnnouncementRead:     NewAnnouncementReadClient(cfg),
+		ErrorPassthroughRule: NewErrorPassthroughRuleClient(cfg),
+		Group:                NewGroupClient(cfg),
+		Proxy:                NewProxyClient(cfg),
+		Setting:              NewSettingClient(cfg),
+		UsageCleanupTask:     NewUsageCleanupTaskClient(cfg),
+		UsageLog:             NewUsageLogClient(cfg),
+		User:                 NewUserClient(cfg),
+		UserSubscription:     NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -189,17 +209,21 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:              ctx,
-		config:           cfg,
-		APIKey:           NewAPIKeyClient(cfg),
-		Account:          NewAccountClient(cfg),
-		AccountGroup:     NewAccountGroupClient(cfg),
-		Group:            NewGroupClient(cfg),
-		Proxy:            NewProxyClient(cfg),
-		Setting:          NewSettingClient(cfg),
-		UsageLog:         NewUsageLogClient(cfg),
-		User:             NewUserClient(cfg),
-		UserSubscription: NewUserSubscriptionClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		APIKey:               NewAPIKeyClient(cfg),
+		Account:              NewAccountClient(cfg),
+		AccountGroup:         NewAccountGroupClient(cfg),
+		Announcement:         NewAnnouncementClient(cfg),
+		AnnouncementRead:     NewAnnouncementReadClient(cfg),
+		ErrorPassthroughRule: NewErrorPassthroughRuleClient(cfg),
+		Group:                NewGroupClient(cfg),
+		Proxy:                NewProxyClient(cfg),
+		Setting:              NewSettingClient(cfg),
+		UsageCleanupTask:     NewUsageCleanupTaskClient(cfg),
+		UsageLog:             NewUsageLogClient(cfg),
+		User:                 NewUserClient(cfg),
+		UserSubscription:     NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -229,8 +253,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Group, c.Proxy, c.Setting, c.UsageLog,
-		c.User, c.UserSubscription,
+		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
+		c.ErrorPassthroughRule, c.Group, c.Proxy, c.Setting, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -240,8 +265,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Group, c.Proxy, c.Setting, c.UsageLog,
-		c.User, c.UserSubscription,
+		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
+		c.ErrorPassthroughRule, c.Group, c.Proxy, c.Setting, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -256,12 +282,20 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Account.mutate(ctx, m)
 	case *AccountGroupMutation:
 		return c.AccountGroup.mutate(ctx, m)
+	case *AnnouncementMutation:
+		return c.Announcement.mutate(ctx, m)
+	case *AnnouncementReadMutation:
+		return c.AnnouncementRead.mutate(ctx, m)
+	case *ErrorPassthroughRuleMutation:
+		return c.ErrorPassthroughRule.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
 	case *ProxyMutation:
 		return c.Proxy.mutate(ctx, m)
 	case *SettingMutation:
 		return c.Setting.mutate(ctx, m)
+	case *UsageCleanupTaskMutation:
+		return c.UsageCleanupTask.mutate(ctx, m)
 	case *UsageLogMutation:
 		return c.UsageLog.mutate(ctx, m)
 	case *UserMutation:
@@ -771,6 +805,453 @@ func (c *AccountGroupClient) mutate(ctx context.Context, m *AccountGroupMutation
 	}
 }
 
+// AnnouncementClient is a client for the Announcement schema.
+type AnnouncementClient struct {
+	config
+}
+
+// NewAnnouncementClient returns a client for the Announcement from the given config.
+func NewAnnouncementClient(c config) *AnnouncementClient {
+	return &AnnouncementClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `announcement.Hooks(f(g(h())))`.
+func (c *AnnouncementClient) Use(hooks ...Hook) {
+	c.hooks.Announcement = append(c.hooks.Announcement, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `announcement.Intercept(f(g(h())))`.
+func (c *AnnouncementClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Announcement = append(c.inters.Announcement, interceptors...)
+}
+
+// Create returns a builder for creating a Announcement entity.
+func (c *AnnouncementClient) Create() *AnnouncementCreate {
+	mutation := newAnnouncementMutation(c.config, OpCreate)
+	return &AnnouncementCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Announcement entities.
+func (c *AnnouncementClient) CreateBulk(builders ...*AnnouncementCreate) *AnnouncementCreateBulk {
+	return &AnnouncementCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AnnouncementClient) MapCreateBulk(slice any, setFunc func(*AnnouncementCreate, int)) *AnnouncementCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AnnouncementCreateBulk{err: fmt.Errorf("calling to AnnouncementClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AnnouncementCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AnnouncementCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Announcement.
+func (c *AnnouncementClient) Update() *AnnouncementUpdate {
+	mutation := newAnnouncementMutation(c.config, OpUpdate)
+	return &AnnouncementUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AnnouncementClient) UpdateOne(_m *Announcement) *AnnouncementUpdateOne {
+	mutation := newAnnouncementMutation(c.config, OpUpdateOne, withAnnouncement(_m))
+	return &AnnouncementUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AnnouncementClient) UpdateOneID(id int64) *AnnouncementUpdateOne {
+	mutation := newAnnouncementMutation(c.config, OpUpdateOne, withAnnouncementID(id))
+	return &AnnouncementUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Announcement.
+func (c *AnnouncementClient) Delete() *AnnouncementDelete {
+	mutation := newAnnouncementMutation(c.config, OpDelete)
+	return &AnnouncementDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AnnouncementClient) DeleteOne(_m *Announcement) *AnnouncementDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AnnouncementClient) DeleteOneID(id int64) *AnnouncementDeleteOne {
+	builder := c.Delete().Where(announcement.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AnnouncementDeleteOne{builder}
+}
+
+// Query returns a query builder for Announcement.
+func (c *AnnouncementClient) Query() *AnnouncementQuery {
+	return &AnnouncementQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAnnouncement},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Announcement entity by its id.
+func (c *AnnouncementClient) Get(ctx context.Context, id int64) (*Announcement, error) {
+	return c.Query().Where(announcement.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AnnouncementClient) GetX(ctx context.Context, id int64) *Announcement {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryReads queries the reads edge of a Announcement.
+func (c *AnnouncementClient) QueryReads(_m *Announcement) *AnnouncementReadQuery {
+	query := (&AnnouncementReadClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(announcement.Table, announcement.FieldID, id),
+			sqlgraph.To(announcementread.Table, announcementread.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, announcement.ReadsTable, announcement.ReadsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *AnnouncementClient) Hooks() []Hook {
+	return c.hooks.Announcement
+}
+
+// Interceptors returns the client interceptors.
+func (c *AnnouncementClient) Interceptors() []Interceptor {
+	return c.inters.Announcement
+}
+
+func (c *AnnouncementClient) mutate(ctx context.Context, m *AnnouncementMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AnnouncementCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AnnouncementUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AnnouncementUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AnnouncementDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Announcement mutation op: %q", m.Op())
+	}
+}
+
+// AnnouncementReadClient is a client for the AnnouncementRead schema.
+type AnnouncementReadClient struct {
+	config
+}
+
+// NewAnnouncementReadClient returns a client for the AnnouncementRead from the given config.
+func NewAnnouncementReadClient(c config) *AnnouncementReadClient {
+	return &AnnouncementReadClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `announcementread.Hooks(f(g(h())))`.
+func (c *AnnouncementReadClient) Use(hooks ...Hook) {
+	c.hooks.AnnouncementRead = append(c.hooks.AnnouncementRead, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `announcementread.Intercept(f(g(h())))`.
+func (c *AnnouncementReadClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AnnouncementRead = append(c.inters.AnnouncementRead, interceptors...)
+}
+
+// Create returns a builder for creating a AnnouncementRead entity.
+func (c *AnnouncementReadClient) Create() *AnnouncementReadCreate {
+	mutation := newAnnouncementReadMutation(c.config, OpCreate)
+	return &AnnouncementReadCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AnnouncementRead entities.
+func (c *AnnouncementReadClient) CreateBulk(builders ...*AnnouncementReadCreate) *AnnouncementReadCreateBulk {
+	return &AnnouncementReadCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AnnouncementReadClient) MapCreateBulk(slice any, setFunc func(*AnnouncementReadCreate, int)) *AnnouncementReadCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AnnouncementReadCreateBulk{err: fmt.Errorf("calling to AnnouncementReadClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AnnouncementReadCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AnnouncementReadCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AnnouncementRead.
+func (c *AnnouncementReadClient) Update() *AnnouncementReadUpdate {
+	mutation := newAnnouncementReadMutation(c.config, OpUpdate)
+	return &AnnouncementReadUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AnnouncementReadClient) UpdateOne(_m *AnnouncementRead) *AnnouncementReadUpdateOne {
+	mutation := newAnnouncementReadMutation(c.config, OpUpdateOne, withAnnouncementRead(_m))
+	return &AnnouncementReadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AnnouncementReadClient) UpdateOneID(id int64) *AnnouncementReadUpdateOne {
+	mutation := newAnnouncementReadMutation(c.config, OpUpdateOne, withAnnouncementReadID(id))
+	return &AnnouncementReadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AnnouncementRead.
+func (c *AnnouncementReadClient) Delete() *AnnouncementReadDelete {
+	mutation := newAnnouncementReadMutation(c.config, OpDelete)
+	return &AnnouncementReadDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AnnouncementReadClient) DeleteOne(_m *AnnouncementRead) *AnnouncementReadDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AnnouncementReadClient) DeleteOneID(id int64) *AnnouncementReadDeleteOne {
+	builder := c.Delete().Where(announcementread.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AnnouncementReadDeleteOne{builder}
+}
+
+// Query returns a query builder for AnnouncementRead.
+func (c *AnnouncementReadClient) Query() *AnnouncementReadQuery {
+	return &AnnouncementReadQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAnnouncementRead},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AnnouncementRead entity by its id.
+func (c *AnnouncementReadClient) Get(ctx context.Context, id int64) (*AnnouncementRead, error) {
+	return c.Query().Where(announcementread.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AnnouncementReadClient) GetX(ctx context.Context, id int64) *AnnouncementRead {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryAnnouncement queries the announcement edge of a AnnouncementRead.
+func (c *AnnouncementReadClient) QueryAnnouncement(_m *AnnouncementRead) *AnnouncementQuery {
+	query := (&AnnouncementClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(announcementread.Table, announcementread.FieldID, id),
+			sqlgraph.To(announcement.Table, announcement.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, announcementread.AnnouncementTable, announcementread.AnnouncementColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUser queries the user edge of a AnnouncementRead.
+func (c *AnnouncementReadClient) QueryUser(_m *AnnouncementRead) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(announcementread.Table, announcementread.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, announcementread.UserTable, announcementread.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *AnnouncementReadClient) Hooks() []Hook {
+	return c.hooks.AnnouncementRead
+}
+
+// Interceptors returns the client interceptors.
+func (c *AnnouncementReadClient) Interceptors() []Interceptor {
+	return c.inters.AnnouncementRead
+}
+
+func (c *AnnouncementReadClient) mutate(ctx context.Context, m *AnnouncementReadMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AnnouncementReadCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AnnouncementReadUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AnnouncementReadUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AnnouncementReadDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AnnouncementRead mutation op: %q", m.Op())
+	}
+}
+
+// ErrorPassthroughRuleClient is a client for the ErrorPassthroughRule schema.
+type ErrorPassthroughRuleClient struct {
+	config
+}
+
+// NewErrorPassthroughRuleClient returns a client for the ErrorPassthroughRule from the given config.
+func NewErrorPassthroughRuleClient(c config) *ErrorPassthroughRuleClient {
+	return &ErrorPassthroughRuleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `errorpassthroughrule.Hooks(f(g(h())))`.
+func (c *ErrorPassthroughRuleClient) Use(hooks ...Hook) {
+	c.hooks.ErrorPassthroughRule = append(c.hooks.ErrorPassthroughRule, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `errorpassthroughrule.Intercept(f(g(h())))`.
+func (c *ErrorPassthroughRuleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ErrorPassthroughRule = append(c.inters.ErrorPassthroughRule, interceptors...)
+}
+
+// Create returns a builder for creating a ErrorPassthroughRule entity.
+func (c *ErrorPassthroughRuleClient) Create() *ErrorPassthroughRuleCreate {
+	mutation := newErrorPassthroughRuleMutation(c.config, OpCreate)
+	return &ErrorPassthroughRuleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ErrorPassthroughRule entities.
+func (c *ErrorPassthroughRuleClient) CreateBulk(builders ...*ErrorPassthroughRuleCreate) *ErrorPassthroughRuleCreateBulk {
+	return &ErrorPassthroughRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ErrorPassthroughRuleClient) MapCreateBulk(slice any, setFunc func(*ErrorPassthroughRuleCreate, int)) *ErrorPassthroughRuleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ErrorPassthroughRuleCreateBulk{err: fmt.Errorf("calling to ErrorPassthroughRuleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ErrorPassthroughRuleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ErrorPassthroughRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ErrorPassthroughRule.
+func (c *ErrorPassthroughRuleClient) Update() *ErrorPassthroughRuleUpdate {
+	mutation := newErrorPassthroughRuleMutation(c.config, OpUpdate)
+	return &ErrorPassthroughRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ErrorPassthroughRuleClient) UpdateOne(_m *ErrorPassthroughRule) *ErrorPassthroughRuleUpdateOne {
+	mutation := newErrorPassthroughRuleMutation(c.config, OpUpdateOne, withErrorPassthroughRule(_m))
+	return &ErrorPassthroughRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ErrorPassthroughRuleClient) UpdateOneID(id int64) *ErrorPassthroughRuleUpdateOne {
+	mutation := newErrorPassthroughRuleMutation(c.config, OpUpdateOne, withErrorPassthroughRuleID(id))
+	return &ErrorPassthroughRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ErrorPassthroughRule.
+func (c *ErrorPassthroughRuleClient) Delete() *ErrorPassthroughRuleDelete {
+	mutation := newErrorPassthroughRuleMutation(c.config, OpDelete)
+	return &ErrorPassthroughRuleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ErrorPassthroughRuleClient) DeleteOne(_m *ErrorPassthroughRule) *ErrorPassthroughRuleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ErrorPassthroughRuleClient) DeleteOneID(id int64) *ErrorPassthroughRuleDeleteOne {
+	builder := c.Delete().Where(errorpassthroughrule.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ErrorPassthroughRuleDeleteOne{builder}
+}
+
+// Query returns a query builder for ErrorPassthroughRule.
+func (c *ErrorPassthroughRuleClient) Query() *ErrorPassthroughRuleQuery {
+	return &ErrorPassthroughRuleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeErrorPassthroughRule},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ErrorPassthroughRule entity by its id.
+func (c *ErrorPassthroughRuleClient) Get(ctx context.Context, id int64) (*ErrorPassthroughRule, error) {
+	return c.Query().Where(errorpassthroughrule.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ErrorPassthroughRuleClient) GetX(ctx context.Context, id int64) *ErrorPassthroughRule {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ErrorPassthroughRuleClient) Hooks() []Hook {
+	return c.hooks.ErrorPassthroughRule
+}
+
+// Interceptors returns the client interceptors.
+func (c *ErrorPassthroughRuleClient) Interceptors() []Interceptor {
+	return c.inters.ErrorPassthroughRule
+}
+
+func (c *ErrorPassthroughRuleClient) mutate(ctx context.Context, m *ErrorPassthroughRuleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ErrorPassthroughRuleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ErrorPassthroughRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ErrorPassthroughRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ErrorPassthroughRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ErrorPassthroughRule mutation op: %q", m.Op())
+	}
+}
+
 // GroupClient is a client for the Group schema.
 type GroupClient struct {
 	config
@@ -1270,6 +1751,139 @@ func (c *SettingClient) mutate(ctx context.Context, m *SettingMutation) (Value, 
 	}
 }
 
+// UsageCleanupTaskClient is a client for the UsageCleanupTask schema.
+type UsageCleanupTaskClient struct {
+	config
+}
+
+// NewUsageCleanupTaskClient returns a client for the UsageCleanupTask from the given config.
+func NewUsageCleanupTaskClient(c config) *UsageCleanupTaskClient {
+	return &UsageCleanupTaskClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `usagecleanuptask.Hooks(f(g(h())))`.
+func (c *UsageCleanupTaskClient) Use(hooks ...Hook) {
+	c.hooks.UsageCleanupTask = append(c.hooks.UsageCleanupTask, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `usagecleanuptask.Intercept(f(g(h())))`.
+func (c *UsageCleanupTaskClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UsageCleanupTask = append(c.inters.UsageCleanupTask, interceptors...)
+}
+
+// Create returns a builder for creating a UsageCleanupTask entity.
+func (c *UsageCleanupTaskClient) Create() *UsageCleanupTaskCreate {
+	mutation := newUsageCleanupTaskMutation(c.config, OpCreate)
+	return &UsageCleanupTaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UsageCleanupTask entities.
+func (c *UsageCleanupTaskClient) CreateBulk(builders ...*UsageCleanupTaskCreate) *UsageCleanupTaskCreateBulk {
+	return &UsageCleanupTaskCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UsageCleanupTaskClient) MapCreateBulk(slice any, setFunc func(*UsageCleanupTaskCreate, int)) *UsageCleanupTaskCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UsageCleanupTaskCreateBulk{err: fmt.Errorf("calling to UsageCleanupTaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UsageCleanupTaskCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UsageCleanupTaskCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UsageCleanupTask.
+func (c *UsageCleanupTaskClient) Update() *UsageCleanupTaskUpdate {
+	mutation := newUsageCleanupTaskMutation(c.config, OpUpdate)
+	return &UsageCleanupTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UsageCleanupTaskClient) UpdateOne(_m *UsageCleanupTask) *UsageCleanupTaskUpdateOne {
+	mutation := newUsageCleanupTaskMutation(c.config, OpUpdateOne, withUsageCleanupTask(_m))
+	return &UsageCleanupTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UsageCleanupTaskClient) UpdateOneID(id int64) *UsageCleanupTaskUpdateOne {
+	mutation := newUsageCleanupTaskMutation(c.config, OpUpdateOne, withUsageCleanupTaskID(id))
+	return &UsageCleanupTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UsageCleanupTask.
+func (c *UsageCleanupTaskClient) Delete() *UsageCleanupTaskDelete {
+	mutation := newUsageCleanupTaskMutation(c.config, OpDelete)
+	return &UsageCleanupTaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UsageCleanupTaskClient) DeleteOne(_m *UsageCleanupTask) *UsageCleanupTaskDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UsageCleanupTaskClient) DeleteOneID(id int64) *UsageCleanupTaskDeleteOne {
+	builder := c.Delete().Where(usagecleanuptask.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UsageCleanupTaskDeleteOne{builder}
+}
+
+// Query returns a query builder for UsageCleanupTask.
+func (c *UsageCleanupTaskClient) Query() *UsageCleanupTaskQuery {
+	return &UsageCleanupTaskQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUsageCleanupTask},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UsageCleanupTask entity by its id.
+func (c *UsageCleanupTaskClient) Get(ctx context.Context, id int64) (*UsageCleanupTask, error) {
+	return c.Query().Where(usagecleanuptask.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UsageCleanupTaskClient) GetX(ctx context.Context, id int64) *UsageCleanupTask {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *UsageCleanupTaskClient) Hooks() []Hook {
+	return c.hooks.UsageCleanupTask
+}
+
+// Interceptors returns the client interceptors.
+func (c *UsageCleanupTaskClient) Interceptors() []Interceptor {
+	return c.inters.UsageCleanupTask
+}
+
+func (c *UsageCleanupTaskClient) mutate(ctx context.Context, m *UsageCleanupTaskMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UsageCleanupTaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UsageCleanupTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UsageCleanupTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UsageCleanupTaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UsageCleanupTask mutation op: %q", m.Op())
+	}
+}
+
 // UsageLogClient is a client for the UsageLog schema.
 type UsageLogClient struct {
 	config
@@ -1639,6 +2253,22 @@ func (c *UserClient) QueryAssignedSubscriptions(_m *User) *UserSubscriptionQuery
 	return query
 }
 
+// QueryAnnouncementReads queries the announcement_reads edge of a User.
+func (c *UserClient) QueryAnnouncementReads(_m *User) *AnnouncementReadQuery {
+	query := (&AnnouncementReadClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(announcementread.Table, announcementread.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.AnnouncementReadsTable, user.AnnouncementReadsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUsageLogs queries the usage_logs edge of a User.
 func (c *UserClient) QueryUsageLogs(_m *User) *UsageLogQuery {
 	query := (&UsageLogClient{config: c.config}).Query()
@@ -1884,11 +2514,13 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIKey, Account, AccountGroup, Group, Proxy, Setting, UsageLog, User,
+		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
+		ErrorPassthroughRule, Group, Proxy, Setting, UsageCleanupTask, UsageLog, User,
 		UserSubscription []ent.Hook
 	}
 	inters struct {
-		APIKey, Account, AccountGroup, Group, Proxy, Setting, UsageLog, User,
+		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
+		ErrorPassthroughRule, Group, Proxy, Setting, UsageCleanupTask, UsageLog, User,
 		UserSubscription []ent.Interceptor
 	}
 )

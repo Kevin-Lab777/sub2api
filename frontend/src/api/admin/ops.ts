@@ -17,6 +17,47 @@ export interface OpsRequestOptions {
 export interface OpsRetryRequest {
   mode: OpsRetryMode
   pinned_account_id?: number
+  force?: boolean
+}
+
+export interface OpsRetryAttempt {
+  id: number
+  created_at: string
+  requested_by_user_id: number
+  source_error_id: number
+  mode: string
+  pinned_account_id?: number | null
+  pinned_account_name?: string
+
+  status: string
+  started_at?: string | null
+  finished_at?: string | null
+  duration_ms?: number | null
+
+  success?: boolean | null
+  http_status_code?: number | null
+  upstream_request_id?: string | null
+  used_account_id?: number | null
+  used_account_name?: string
+  response_preview?: string | null
+  response_truncated?: boolean | null
+
+  result_request_id?: string | null
+  result_error_id?: number | null
+  error_message?: string | null
+}
+
+export type OpsUpstreamErrorEvent = {
+  at_unix_ms?: number
+  platform?: string
+  account_id?: number
+  account_name?: string
+  upstream_status_code?: number
+  upstream_request_id?: string
+  upstream_request_body?: string
+  kind?: string
+  message?: string
+  detail?: string
 }
 
 export interface OpsRetryResult {
@@ -95,6 +136,7 @@ export interface OpsThroughputTrendPoint {
   bucket_start: string
   request_count: number
   token_consumed: number
+  switch_count?: number
   qps: number
   tps: number
 }
@@ -243,6 +285,7 @@ export interface OpsSystemMetricsSnapshot {
 
   goroutine_count?: number | null
   concurrency_queue_depth?: number | null
+  account_switch_count?: number | null
 }
 
 export interface OpsJobHeartbeat {
@@ -252,6 +295,7 @@ export interface OpsJobHeartbeat {
   last_error_at?: string | null
   last_error?: string | null
   last_duration_ms?: number | null
+  last_result?: string | null
   updated_at: string
 }
 
@@ -293,6 +337,22 @@ export interface OpsConcurrencyStatsResponse {
   timestamp?: string
 }
 
+export interface UserConcurrencyInfo {
+  user_id: number
+  user_email: string
+  username: string
+  current_in_use: number
+  max_capacity: number
+  load_percentage: number
+  waiting_in_queue: number
+}
+
+export interface OpsUserConcurrencyStatsResponse {
+  enabled: boolean
+  user: Record<string, UserConcurrencyInfo>
+  timestamp?: string
+}
+
 export async function getConcurrencyStats(platform?: string, groupId?: number | null): Promise<OpsConcurrencyStatsResponse> {
   const params: Record<string, any> = {}
   if (platform) {
@@ -303,6 +363,11 @@ export async function getConcurrencyStats(platform?: string, groupId?: number | 
   }
 
   const { data } = await apiClient.get<OpsConcurrencyStatsResponse>('/admin/ops/concurrency', { params })
+  return data
+}
+
+export async function getUserConcurrencyStats(): Promise<OpsUserConcurrencyStatsResponse> {
+  const { data } = await apiClient.get<OpsUserConcurrencyStatsResponse>('/admin/ops/user-concurrency')
   return data
 }
 
@@ -626,8 +691,6 @@ export type MetricType =
   | 'success_rate'
   | 'error_rate'
   | 'upstream_error_rate'
-  | 'p95_latency_ms'
-  | 'p99_latency_ms'
   | 'cpu_usage_percent'
   | 'memory_usage_percent'
   | 'concurrency_queue_depth'
@@ -663,7 +726,7 @@ export interface AlertEvent {
   id: number
   rule_id: number
   severity: OpsSeverity | string
-  status: 'firing' | 'resolved' | string
+  status: 'firing' | 'resolved' | 'manual_resolved' | string
   title?: string
   description?: string
   metric_value?: number
@@ -701,10 +764,9 @@ export interface EmailNotificationConfig {
 }
 
 export interface OpsMetricThresholds {
-  sla_percent_min?: number | null                // SLA低于此值变红
-  latency_p99_ms_max?: number | null             // 延迟P99高于此值变红
-  ttft_p99_ms_max?: number | null                // TTFT P99高于此值变红
-  request_error_rate_percent_max?: number | null // 请求错误率高于此值变红
+  sla_percent_min?: number | null                 // SLA低于此值变红
+  ttft_p99_ms_max?: number | null                 // TTFT P99高于此值变红
+  request_error_rate_percent_max?: number | null  // 请求错误率高于此值变红
   upstream_error_rate_percent_max?: number | null // 上游错误率高于此值变红
 }
 
@@ -735,6 +797,9 @@ export interface OpsAdvancedSettings {
   data_retention: OpsDataRetentionSettings
   aggregation: OpsAggregationSettings
   ignore_count_tokens_errors: boolean
+  ignore_context_canceled: boolean
+  ignore_no_available_accounts: boolean
+  ignore_invalid_api_key_errors: boolean
   auto_refresh_enabled: boolean
   auto_refresh_interval_seconds: number
 }
@@ -754,21 +819,37 @@ export interface OpsAggregationSettings {
 export interface OpsErrorLog {
   id: number
   created_at: string
+
+  // Standardized classification
   phase: OpsPhase
   type: string
+  error_owner: 'client' | 'provider' | 'platform' | string
+  error_source: 'client_request' | 'upstream_http' | 'gateway' | string
+
   severity: OpsSeverity
   status_code: number
   platform: string
   model: string
-  latency_ms?: number | null
+
+  is_retryable: boolean
+  retry_count: number
+
+  resolved: boolean
+  resolved_at?: string | null
+  resolved_by_user_id?: number | null
+  resolved_retry_id?: number | null
+
   client_request_id: string
   request_id: string
   message: string
 
   user_id?: number | null
+  user_email: string
   api_key_id?: number | null
   account_id?: number | null
+  account_name: string
   group_id?: number | null
+  group_name: string
 
   client_ip?: string | null
   request_path?: string
@@ -890,7 +971,9 @@ export async function getErrorDistribution(
   return data
 }
 
-export async function listErrorLogs(params: {
+export type OpsErrorListView = 'errors' | 'excluded' | 'all'
+
+export type OpsErrorListQueryParams = {
   page?: number
   page_size?: number
   time_range?: string
@@ -899,10 +982,20 @@ export async function listErrorLogs(params: {
   platform?: string
   group_id?: number | null
   account_id?: number | null
+
   phase?: string
+  error_owner?: string
+  error_source?: string
+  resolved?: string
+  view?: OpsErrorListView
+
   q?: string
   status_codes?: string
-}): Promise<OpsErrorLogsResponse> {
+  status_codes_other?: string
+}
+
+// Legacy unified endpoints
+export async function listErrorLogs(params: OpsErrorListQueryParams): Promise<OpsErrorLogsResponse> {
   const { data } = await apiClient.get<OpsErrorLogsResponse>('/admin/ops/errors', { params })
   return data
 }
@@ -914,6 +1007,70 @@ export async function getErrorLogDetail(id: number): Promise<OpsErrorDetail> {
 
 export async function retryErrorRequest(id: number, req: OpsRetryRequest): Promise<OpsRetryResult> {
   const { data } = await apiClient.post<OpsRetryResult>(`/admin/ops/errors/${id}/retry`, req)
+  return data
+}
+
+export async function listRetryAttempts(errorId: number, limit = 50): Promise<OpsRetryAttempt[]> {
+  const { data } = await apiClient.get<OpsRetryAttempt[]>(`/admin/ops/errors/${errorId}/retries`, { params: { limit } })
+  return data
+}
+
+export async function updateErrorResolved(errorId: number, resolved: boolean): Promise<void> {
+  await apiClient.put(`/admin/ops/errors/${errorId}/resolve`, { resolved })
+}
+
+// New split endpoints
+export async function listRequestErrors(params: OpsErrorListQueryParams): Promise<OpsErrorLogsResponse> {
+  const { data } = await apiClient.get<OpsErrorLogsResponse>('/admin/ops/request-errors', { params })
+  return data
+}
+
+export async function listUpstreamErrors(params: OpsErrorListQueryParams): Promise<OpsErrorLogsResponse> {
+  const { data } = await apiClient.get<OpsErrorLogsResponse>('/admin/ops/upstream-errors', { params })
+  return data
+}
+
+export async function getRequestErrorDetail(id: number): Promise<OpsErrorDetail> {
+  const { data } = await apiClient.get<OpsErrorDetail>(`/admin/ops/request-errors/${id}`)
+  return data
+}
+
+export async function getUpstreamErrorDetail(id: number): Promise<OpsErrorDetail> {
+  const { data } = await apiClient.get<OpsErrorDetail>(`/admin/ops/upstream-errors/${id}`)
+  return data
+}
+
+export async function retryRequestErrorClient(id: number): Promise<OpsRetryResult> {
+  const { data } = await apiClient.post<OpsRetryResult>(`/admin/ops/request-errors/${id}/retry-client`, {})
+  return data
+}
+
+export async function retryRequestErrorUpstreamEvent(id: number, idx: number): Promise<OpsRetryResult> {
+  const { data } = await apiClient.post<OpsRetryResult>(`/admin/ops/request-errors/${id}/upstream-errors/${idx}/retry`, {})
+  return data
+}
+
+export async function retryUpstreamError(id: number): Promise<OpsRetryResult> {
+  const { data } = await apiClient.post<OpsRetryResult>(`/admin/ops/upstream-errors/${id}/retry`, {})
+  return data
+}
+
+export async function updateRequestErrorResolved(errorId: number, resolved: boolean): Promise<void> {
+  await apiClient.put(`/admin/ops/request-errors/${errorId}/resolve`, { resolved })
+}
+
+export async function updateUpstreamErrorResolved(errorId: number, resolved: boolean): Promise<void> {
+  await apiClient.put(`/admin/ops/upstream-errors/${errorId}/resolve`, { resolved })
+}
+
+export async function listRequestErrorUpstreamErrors(
+  id: number,
+  params: OpsErrorListQueryParams = {},
+  options: { include_detail?: boolean } = {}
+): Promise<PaginatedResponse<OpsErrorDetail>> {
+  const query: Record<string, any> = { ...params }
+  if (options.include_detail) query.include_detail = '1'
+  const { data } = await apiClient.get<PaginatedResponse<OpsErrorDetail>>(`/admin/ops/request-errors/${id}/upstream-errors`, { params: query })
   return data
 }
 
@@ -942,9 +1099,43 @@ export async function deleteAlertRule(id: number): Promise<void> {
   await apiClient.delete(`/admin/ops/alert-rules/${id}`)
 }
 
-export async function listAlertEvents(limit = 100): Promise<AlertEvent[]> {
-  const { data } = await apiClient.get<AlertEvent[]>('/admin/ops/alert-events', { params: { limit } })
+export interface AlertEventsQuery {
+  limit?: number
+  status?: string
+  severity?: string
+  email_sent?: boolean
+  time_range?: string
+  start_time?: string
+  end_time?: string
+  before_fired_at?: string
+  before_id?: number
+  platform?: string
+  group_id?: number
+}
+
+export async function listAlertEvents(params: AlertEventsQuery = {}): Promise<AlertEvent[]> {
+  const { data } = await apiClient.get<AlertEvent[]>('/admin/ops/alert-events', { params })
   return data
+}
+
+export async function getAlertEvent(id: number): Promise<AlertEvent> {
+  const { data } = await apiClient.get<AlertEvent>(`/admin/ops/alert-events/${id}`)
+  return data
+}
+
+export async function updateAlertEventStatus(id: number, status: 'resolved' | 'manual_resolved'): Promise<void> {
+  await apiClient.put(`/admin/ops/alert-events/${id}/status`, { status })
+}
+
+export async function createAlertSilence(payload: {
+  rule_id: number
+  platform: string
+  group_id?: number | null
+  region?: string | null
+  until: string
+  reason?: string
+}): Promise<void> {
+  await apiClient.post('/admin/ops/alert-silences', payload)
 }
 
 // Email notification config
@@ -998,18 +1189,39 @@ export const opsAPI = {
   getErrorTrend,
   getErrorDistribution,
   getConcurrencyStats,
+  getUserConcurrencyStats,
   getAccountAvailabilityStats,
   getRealtimeTrafficSummary,
   subscribeQPS,
+
+  // Legacy unified endpoints
   listErrorLogs,
   getErrorLogDetail,
   retryErrorRequest,
+  listRetryAttempts,
+  updateErrorResolved,
+
+  // New split endpoints
+  listRequestErrors,
+  listUpstreamErrors,
+  getRequestErrorDetail,
+  getUpstreamErrorDetail,
+  retryRequestErrorClient,
+  retryRequestErrorUpstreamEvent,
+  retryUpstreamError,
+  updateRequestErrorResolved,
+  updateUpstreamErrorResolved,
+  listRequestErrorUpstreamErrors,
+
   listRequestDetails,
   listAlertRules,
   createAlertRule,
   updateAlertRule,
   deleteAlertRule,
   listAlertEvents,
+  getAlertEvent,
+  updateAlertEventStatus,
+  createAlertSilence,
   getEmailNotificationConfig,
   updateEmailNotificationConfig,
   getAlertRuntimeSettings,

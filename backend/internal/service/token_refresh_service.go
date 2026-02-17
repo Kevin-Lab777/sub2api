@@ -14,9 +14,11 @@ import (
 // TokenRefreshService OAuth token自动刷新服务
 // 定期检查并刷新即将过期的token
 type TokenRefreshService struct {
-	accountRepo AccountRepository
-	refreshers  []TokenRefresher
-	cfg         *config.TokenRefreshConfig
+	accountRepo      AccountRepository
+	refreshers       []TokenRefresher
+	cfg              *config.TokenRefreshConfig
+	cacheInvalidator TokenCacheInvalidator
+	schedulerCache   SchedulerCache // 用于同步更新调度器缓存，解决 token 刷新后缓存不一致问题
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
@@ -29,12 +31,16 @@ func NewTokenRefreshService(
 	openaiOAuthService *OpenAIOAuthService,
 	geminiOAuthService *GeminiOAuthService,
 	antigravityOAuthService *AntigravityOAuthService,
+	cacheInvalidator TokenCacheInvalidator,
+	schedulerCache SchedulerCache,
 	cfg *config.Config,
 ) *TokenRefreshService {
 	s := &TokenRefreshService{
-		accountRepo: accountRepo,
-		cfg:         &cfg.TokenRefresh,
-		stopCh:      make(chan struct{}),
+		accountRepo:      accountRepo,
+		cfg:              &cfg.TokenRefresh,
+		cacheInvalidator: cacheInvalidator,
+		schedulerCache:   schedulerCache,
+		stopCh:           make(chan struct{}),
 	}
 
 	// 注册平台特定的刷新器
@@ -163,11 +169,46 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 
 	for attempt := 1; attempt <= s.cfg.MaxRetries; attempt++ {
 		newCredentials, err := refresher.Refresh(ctx, account)
-		if err == nil {
-			// 刷新成功，更新账号credentials
+
+		// 如果有新凭证，先更新（即使有错误也要保存 token）
+		if newCredentials != nil {
+			// 记录刷新版本时间戳，用于解决缓存一致性问题
+			// TokenProvider 写入缓存前会检查此版本，如果版本已更新则跳过写入
+			newCredentials["_token_version"] = time.Now().UnixMilli()
+
 			account.Credentials = newCredentials
-			if err := s.accountRepo.Update(ctx, account); err != nil {
-				return fmt.Errorf("failed to save credentials: %w", err)
+			if saveErr := s.accountRepo.Update(ctx, account); saveErr != nil {
+				return fmt.Errorf("failed to save credentials: %w", saveErr)
+			}
+		}
+
+		if err == nil {
+			// Antigravity 账户：如果之前是因为缺少 project_id 而标记为 error，现在成功获取到了，清除错误状态
+			if account.Platform == PlatformAntigravity &&
+				account.Status == StatusError &&
+				strings.Contains(account.ErrorMessage, "missing_project_id:") {
+				if clearErr := s.accountRepo.ClearError(ctx, account.ID); clearErr != nil {
+					log.Printf("[TokenRefresh] Failed to clear error status for account %d: %v", account.ID, clearErr)
+				} else {
+					log.Printf("[TokenRefresh] Account %d: cleared missing_project_id error", account.ID)
+				}
+			}
+			// 对所有 OAuth 账号调用缓存失效（InvalidateToken 内部根据平台判断是否需要处理）
+			if s.cacheInvalidator != nil && account.Type == AccountTypeOAuth {
+				if err := s.cacheInvalidator.InvalidateToken(ctx, account); err != nil {
+					log.Printf("[TokenRefresh] Failed to invalidate token cache for account %d: %v", account.ID, err)
+				} else {
+					log.Printf("[TokenRefresh] Token cache invalidated for account %d", account.ID)
+				}
+			}
+			// 同步更新调度器缓存，确保调度获取的 Account 对象包含最新的 credentials
+			// 这解决了 token 刷新后调度器缓存数据不一致的问题（#445）
+			if s.schedulerCache != nil {
+				if err := s.schedulerCache.SetAccount(ctx, account); err != nil {
+					log.Printf("[TokenRefresh] Failed to sync scheduler cache for account %d: %v", account.ID, err)
+				} else {
+					log.Printf("[TokenRefresh] Scheduler cache synced for account %d", account.ID)
+				}
 			}
 			return nil
 		}
@@ -208,7 +249,8 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 }
 
 // isNonRetryableRefreshError 判断是否为不可重试的刷新错误
-// 这些错误通常表示凭证已失效，需要用户重新授权
+// 这些错误通常表示凭证已失效或配置确实缺失，需要用户重新授权
+// 注意：missing_project_id 错误只在真正缺失（从未获取过）时返回，临时获取失败不会返回此错误
 func isNonRetryableRefreshError(err error) bool {
 	if err == nil {
 		return false
@@ -219,6 +261,7 @@ func isNonRetryableRefreshError(err error) bool {
 		"invalid_client",      // 客户端配置错误
 		"unauthorized_client", // 客户端未授权
 		"access_denied",       // 访问被拒绝
+		"missing_project_id",  // 缺少 project_id
 	}
 	for _, needle := range nonRetryable {
 		if strings.Contains(msg, needle) {

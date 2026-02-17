@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/timezone"
 	"github.com/Kevin-Lab777/sub2api/internal/service"
 	"github.com/lib/pq"
 )
@@ -41,25 +42,95 @@ func isPostgresDriver(db *sql.DB) bool {
 }
 
 func (r *dashboardAggregationRepository) AggregateRange(ctx context.Context, start, end time.Time) error {
-	startUTC := start.UTC()
-	endUTC := end.UTC()
-	if !endUTC.After(startUTC) {
+	loc := timezone.Location()
+	startLocal := start.In(loc)
+	endLocal := end.In(loc)
+	if !endLocal.After(startLocal) {
 		return nil
 	}
 
-	hourStart := startUTC.Truncate(time.Hour)
-	hourEnd := endUTC.Truncate(time.Hour)
-	if endUTC.After(hourEnd) {
+	hourStart := startLocal.Truncate(time.Hour)
+	hourEnd := endLocal.Truncate(time.Hour)
+	if endLocal.After(hourEnd) {
 		hourEnd = hourEnd.Add(time.Hour)
 	}
 
-	dayStart := truncateToDayUTC(startUTC)
-	dayEnd := truncateToDayUTC(endUTC)
-	if endUTC.After(dayEnd) {
+	dayStart := truncateToDay(startLocal)
+	dayEnd := truncateToDay(endLocal)
+	if endLocal.After(dayEnd) {
 		dayEnd = dayEnd.Add(24 * time.Hour)
 	}
 
 	// 以桶边界聚合，允许覆盖 end 所在桶的剩余区间。
+	if err := r.insertHourlyActiveUsers(ctx, hourStart, hourEnd); err != nil {
+		return err
+	}
+	if err := r.insertDailyActiveUsers(ctx, hourStart, hourEnd); err != nil {
+		return err
+	}
+	if err := r.upsertHourlyAggregates(ctx, hourStart, hourEnd); err != nil {
+		return err
+	}
+	if err := r.upsertDailyAggregates(ctx, dayStart, dayEnd); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *dashboardAggregationRepository) RecomputeRange(ctx context.Context, start, end time.Time) error {
+	if r == nil || r.sql == nil {
+		return nil
+	}
+	loc := timezone.Location()
+	startLocal := start.In(loc)
+	endLocal := end.In(loc)
+	if !endLocal.After(startLocal) {
+		return nil
+	}
+
+	hourStart := startLocal.Truncate(time.Hour)
+	hourEnd := endLocal.Truncate(time.Hour)
+	if endLocal.After(hourEnd) {
+		hourEnd = hourEnd.Add(time.Hour)
+	}
+
+	dayStart := truncateToDay(startLocal)
+	dayEnd := truncateToDay(endLocal)
+	if endLocal.After(dayEnd) {
+		dayEnd = dayEnd.Add(24 * time.Hour)
+	}
+
+	// 尽量使用事务保证范围内的一致性（允许在非 *sql.DB 的情况下退化为非事务执行）。
+	if db, ok := r.sql.(*sql.DB); ok {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		txRepo := newDashboardAggregationRepositoryWithSQL(tx)
+		if err := txRepo.recomputeRangeInTx(ctx, hourStart, hourEnd, dayStart, dayEnd); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		return tx.Commit()
+	}
+	return r.recomputeRangeInTx(ctx, hourStart, hourEnd, dayStart, dayEnd)
+}
+
+func (r *dashboardAggregationRepository) recomputeRangeInTx(ctx context.Context, hourStart, hourEnd, dayStart, dayEnd time.Time) error {
+	// 先清空范围内桶，再重建（避免仅增量插入导致活跃用户等指标无法回退）。
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_hourly WHERE bucket_start >= $1 AND bucket_start < $2", hourStart, hourEnd); err != nil {
+		return err
+	}
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_hourly_users WHERE bucket_start >= $1 AND bucket_start < $2", hourStart, hourEnd); err != nil {
+		return err
+	}
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_daily WHERE bucket_date >= $1::date AND bucket_date < $2::date", dayStart, dayEnd); err != nil {
+		return err
+	}
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_daily_users WHERE bucket_date >= $1::date AND bucket_date < $2::date", dayStart, dayEnd); err != nil {
+		return err
+	}
+
 	if err := r.insertHourlyActiveUsers(ctx, hourStart, hourEnd); err != nil {
 		return err
 	}
@@ -146,38 +217,41 @@ func (r *dashboardAggregationRepository) EnsureUsageLogsPartitions(ctx context.C
 }
 
 func (r *dashboardAggregationRepository) insertHourlyActiveUsers(ctx context.Context, start, end time.Time) error {
+	tzName := timezone.Name()
 	query := `
 		INSERT INTO usage_dashboard_hourly_users (bucket_start, user_id)
 		SELECT DISTINCT
-			date_trunc('hour', created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS bucket_start,
+			date_trunc('hour', created_at AT TIME ZONE $3) AT TIME ZONE $3 AS bucket_start,
 			user_id
 		FROM usage_logs
 		WHERE created_at >= $1 AND created_at < $2
 		ON CONFLICT DO NOTHING
 	`
-	_, err := r.sql.ExecContext(ctx, query, start.UTC(), end.UTC())
+	_, err := r.sql.ExecContext(ctx, query, start, end, tzName)
 	return err
 }
 
 func (r *dashboardAggregationRepository) insertDailyActiveUsers(ctx context.Context, start, end time.Time) error {
+	tzName := timezone.Name()
 	query := `
 		INSERT INTO usage_dashboard_daily_users (bucket_date, user_id)
 		SELECT DISTINCT
-			(bucket_start AT TIME ZONE 'UTC')::date AS bucket_date,
+			(bucket_start AT TIME ZONE $3)::date AS bucket_date,
 			user_id
 		FROM usage_dashboard_hourly_users
 		WHERE bucket_start >= $1 AND bucket_start < $2
 		ON CONFLICT DO NOTHING
 	`
-	_, err := r.sql.ExecContext(ctx, query, start.UTC(), end.UTC())
+	_, err := r.sql.ExecContext(ctx, query, start, end, tzName)
 	return err
 }
 
 func (r *dashboardAggregationRepository) upsertHourlyAggregates(ctx context.Context, start, end time.Time) error {
+	tzName := timezone.Name()
 	query := `
 		WITH hourly AS (
 			SELECT
-				date_trunc('hour', created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS bucket_start,
+				date_trunc('hour', created_at AT TIME ZONE $3) AT TIME ZONE $3 AS bucket_start,
 				COUNT(*) AS total_requests,
 				COALESCE(SUM(input_tokens), 0) AS input_tokens,
 				COALESCE(SUM(output_tokens), 0) AS output_tokens,
@@ -236,15 +310,16 @@ func (r *dashboardAggregationRepository) upsertHourlyAggregates(ctx context.Cont
 			active_users = EXCLUDED.active_users,
 			computed_at = EXCLUDED.computed_at
 	`
-	_, err := r.sql.ExecContext(ctx, query, start.UTC(), end.UTC())
+	_, err := r.sql.ExecContext(ctx, query, start, end, tzName)
 	return err
 }
 
 func (r *dashboardAggregationRepository) upsertDailyAggregates(ctx context.Context, start, end time.Time) error {
+	tzName := timezone.Name()
 	query := `
 		WITH daily AS (
 			SELECT
-				(bucket_start AT TIME ZONE 'UTC')::date AS bucket_date,
+				(bucket_start AT TIME ZONE $5)::date AS bucket_date,
 				COALESCE(SUM(total_requests), 0) AS total_requests,
 				COALESCE(SUM(input_tokens), 0) AS input_tokens,
 				COALESCE(SUM(output_tokens), 0) AS output_tokens,
@@ -255,7 +330,7 @@ func (r *dashboardAggregationRepository) upsertDailyAggregates(ctx context.Conte
 				COALESCE(SUM(total_duration_ms), 0) AS total_duration_ms
 			FROM usage_dashboard_hourly
 			WHERE bucket_start >= $1 AND bucket_start < $2
-			GROUP BY (bucket_start AT TIME ZONE 'UTC')::date
+			GROUP BY (bucket_start AT TIME ZONE $5)::date
 		),
 		user_counts AS (
 			SELECT bucket_date, COUNT(*) AS active_users
@@ -303,7 +378,7 @@ func (r *dashboardAggregationRepository) upsertDailyAggregates(ctx context.Conte
 			active_users = EXCLUDED.active_users,
 			computed_at = EXCLUDED.computed_at
 	`
-	_, err := r.sql.ExecContext(ctx, query, start.UTC(), end.UTC(), start.UTC(), end.UTC())
+	_, err := r.sql.ExecContext(ctx, query, start, end, start, end, tzName)
 	return err
 }
 
@@ -376,9 +451,8 @@ func (r *dashboardAggregationRepository) createUsageLogsPartition(ctx context.Co
 	return err
 }
 
-func truncateToDayUTC(t time.Time) time.Time {
-	t = t.UTC()
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+func truncateToDay(t time.Time) time.Time {
+	return timezone.StartOfDay(t)
 }
 
 func truncateToMonthUTC(t time.Time) time.Time {

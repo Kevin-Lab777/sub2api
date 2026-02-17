@@ -75,6 +75,9 @@ func (f fakeAPIKeyRepo) ListKeysByUserID(ctx context.Context, userID int64) ([]s
 func (f fakeAPIKeyRepo) ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error) {
 	return nil, errors.New("not implemented")
 }
+func (f fakeAPIKeyRepo) IncrementQuotaUsed(ctx context.Context, id int64, amount float64) (float64, error) {
+	return 0, errors.New("not implemented")
+}
 
 type googleErrorResponse struct {
 	Error struct {
@@ -90,6 +93,7 @@ func newTestAPIKeyService(repo service.APIKeyRepository) *service.APIKeyService 
 		nil, // userRepo (unused in GetByKey)
 		nil, // groupRepo
 		nil, // userSubRepo
+		nil, // userGroupRateRepo
 		nil, // cache
 		&config.Config{},
 	)
@@ -184,10 +188,11 @@ func TestApiKeyAuthWithSubscriptionGoogleSetsGroupContext(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		&config.Config{},
+		nil,
+		&config.Config{RunMode: config.RunModeSimple},
 	)
 
-	cfg := &config.Config{}
+	cfg := &config.Config{RunMode: config.RunModeSimple}
 	r := gin.New()
 	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) {
@@ -224,7 +229,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_QueryKeyAllowedOnV1Beta(t *testing.T) 
 			}, nil
 		},
 	})
-	cfg := &config.Config{}
+	cfg := &config.Config{RunMode: config.RunModeSimple}
 	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 

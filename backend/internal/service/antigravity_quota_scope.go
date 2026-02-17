@@ -1,39 +1,10 @@
 package service
 
 import (
+	"context"
 	"strings"
 	"time"
 )
-
-const antigravityQuotaScopesKey = "antigravity_quota_scopes"
-
-// AntigravityQuotaScope 表示 Antigravity 的配额域
-type AntigravityQuotaScope string
-
-const (
-	AntigravityQuotaScopeClaude      AntigravityQuotaScope = "claude"
-	AntigravityQuotaScopeGeminiText  AntigravityQuotaScope = "gemini_text"
-	AntigravityQuotaScopeGeminiImage AntigravityQuotaScope = "gemini_image"
-)
-
-// resolveAntigravityQuotaScope 根据模型名称解析配额域
-func resolveAntigravityQuotaScope(requestedModel string) (AntigravityQuotaScope, bool) {
-	model := normalizeAntigravityModelName(requestedModel)
-	if model == "" {
-		return "", false
-	}
-	switch {
-	case strings.HasPrefix(model, "claude-"):
-		return AntigravityQuotaScopeClaude, true
-	case strings.HasPrefix(model, "gemini-"):
-		if isImageGenerationModel(model) {
-			return AntigravityQuotaScopeGeminiImage, true
-		}
-		return AntigravityQuotaScopeGeminiText, true
-	default:
-		return "", false
-	}
-}
 
 func normalizeAntigravityModelName(model string) string {
 	normalized := strings.ToLower(strings.TrimSpace(model))
@@ -41,48 +12,42 @@ func normalizeAntigravityModelName(model string) string {
 	return normalized
 }
 
-// IsSchedulableForModel 结合 Antigravity 配额域限流判断是否可调度
+// resolveAntigravityModelKey 根据请求的模型名解析限流 key
+// 返回空字符串表示无法解析
+func resolveAntigravityModelKey(requestedModel string) string {
+	return normalizeAntigravityModelName(requestedModel)
+}
+
+// IsSchedulableForModel 结合模型级限流判断是否可调度。
+// 保持旧签名以兼容既有调用方；默认使用 context.Background()。
 func (a *Account) IsSchedulableForModel(requestedModel string) bool {
+	return a.IsSchedulableForModelWithContext(context.Background(), requestedModel)
+}
+
+func (a *Account) IsSchedulableForModelWithContext(ctx context.Context, requestedModel string) bool {
 	if a == nil {
 		return false
 	}
 	if !a.IsSchedulable() {
 		return false
 	}
-	if a.Platform != PlatformAntigravity {
-		return true
+	if a.isModelRateLimitedWithContext(ctx, requestedModel) {
+		return false
 	}
-	scope, ok := resolveAntigravityQuotaScope(requestedModel)
-	if !ok {
-		return true
-	}
-	resetAt := a.antigravityQuotaScopeResetAt(scope)
-	if resetAt == nil {
-		return true
-	}
-	now := time.Now()
-	return !now.Before(*resetAt)
+	return true
 }
 
-func (a *Account) antigravityQuotaScopeResetAt(scope AntigravityQuotaScope) *time.Time {
-	if a == nil || a.Extra == nil || scope == "" {
-		return nil
+// GetRateLimitRemainingTime 获取限流剩余时间（模型级限流）
+// 返回 0 表示未限流或已过期
+func (a *Account) GetRateLimitRemainingTime(requestedModel string) time.Duration {
+	return a.GetRateLimitRemainingTimeWithContext(context.Background(), requestedModel)
+}
+
+// GetRateLimitRemainingTimeWithContext 获取限流剩余时间（模型级限流）
+// 返回 0 表示未限流或已过期
+func (a *Account) GetRateLimitRemainingTimeWithContext(ctx context.Context, requestedModel string) time.Duration {
+	if a == nil {
+		return 0
 	}
-	rawScopes, ok := a.Extra[antigravityQuotaScopesKey].(map[string]any)
-	if !ok {
-		return nil
-	}
-	rawScope, ok := rawScopes[string(scope)].(map[string]any)
-	if !ok {
-		return nil
-	}
-	resetAtRaw, ok := rawScope["rate_limit_reset_at"].(string)
-	if !ok || strings.TrimSpace(resetAtRaw) == "" {
-		return nil
-	}
-	resetAt, err := time.Parse(time.RFC3339, resetAtRaw)
-	if err != nil {
-		return nil
-	}
-	return &resetAt
+	return a.GetModelRateLimitRemainingTimeWithContext(ctx, requestedModel)
 }

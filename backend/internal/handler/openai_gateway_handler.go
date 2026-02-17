@@ -22,9 +22,12 @@ import (
 
 // OpenAIGatewayHandler handles OpenAI API gateway requests
 type OpenAIGatewayHandler struct {
-	gatewayService      *service.OpenAIGatewayService
-	billingCacheService *service.BillingCacheService
-	concurrencyHelper   *ConcurrencyHelper
+	gatewayService          *service.OpenAIGatewayService
+	billingCacheService     *service.BillingCacheService
+	apiKeyService           *service.APIKeyService
+	errorPassthroughService *service.ErrorPassthroughService
+	concurrencyHelper       *ConcurrencyHelper
+	maxAccountSwitches      int
 }
 
 // NewOpenAIGatewayHandler creates a new OpenAIGatewayHandler
@@ -32,16 +35,25 @@ func NewOpenAIGatewayHandler(
 	gatewayService *service.OpenAIGatewayService,
 	concurrencyService *service.ConcurrencyService,
 	billingCacheService *service.BillingCacheService,
+	apiKeyService *service.APIKeyService,
+	errorPassthroughService *service.ErrorPassthroughService,
 	cfg *config.Config,
 ) *OpenAIGatewayHandler {
 	pingInterval := time.Duration(0)
+	maxAccountSwitches := 3
 	if cfg != nil {
 		pingInterval = time.Duration(cfg.Concurrency.PingInterval) * time.Second
+		if cfg.Gateway.MaxAccountSwitches > 0 {
+			maxAccountSwitches = cfg.Gateway.MaxAccountSwitches
+		}
 	}
 	return &OpenAIGatewayHandler{
-		gatewayService:      gatewayService,
-		billingCacheService: billingCacheService,
-		concurrencyHelper:   NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
+		gatewayService:          gatewayService,
+		billingCacheService:     billingCacheService,
+		apiKeyService:           apiKeyService,
+		errorPassthroughService: errorPassthroughService,
+		concurrencyHelper:       NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
+		maxAccountSwitches:      maxAccountSwitches,
 	}
 }
 
@@ -114,8 +126,33 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
 
+	// 提前校验 function_call_output 是否具备可关联上下文，避免上游 400。
+	// 要求 previous_response_id，或 input 内存在带 call_id 的 tool_call/function_call，
+	// 或带 id 且与 call_id 匹配的 item_reference。
+	if service.HasFunctionCallOutput(reqBody) {
+		previousResponseID, _ := reqBody["previous_response_id"].(string)
+		if strings.TrimSpace(previousResponseID) == "" && !service.HasToolCallContext(reqBody) {
+			if service.HasFunctionCallOutputMissingCallID(reqBody) {
+				log.Printf("[OpenAI Handler] function_call_output 缺少 call_id: model=%s", reqModel)
+				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "function_call_output requires call_id or previous_response_id; if relying on history, ensure store=true and reuse previous_response_id")
+				return
+			}
+			callIDs := service.FunctionCallOutputCallIDs(reqBody)
+			if !service.HasItemReferenceForCallIDs(reqBody, callIDs) {
+				log.Printf("[OpenAI Handler] function_call_output 缺少匹配的 item_reference: model=%s", reqModel)
+				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "function_call_output requires item_reference ids matching each call_id, or previous_response_id/tool_call context; if relying on history, ensure store=true and reuse previous_response_id")
+				return
+			}
+		}
+	}
+
 	// Track if we've started streaming (for error handling)
 	streamStarted := false
+
+	// 绑定错误透传服务，允许 service 层在非 failover 错误场景复用规则。
+	if h.errorPassthroughService != nil {
+		service.BindErrorPassthroughService(c, h.errorPassthroughService)
+	}
 
 	// Get subscription info (may be nil)
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
@@ -166,13 +203,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
-	// Generate session hash (from header for OpenAI)
-	sessionHash := h.gatewayService.GenerateSessionHash(c)
+	// Generate session hash (header first; fallback to prompt_cache_key)
+	sessionHash := h.gatewayService.GenerateSessionHash(c, reqBody)
 
-	const maxAccountSwitches = 3
+	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
 	failedAccountIDs := make(map[int64]struct{})
-	lastFailoverStatus := 0
+	var lastFailoverErr *service.UpstreamFailoverError
 
 	for {
 		// Select account supporting the requested model
@@ -184,7 +221,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 				return
 			}
-			h.handleFailoverExhausted(c, lastFailoverStatus, streamStarted)
+			if lastFailoverErr != nil {
+				h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
+			} else {
+				h.handleFailoverExhaustedSimple(c, 502, streamStarted)
+			}
 			return
 		}
 		account := selection.Account
@@ -249,12 +290,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				failedAccountIDs[account.ID] = struct{}{}
+				lastFailoverErr = failoverErr
 				if switchCount >= maxAccountSwitches {
-					lastFailoverStatus = failoverErr.StatusCode
-					h.handleFailoverExhausted(c, lastFailoverStatus, streamStarted)
+					h.handleFailoverExhausted(c, failoverErr, streamStarted)
 					return
 				}
-				lastFailoverStatus = failoverErr.StatusCode
 				switchCount++
 				log.Printf("Account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
 				continue
@@ -273,13 +313,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-				Result:       result,
-				APIKey:       apiKey,
-				User:         apiKey.User,
-				Account:      usedAccount,
-				Subscription: subscription,
-				UserAgent:    ua,
-				IPAddress:    ip,
+				Result:        result,
+				APIKey:        apiKey,
+				User:          apiKey.User,
+				Account:       usedAccount,
+				Subscription:  subscription,
+				UserAgent:     ua,
+				IPAddress:     ip,
+				APIKeyService: h.apiKeyService,
 			}); err != nil {
 				log.Printf("Record usage failed: %v", err)
 			}
@@ -294,7 +335,41 @@ func (h *OpenAIGatewayHandler) handleConcurrencyError(c *gin.Context, err error,
 		fmt.Sprintf("Concurrency limit exceeded for %s, please retry later", slotType), streamStarted)
 }
 
-func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, statusCode int, streamStarted bool) {
+func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, streamStarted bool) {
+	statusCode := failoverErr.StatusCode
+	responseBody := failoverErr.ResponseBody
+
+	// 先检查透传规则
+	if h.errorPassthroughService != nil && len(responseBody) > 0 {
+		if rule := h.errorPassthroughService.MatchRule("openai", statusCode, responseBody); rule != nil {
+			// 确定响应状态码
+			respCode := statusCode
+			if !rule.PassthroughCode && rule.ResponseCode != nil {
+				respCode = *rule.ResponseCode
+			}
+
+			// 确定响应消息
+			msg := service.ExtractUpstreamErrorMessage(responseBody)
+			if !rule.PassthroughBody && rule.CustomMessage != nil {
+				msg = *rule.CustomMessage
+			}
+
+			if rule.SkipMonitoring {
+				c.Set(service.OpsSkipPassthroughKey, true)
+			}
+
+			h.handleStreamingAwareError(c, respCode, "upstream_error", msg, streamStarted)
+			return
+		}
+	}
+
+	// 使用默认的错误映射
+	status, errType, errMsg := h.mapUpstreamError(statusCode)
+	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
+}
+
+// handleFailoverExhaustedSimple 简化版本，用于没有响应体的情况
+func (h *OpenAIGatewayHandler) handleFailoverExhaustedSimple(c *gin.Context, statusCode int, streamStarted bool) {
 	status, errType, errMsg := h.mapUpstreamError(statusCode)
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }

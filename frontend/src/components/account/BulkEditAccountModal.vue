@@ -459,7 +459,7 @@
       </div>
 
       <!-- Concurrency & Priority -->
-      <div class="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 dark:border-dark-600">
+      <div class="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 dark:border-dark-600 lg:grid-cols-3">
         <div>
           <div class="mb-3 flex items-center justify-between">
             <label
@@ -515,6 +515,36 @@
             :class="!enablePriority && 'cursor-not-allowed opacity-50'"
             aria-labelledby="bulk-edit-priority-label"
           />
+        </div>
+        <div>
+          <div class="mb-3 flex items-center justify-between">
+            <label
+              id="bulk-edit-rate-multiplier-label"
+              class="input-label mb-0"
+              for="bulk-edit-rate-multiplier-enabled"
+            >
+              {{ t('admin.accounts.billingRateMultiplier') }}
+            </label>
+            <input
+              v-model="enableRateMultiplier"
+              id="bulk-edit-rate-multiplier-enabled"
+              type="checkbox"
+              aria-controls="bulk-edit-rate-multiplier"
+              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+          </div>
+          <input
+            v-model.number="rateMultiplier"
+            id="bulk-edit-rate-multiplier"
+            type="number"
+            min="0"
+            step="0.01"
+            :disabled="!enableRateMultiplier"
+            class="input"
+            :class="!enableRateMultiplier && 'cursor-not-allowed opacity-50'"
+            aria-labelledby="bulk-edit-rate-multiplier-label"
+          />
+          <p class="input-hint">{{ t('admin.accounts.billingRateMultiplierHint') }}</p>
         </div>
       </div>
 
@@ -618,7 +648,7 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
-import type { Proxy, Group } from '@/types'
+import type { Proxy, AdminGroup } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
@@ -629,7 +659,7 @@ interface Props {
   show: boolean
   accountIds: number[]
   proxies: Proxy[]
-  groups: Group[]
+  groups: AdminGroup[]
 }
 
 const props = defineProps<Props>()
@@ -655,6 +685,7 @@ const enableInterceptWarmup = ref(false)
 const enableProxy = ref(false)
 const enableConcurrency = ref(false)
 const enablePriority = ref(false)
+const enableRateMultiplier = ref(false)
 const enableStatus = ref(false)
 const enableGroups = ref(false)
 
@@ -670,11 +701,13 @@ const interceptWarmupRequests = ref(false)
 const proxyId = ref<number | null>(null)
 const concurrency = ref(1)
 const priority = ref(1)
+const rateMultiplier = ref(1)
 const status = ref<'active' | 'inactive'>('active')
 const groupIds = ref<number[]>([])
 
 // All models list (combined Anthropic + OpenAI)
 const allModels = [
+  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
   { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5' },
   { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
   { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5' },
@@ -711,6 +744,13 @@ const presetMappings = [
     label: 'Opus 4.5',
     from: 'claude-opus-4-5-20251101',
     to: 'claude-opus-4-5-20251101',
+    color:
+      'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400'
+  },
+  {
+    label: 'Opus 4.6',
+    from: 'claude-opus-4-6',
+    to: 'claude-opus-4-6',
     color:
       'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400'
   },
@@ -863,6 +903,10 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     updates.priority = priority.value
   }
 
+  if (enableRateMultiplier.value) {
+    updates.rate_multiplier = rateMultiplier.value
+  }
+
   if (enableStatus.value) {
     updates.status = status.value
   }
@@ -881,9 +925,23 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
 
   if (enableModelRestriction.value) {
     const modelMapping = buildModelMappingObject()
-    if (modelMapping) {
-      credentials.model_mapping = modelMapping
-      credentialsChanged = true
+
+    // 统一使用 model_mapping 字段
+    if (modelRestrictionMode.value === 'whitelist') {
+      if (allowedModels.value.length > 0) {
+        // 白名单模式：将模型转换为 model_mapping 格式（key=value）
+        const mapping: Record<string, string> = {}
+        for (const m of allowedModels.value) {
+          mapping[m] = m
+        }
+        credentials.model_mapping = mapping
+        credentialsChanged = true
+      }
+    } else {
+      if (modelMapping) {
+        credentials.model_mapping = modelMapping
+        credentialsChanged = true
+      }
     }
   }
 
@@ -923,6 +981,7 @@ const handleSubmit = async () => {
     enableProxy.value ||
     enableConcurrency.value ||
     enablePriority.value ||
+    enableRateMultiplier.value ||
     enableStatus.value ||
     enableGroups.value
 
@@ -977,6 +1036,7 @@ watch(
       enableProxy.value = false
       enableConcurrency.value = false
       enablePriority.value = false
+      enableRateMultiplier.value = false
       enableStatus.value = false
       enableGroups.value = false
 
@@ -991,6 +1051,7 @@ watch(
       proxyId.value = null
       concurrency.value = 1
       priority.value = 1
+      rateMultiplier.value = 1
       status.value = 'active'
       groupIds.value = []
     }

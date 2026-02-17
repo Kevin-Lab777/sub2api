@@ -6,6 +6,7 @@
           <AccountTableFilters
             v-model:searchQuery="params.search"
             :filters="params"
+            :groups="groups"
             @update:filters="(newFilters) => Object.assign(params, newFilters)"
             @change="debouncedReload"
             @update:searchQuery="debouncedReload"
@@ -15,17 +16,142 @@
             @refresh="load"
             @sync="showSync = true"
             @create="showCreate = true"
-          />
+          >
+            <template #after>
+              <!-- Auto Refresh Dropdown -->
+              <div class="relative" ref="autoRefreshDropdownRef">
+                <button
+                  @click="
+                    showAutoRefreshDropdown = !showAutoRefreshDropdown;
+                    showColumnDropdown = false
+                  "
+                  class="btn btn-secondary px-2 md:px-3"
+                  :title="t('admin.accounts.autoRefresh')"
+                >
+                  <Icon name="refresh" size="sm" :class="[autoRefreshEnabled ? 'animate-spin' : '']" />
+                  <span class="hidden md:inline">
+                    {{
+                      autoRefreshEnabled
+                        ? t('admin.accounts.autoRefreshCountdown', { seconds: autoRefreshCountdown })
+                        : t('admin.accounts.autoRefresh')
+                    }}
+                  </span>
+                </button>
+                <div
+                  v-if="showAutoRefreshDropdown"
+                  class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <div class="p-2">
+                    <button
+                      @click="setAutoRefreshEnabled(!autoRefreshEnabled)"
+                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
+                      <Icon v-if="autoRefreshEnabled" name="check" size="sm" class="text-primary-500" />
+                    </button>
+                    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
+                    <button
+                      v-for="sec in autoRefreshIntervals"
+                      :key="sec"
+                      @click="setAutoRefreshInterval(sec)"
+                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{{ autoRefreshIntervalLabel(sec) }}</span>
+                      <Icon v-if="autoRefreshIntervalSeconds === sec" name="check" size="sm" class="text-primary-500" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Error Passthrough Rules -->
+              <button
+                @click="showErrorPassthrough = true"
+                class="btn btn-secondary"
+                :title="t('admin.errorPassthrough.title')"
+              >
+                <Icon name="shield" size="md" class="mr-1.5" />
+                <span class="hidden md:inline">{{ t('admin.errorPassthrough.title') }}</span>
+              </button>
+
+              <!-- Column Settings Dropdown -->
+              <div class="relative" ref="columnDropdownRef">
+                <button
+                  @click="
+                    showColumnDropdown = !showColumnDropdown;
+                    showAutoRefreshDropdown = false
+                  "
+                  class="btn btn-secondary px-2 md:px-3"
+                  :title="t('admin.users.columnSettings')"
+                >
+                  <svg class="h-4 w-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
+                  </svg>
+                  <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
+                </button>
+                <!-- Dropdown menu -->
+                <div
+                  v-if="showColumnDropdown"
+                  class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                >
+                  <div class="max-h-80 overflow-y-auto p-2">
+                    <button
+                      v-for="col in toggleableColumns"
+                      :key="col.key"
+                      @click="toggleColumn(col.key)"
+                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{{ col.label }}</span>
+                      <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <template #beforeCreate>
+              <button @click="showImportData = true" class="btn btn-secondary">
+                {{ t('admin.accounts.dataImport') }}
+              </button>
+              <button @click="openExportDataDialog" class="btn btn-secondary">
+                {{ selIds.length ? t('admin.accounts.dataExportSelected') : t('admin.accounts.dataExport') }}
+              </button>
+            </template>
+          </AccountTableActions>
         </div>
       </template>
       <template #table>
         <AccountBulkActionsBar :selected-ids="selIds" @delete="handleBulkDelete" @edit="showBulkEdit = true" @clear="selIds = []" @select-page="selectPage" @toggle-schedulable="handleBulkToggleSchedulable" />
-        <DataTable :columns="cols" :data="accounts" :loading="loading" row-key="id">
+        <DataTable
+          :columns="cols"
+          :data="accounts"
+          :loading="loading"
+          row-key="id"
+          default-sort-key="name"
+          default-sort-order="asc"
+          :sort-storage-key="ACCOUNT_SORT_STORAGE_KEY"
+        >
+          <template #header-select>
+            <input
+              type="checkbox"
+              class="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :checked="allVisibleSelected"
+              @click.stop
+              @change="toggleSelectAllVisible($event)"
+            />
+          </template>
           <template #cell-select="{ row }">
             <input type="checkbox" :checked="selIds.includes(row.id)" @change="toggleSel(row.id)" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
           </template>
-          <template #cell-name="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+          <template #cell-name="{ row, value }">
+            <div class="flex flex-col">
+              <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <span
+                v-if="row.extra?.email_address"
+                class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]"
+                :title="row.extra.email_address"
+              >
+                {{ row.extra.email_address }}
+              </span>
+            </div>
           </template>
           <template #cell-notes="{ value }">
             <span v-if="value" :title="value" class="block max-w-xs truncate text-sm text-gray-600 dark:text-gray-300">{{ value }}</span>
@@ -34,15 +160,8 @@
           <template #cell-platform_type="{ row }">
             <PlatformTypeBadge :platform="row.platform" :type="row.type" />
           </template>
-          <template #cell-concurrency="{ row }">
-            <div class="flex items-center gap-1.5">
-              <span :class="['inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium', (row.current_concurrency || 0) >= row.concurrency ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : (row.current_concurrency || 0) > 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400']">
-                <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
-                <span class="font-mono">{{ row.current_concurrency || 0 }}</span>
-                <span class="text-gray-400 dark:text-gray-500">/</span>
-                <span class="font-mono">{{ row.concurrency }}</span>
-              </span>
-            </div>
+          <template #cell-capacity="{ row }">
+            <AccountCapacityCell :account="row" />
           </template>
           <template #cell-status="{ row }">
             <AccountStatusIndicator :account="row" @show-temp-unsched="handleShowTempUnsched" />
@@ -60,6 +179,20 @@
           </template>
           <template #cell-usage="{ row }">
             <AccountUsageCell :account="row" />
+          </template>
+          <template #cell-proxy="{ row }">
+            <div v-if="row.proxy" class="flex items-center gap-2">
+              <span class="text-sm text-gray-700 dark:text-gray-300">{{ row.proxy.name }}</span>
+              <span v-if="row.proxy.country_code" class="text-xs text-gray-500 dark:text-gray-400">
+                ({{ row.proxy.country_code }})
+              </span>
+            </div>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+          </template>
+          <template #cell-rate_multiplier="{ row }">
+            <span class="text-sm font-mono text-gray-700 dark:text-gray-300">
+              {{ (row.rate_multiplier ?? 1).toFixed(2) }}x
+            </span>
           </template>
           <template #cell-priority="{ value }">
             <span class="text-sm text-gray-700 dark:text-gray-300">{{ value }}</span>
@@ -113,14 +246,23 @@
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @reauth="handleReAuth" @refresh-token="handleRefresh" @reset-status="handleResetStatus" @clear-rate-limit="handleClearRateLimit" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
+    <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
     <TempUnschedStatusModal :show="showTempUnsched" :account="tempUnschedAcc" @close="showTempUnsched = false" @reset="handleTempUnschedReset" />
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.accounts.deleteAccount')" :message="t('admin.accounts.deleteConfirm', { name: deletingAcc?.name })" :confirm-text="t('common.delete')" :cancel-text="t('common.cancel')" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
+    <ConfirmDialog :show="showExportDataDialog" :title="t('admin.accounts.dataExport')" :message="t('admin.accounts.dataExportConfirmMessage')" :confirm-text="t('admin.accounts.dataExportConfirm')" :cancel-text="t('common.cancel')" @confirm="handleExportData" @cancel="showExportDataDialog = false">
+      <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" v-model="includeProxyOnExport" />
+        <span>{{ t('admin.accounts.dataExportIncludeProxies') }}</span>
+      </label>
+    </ConfirmDialog>
+    <ErrorPassthroughRulesModal :show="showErrorPassthrough" @close="showErrorPassthrough = false" />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -135,6 +277,7 @@ import AccountTableActions from '@/components/admin/account/AccountTableActions.
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
+import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
@@ -142,25 +285,32 @@ import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
+import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
+import Icon from '@/components/icons/Icon.vue'
+import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
 import { formatDateTime, formatRelativeTime } from '@/utils/format'
-import type { Account, Proxy, Group } from '@/types'
+import type { Account, Proxy, AdminGroup } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 
 const proxies = ref<Proxy[]>([])
-const groups = ref<Group[]>([])
+const groups = ref<AdminGroup[]>([])
 const selIds = ref<number[]>([])
 const showCreate = ref(false)
 const showEdit = ref(false)
 const showSync = ref(false)
+const showImportData = ref(false)
+const showExportDataDialog = ref(false)
+const includeProxyOnExport = ref(true)
 const showBulkEdit = ref(false)
 const showTempUnsched = ref(false)
 const showDeleteDialog = ref(false)
 const showReAuth = ref(false)
 const showTest = ref(false)
 const showStats = ref(false)
+const showErrorPassthrough = ref(false)
 const edAcc = ref<Account | null>(null)
 const tempUnschedAcc = ref<Account | null>(null)
 const deletingAcc = ref<Account | null>(null)
@@ -169,18 +319,176 @@ const testingAcc = ref<Account | null>(null)
 const statsAcc = ref<Account | null>(null)
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
+const exportingData = ref(false)
+
+// Column settings
+const showColumnDropdown = ref(false)
+const columnDropdownRef = ref<HTMLElement | null>(null)
+const hiddenColumns = reactive<Set<string>>(new Set())
+const DEFAULT_HIDDEN_COLUMNS = ['proxy', 'notes', 'priority', 'rate_multiplier']
+const HIDDEN_COLUMNS_KEY = 'account-hidden-columns'
+
+// Sorting settings
+const ACCOUNT_SORT_STORAGE_KEY = 'account-table-sort'
+
+// Auto refresh settings
+const showAutoRefreshDropdown = ref(false)
+const autoRefreshDropdownRef = ref<HTMLElement | null>(null)
+const AUTO_REFRESH_STORAGE_KEY = 'account-auto-refresh'
+const autoRefreshIntervals = [5, 10, 15, 30] as const
+const autoRefreshEnabled = ref(false)
+const autoRefreshIntervalSeconds = ref<(typeof autoRefreshIntervals)[number]>(30)
+const autoRefreshCountdown = ref(0)
+
+const autoRefreshIntervalLabel = (sec: number) => {
+  if (sec === 5) return t('admin.accounts.refreshInterval5s')
+  if (sec === 10) return t('admin.accounts.refreshInterval10s')
+  if (sec === 15) return t('admin.accounts.refreshInterval15s')
+  if (sec === 30) return t('admin.accounts.refreshInterval30s')
+  return `${sec}s`
+}
+
+const loadSavedColumns = () => {
+  try {
+    const saved = localStorage.getItem(HIDDEN_COLUMNS_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved) as string[]
+      parsed.forEach(key => hiddenColumns.add(key))
+    } else {
+      DEFAULT_HIDDEN_COLUMNS.forEach(key => hiddenColumns.add(key))
+    }
+  } catch (e) {
+    console.error('Failed to load saved columns:', e)
+    DEFAULT_HIDDEN_COLUMNS.forEach(key => hiddenColumns.add(key))
+  }
+}
+
+const saveColumnsToStorage = () => {
+  try {
+    localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify([...hiddenColumns]))
+  } catch (e) {
+    console.error('Failed to save columns:', e)
+  }
+}
+
+const loadSavedAutoRefresh = () => {
+  try {
+    const saved = localStorage.getItem(AUTO_REFRESH_STORAGE_KEY)
+    if (!saved) return
+    const parsed = JSON.parse(saved) as { enabled?: boolean; interval_seconds?: number }
+    autoRefreshEnabled.value = parsed.enabled === true
+    const interval = Number(parsed.interval_seconds)
+    if (autoRefreshIntervals.includes(interval as any)) {
+      autoRefreshIntervalSeconds.value = interval as any
+    }
+  } catch (e) {
+    console.error('Failed to load saved auto refresh settings:', e)
+  }
+}
+
+const saveAutoRefreshToStorage = () => {
+  try {
+    localStorage.setItem(
+      AUTO_REFRESH_STORAGE_KEY,
+      JSON.stringify({
+        enabled: autoRefreshEnabled.value,
+        interval_seconds: autoRefreshIntervalSeconds.value
+      })
+    )
+  } catch (e) {
+    console.error('Failed to save auto refresh settings:', e)
+  }
+}
+
+if (typeof window !== 'undefined') {
+  loadSavedColumns()
+  loadSavedAutoRefresh()
+}
+
+const setAutoRefreshEnabled = (enabled: boolean) => {
+  autoRefreshEnabled.value = enabled
+  saveAutoRefreshToStorage()
+  if (enabled) {
+    autoRefreshCountdown.value = autoRefreshIntervalSeconds.value
+    resumeAutoRefresh()
+  } else {
+    pauseAutoRefresh()
+    autoRefreshCountdown.value = 0
+  }
+}
+
+const setAutoRefreshInterval = (seconds: (typeof autoRefreshIntervals)[number]) => {
+  autoRefreshIntervalSeconds.value = seconds
+  saveAutoRefreshToStorage()
+  if (autoRefreshEnabled.value) {
+    autoRefreshCountdown.value = seconds
+  }
+}
+
+const toggleColumn = (key: string) => {
+  if (hiddenColumns.has(key)) {
+    hiddenColumns.delete(key)
+  } else {
+    hiddenColumns.add(key)
+  }
+  saveColumnsToStorage()
+}
+
+const isColumnVisible = (key: string) => !hiddenColumns.has(key)
 
 const { items: accounts, loading, params, pagination, load, reload, debouncedReload, handlePageChange, handlePageSizeChange } = useTableLoader<Account, any>({
   fetchFn: adminAPI.accounts.list,
-  initialParams: { platform: '', type: '', status: '', search: '' }
+  initialParams: { platform: '', type: '', status: '', group: '', search: '' }
 })
 
-const cols = computed(() => {
+const isAnyModalOpen = computed(() => {
+  return (
+    showCreate.value ||
+    showEdit.value ||
+    showSync.value ||
+    showImportData.value ||
+    showExportDataDialog.value ||
+    showBulkEdit.value ||
+    showTempUnsched.value ||
+    showDeleteDialog.value ||
+    showReAuth.value ||
+    showTest.value ||
+    showStats.value ||
+    showErrorPassthrough.value
+  )
+})
+
+const { pause: pauseAutoRefresh, resume: resumeAutoRefresh } = useIntervalFn(
+  async () => {
+    if (!autoRefreshEnabled.value) return
+    if (document.hidden) return
+    if (loading.value) return
+    if (isAnyModalOpen.value) return
+    if (menu.show) return
+
+    if (autoRefreshCountdown.value <= 0) {
+      autoRefreshCountdown.value = autoRefreshIntervalSeconds.value
+      try {
+        await load()
+      } catch (e) {
+        console.error('Auto refresh failed:', e)
+      }
+      return
+    }
+
+    autoRefreshCountdown.value -= 1
+  },
+  1000,
+  { immediate: false }
+)
+
+// All available columns
+const allColumns = computed(() => {
   const c = [
     { key: 'select', label: '', sortable: false },
     { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
     { key: 'platform_type', label: t('admin.accounts.columns.platformType'), sortable: false },
-    { key: 'concurrency', label: t('admin.accounts.columns.concurrencyStatus'), sortable: false },
+    { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false },
     { key: 'status', label: t('admin.accounts.columns.status'), sortable: true },
     { key: 'schedulable', label: t('admin.accounts.columns.schedulable'), sortable: true },
     { key: 'today_stats', label: t('admin.accounts.columns.todayStats'), sortable: false }
@@ -189,7 +497,9 @@ const cols = computed(() => {
   c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false })
   c.push(
     { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
+    { key: 'proxy', label: t('admin.accounts.columns.proxy'), sortable: false },
     { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
+    { key: 'rate_multiplier', label: t('admin.accounts.columns.billingRateMultiplier'), sortable: true },
     { key: 'last_used_at', label: t('admin.accounts.columns.lastUsed'), sortable: true },
     { key: 'expires_at', label: t('admin.accounts.columns.expiresAt'), sortable: true },
     { key: 'notes', label: t('admin.accounts.columns.notes'), sortable: false },
@@ -198,9 +508,85 @@ const cols = computed(() => {
   return c
 })
 
+// Columns that can be toggled (exclude select, name, and actions)
+const toggleableColumns = computed(() =>
+  allColumns.value.filter(col => col.key !== 'select' && col.key !== 'name' && col.key !== 'actions')
+)
+
+// Filtered columns based on visibility
+const cols = computed(() =>
+  allColumns.value.filter(col =>
+    col.key === 'select' || col.key === 'name' || col.key === 'actions' || !hiddenColumns.has(col.key)
+  )
+)
+
 const handleEdit = (a: Account) => { edAcc.value = a; showEdit.value = true }
-const openMenu = (a: Account, e: MouseEvent) => { menu.acc = a; menu.pos = { top: e.clientY, left: e.clientX - 200 }; menu.show = true }
+const openMenu = (a: Account, e: MouseEvent) => {
+  menu.acc = a
+
+  const target = e.currentTarget as HTMLElement
+  if (target) {
+    const rect = target.getBoundingClientRect()
+    const menuWidth = 200
+    const menuHeight = 240
+    const padding = 8
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+
+    let left, top
+
+    if (viewportWidth < 768) {
+      // 居中显示,水平位置
+      left = Math.max(padding, Math.min(
+        rect.left + rect.width / 2 - menuWidth / 2,
+        viewportWidth - menuWidth - padding
+      ))
+
+      // 优先显示在按钮下方
+      top = rect.bottom + 4
+
+      // 如果下方空间不够,显示在上方
+      if (top + menuHeight > viewportHeight - padding) {
+        top = rect.top - menuHeight - 4
+        // 如果上方也不够,就贴在视口顶部
+        if (top < padding) {
+          top = padding
+        }
+      }
+    } else {
+      left = Math.max(padding, Math.min(
+        e.clientX - menuWidth,
+        viewportWidth - menuWidth - padding
+      ))
+      top = e.clientY
+      if (top + menuHeight > viewportHeight - padding) {
+        top = viewportHeight - menuHeight - padding
+      }
+    }
+
+    menu.pos = { top, left }
+  } else {
+    menu.pos = { top: e.clientY, left: e.clientX - 200 }
+  }
+
+  menu.show = true
+}
 const toggleSel = (id: number) => { const i = selIds.value.indexOf(id); if(i === -1) selIds.value.push(id); else selIds.value.splice(i, 1) }
+const allVisibleSelected = computed(() => {
+  if (accounts.value.length === 0) return false
+  return accounts.value.every(account => selIds.value.includes(account.id))
+})
+const toggleSelectAllVisible = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.checked) {
+    const next = new Set(selIds.value)
+    accounts.value.forEach(account => next.add(account.id))
+    selIds.value = Array.from(next)
+    return
+  }
+  const visibleIds = new Set(accounts.value.map(account => account.id))
+  selIds.value = selIds.value.filter(id => !visibleIds.has(id))
+}
 const selectPage = () => { selIds.value = [...new Set([...selIds.value, ...accounts.value.map(a => a.id)])] }
 const handleBulkDelete = async () => { if(!confirm(t('common.confirm'))) return; try { await Promise.all(selIds.value.map(id => adminAPI.accounts.delete(id))); selIds.value = []; reload() } catch (error) { console.error('Failed to bulk delete accounts:', error) } }
 const updateSchedulableInList = (accountIds: number[], schedulable: boolean) => {
@@ -299,15 +685,56 @@ const handleBulkToggleSchedulable = async (schedulable: boolean) => {
     } else {
       selIds.value = hasIds ? [] : accountIds
     }
-    load().catch((error) => {
-      console.error('Failed to refresh accounts:', error)
-    })
   } catch (error) {
     console.error('Failed to bulk toggle schedulable:', error)
     appStore.showError(t('common.error'))
   }
 }
 const handleBulkUpdated = () => { showBulkEdit.value = false; selIds.value = []; reload() }
+const handleDataImported = () => { showImportData.value = false; reload() }
+const formatExportTimestamp = () => {
+  const now = new Date()
+  const pad2 = (value: number) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`
+}
+const openExportDataDialog = () => {
+  includeProxyOnExport.value = true
+  showExportDataDialog.value = true
+}
+const handleExportData = async () => {
+  if (exportingData.value) return
+  exportingData.value = true
+  try {
+    const dataPayload = await adminAPI.accounts.exportData(
+      selIds.value.length > 0
+        ? { ids: selIds.value, includeProxies: includeProxyOnExport.value }
+        : {
+            includeProxies: includeProxyOnExport.value,
+            filters: {
+              platform: params.platform,
+              type: params.type,
+              status: params.status,
+              search: params.search
+            }
+          }
+    )
+    const timestamp = formatExportTimestamp()
+    const filename = `sub2api-account-${timestamp}.json`
+    const blob = new Blob([JSON.stringify(dataPayload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+    appStore.showSuccess(t('admin.accounts.dataExported'))
+  } catch (error: any) {
+    appStore.showError(error?.message || t('admin.accounts.dataExportFailed'))
+  } finally {
+    exportingData.value = false
+    showExportDataDialog.value = false
+  }
+}
 const closeTestModal = () => { showTest.value = false; testingAcc.value = null }
 const closeStatsModal = () => { showStats.value = false; statsAcc.value = null }
 const closeReAuthModal = () => { showReAuth.value = false; reAuthAcc.value = null }
@@ -325,9 +752,6 @@ const handleToggleSchedulable = async (a: Account) => {
   try {
     const updated = await adminAPI.accounts.setSchedulable(a.id, nextSchedulable)
     updateSchedulableInList([a.id], updated?.schedulable ?? nextSchedulable)
-    load().catch((error) => {
-      console.error('Failed to refresh accounts:', error)
-    })
   } catch (error) {
     console.error('Failed to toggle schedulable:', error)
     appStore.showError(t('admin.accounts.failedToToggleSchedulable'))
@@ -357,5 +781,44 @@ const isExpired = (value: number | null) => {
   return value * 1000 <= Date.now()
 }
 
-onMounted(async () => { load(); try { const [p, g] = await Promise.all([adminAPI.proxies.getAll(), adminAPI.groups.getAll()]); proxies.value = p; groups.value = g } catch (error) { console.error('Failed to load proxies/groups:', error) } })
+// 滚动时关闭操作菜单（不关闭列设置下拉菜单）
+const handleScroll = () => {
+  menu.show = false
+}
+
+// 点击外部关闭列设置下拉菜单
+const handleClickOutside = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  if (columnDropdownRef.value && !columnDropdownRef.value.contains(target)) {
+    showColumnDropdown.value = false
+  }
+  if (autoRefreshDropdownRef.value && !autoRefreshDropdownRef.value.contains(target)) {
+    showAutoRefreshDropdown.value = false
+  }
+}
+
+onMounted(async () => {
+  load()
+  try {
+    const [p, g] = await Promise.all([adminAPI.proxies.getAll(), adminAPI.groups.getAll()])
+    proxies.value = p
+    groups.value = g
+  } catch (error) {
+    console.error('Failed to load proxies/groups:', error)
+  }
+  window.addEventListener('scroll', handleScroll, true)
+  document.addEventListener('click', handleClickOutside)
+
+  if (autoRefreshEnabled.value) {
+    autoRefreshCountdown.value = autoRefreshIntervalSeconds.value
+    resumeAutoRefresh()
+  } else {
+    pauseAutoRefresh()
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll, true)
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>

@@ -14,9 +14,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-// [LITE] RunMode constants removed - Lite mode is always active
+const (
+	RunModeStandard = "standard"
+	RunModeSimple   = "simple"
+	RunModeLite     = "lite"
+)
 
-const DefaultCSPPolicy = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+// DefaultCSPPolicy is the default Content-Security-Policy with nonce support
+// __CSP_NONCE__ will be replaced with actual nonce at request time by the SecurityHeaders middleware
+const DefaultCSPPolicy = "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 // 连接池隔离策略常量
 // 用于控制上游 HTTP 连接池的隔离粒度，影响连接复用和资源消耗
@@ -42,6 +48,7 @@ type Config struct {
 	Redis        RedisConfig                `mapstructure:"redis"`
 	Ops          OpsConfig                  `mapstructure:"ops"`
 	JWT          JWTConfig                  `mapstructure:"jwt"`
+	Totp         TotpConfig                 `mapstructure:"totp"`
 	LinuxDo      LinuxDoConnectConfig       `mapstructure:"linuxdo_connect"`
 	Default      DefaultConfig              `mapstructure:"default"`
 	RateLimit    RateLimitConfig            `mapstructure:"rate_limit"`
@@ -50,10 +57,11 @@ type Config struct {
 	APIKeyAuth   APIKeyAuthCacheConfig      `mapstructure:"api_key_auth_cache"`
 	Dashboard    DashboardCacheConfig       `mapstructure:"dashboard_cache"`
 	DashboardAgg DashboardAggregationConfig `mapstructure:"dashboard_aggregation"`
+	UsageCleanup UsageCleanupConfig         `mapstructure:"usage_cleanup"`
 	Concurrency  ConcurrencyConfig          `mapstructure:"concurrency"`
 	TokenRefresh TokenRefreshConfig         `mapstructure:"token_refresh"`
-	// [LITE] RunMode field removed - Lite mode is always active
-	Timezone string       `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
+	RunMode      string                     `mapstructure:"run_mode" yaml:"run_mode"`
+	Timezone     string                     `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
 	Gemini   GeminiConfig `mapstructure:"gemini"`
 	Update   UpdateConfig `mapstructure:"update"`
 }
@@ -137,12 +145,24 @@ type PricingConfig struct {
 }
 
 type ServerConfig struct {
-	Host              string   `mapstructure:"host"`
-	Port              int      `mapstructure:"port"`
-	Mode              string   `mapstructure:"mode"`                // debug/release
-	ReadHeaderTimeout int      `mapstructure:"read_header_timeout"` // 读取请求头超时（秒）
-	IdleTimeout       int      `mapstructure:"idle_timeout"`        // 空闲连接超时（秒）
-	TrustedProxies    []string `mapstructure:"trusted_proxies"`     // 可信代理列表（CIDR/IP）
+	Host               string    `mapstructure:"host"`
+	Port               int       `mapstructure:"port"`
+	Mode               string    `mapstructure:"mode"`                  // debug/release
+	ReadHeaderTimeout  int       `mapstructure:"read_header_timeout"`   // 读取请求头超时（秒）
+	IdleTimeout        int       `mapstructure:"idle_timeout"`          // 空闲连接超时（秒）
+	TrustedProxies     []string  `mapstructure:"trusted_proxies"`       // 可信代理列表（CIDR/IP）
+	MaxRequestBodySize int64     `mapstructure:"max_request_body_size"` // 全局最大请求体限制
+	H2C                H2CConfig `mapstructure:"h2c"`                   // HTTP/2 Cleartext 配置
+}
+
+// H2CConfig HTTP/2 Cleartext 配置
+type H2CConfig struct {
+	Enabled                      bool   `mapstructure:"enabled"`                          // 是否启用 H2C
+	MaxConcurrentStreams         uint32 `mapstructure:"max_concurrent_streams"`           // 最大并发流数量
+	IdleTimeout                  int    `mapstructure:"idle_timeout"`                     // 空闲超时（秒）
+	MaxReadFrameSize             int    `mapstructure:"max_read_frame_size"`              // 最大帧大小（字节）
+	MaxUploadBufferPerConnection int    `mapstructure:"max_upload_buffer_per_connection"` // 每个连接的上传缓冲区（字节）
+	MaxUploadBufferPerStream     int    `mapstructure:"max_upload_buffer_per_stream"`     // 每个流的上传缓冲区（字节）
 }
 
 type CORSConfig struct {
@@ -229,6 +249,10 @@ type GatewayConfig struct {
 	// ConcurrencySlotTTLMinutes: 并发槽位过期时间（分钟）
 	// 应大于最长 LLM 请求时间，防止请求完成前槽位过期
 	ConcurrencySlotTTLMinutes int `mapstructure:"concurrency_slot_ttl_minutes"`
+	// SessionIdleTimeoutMinutes: 会话空闲超时时间（分钟），默认 5 分钟
+	// 用于 Anthropic OAuth/SetupToken 账号的会话数量限制功能
+	// 空闲超过此时间的会话将被自动释放
+	SessionIdleTimeoutMinutes int `mapstructure:"session_idle_timeout_minutes"`
 
 	// StreamDataIntervalTimeout: 流数据间隔超时（秒），0表示禁用
 	StreamDataIntervalTimeout int `mapstructure:"stream_data_interval_timeout"`
@@ -248,8 +272,43 @@ type GatewayConfig struct {
 	// 是否允许对部分 400 错误触发 failover（默认关闭以避免改变语义）
 	FailoverOn400 bool `mapstructure:"failover_on_400"`
 
+	// 账户切换最大次数（遇到上游错误时切换到其他账户的次数上限）
+	MaxAccountSwitches int `mapstructure:"max_account_switches"`
+	// Gemini 账户切换最大次数（Gemini 平台单独配置，因 API 限制更严格）
+	MaxAccountSwitchesGemini int `mapstructure:"max_account_switches_gemini"`
+
+	// Antigravity 429 fallback 限流时间（分钟），解析重置时间失败时使用
+	AntigravityFallbackCooldownMinutes int `mapstructure:"antigravity_fallback_cooldown_minutes"`
+
 	// Scheduling: 账号调度相关配置
 	Scheduling GatewaySchedulingConfig `mapstructure:"scheduling"`
+
+	// TLSFingerprint: TLS指纹伪装配置
+	TLSFingerprint TLSFingerprintConfig `mapstructure:"tls_fingerprint"`
+}
+
+// TLSFingerprintConfig TLS指纹伪装配置
+// 用于模拟 Claude CLI (Node.js) 的 TLS 握手特征，避免被识别为非官方客户端
+type TLSFingerprintConfig struct {
+	// Enabled: 是否全局启用TLS指纹功能
+	Enabled bool `mapstructure:"enabled"`
+	// Profiles: 预定义的TLS指纹配置模板
+	// key 为模板名称，如 "claude_cli_v2", "chrome_120" 等
+	Profiles map[string]TLSProfileConfig `mapstructure:"profiles"`
+}
+
+// TLSProfileConfig 单个TLS指纹模板的配置
+type TLSProfileConfig struct {
+	// Name: 模板显示名称
+	Name string `mapstructure:"name"`
+	// EnableGREASE: 是否启用GREASE扩展（Chrome使用，Node.js不使用）
+	EnableGREASE bool `mapstructure:"enable_grease"`
+	// CipherSuites: TLS加密套件列表（空则使用内置默认值）
+	CipherSuites []uint16 `mapstructure:"cipher_suites"`
+	// Curves: 椭圆曲线列表（空则使用内置默认值）
+	Curves []uint16 `mapstructure:"curves"`
+	// PointFormats: 点格式列表（空则使用内置默认值）
+	PointFormats []uint8 `mapstructure:"point_formats"`
 }
 
 // GatewaySchedulingConfig accounts scheduling configuration.
@@ -261,6 +320,9 @@ type GatewaySchedulingConfig struct {
 	// 兜底排队配置
 	FallbackWaitTimeout time.Duration `mapstructure:"fallback_wait_timeout"`
 	FallbackMaxWaiting  int           `mapstructure:"fallback_max_waiting"`
+
+	// 兜底层账户选择策略: "last_used"(按最后使用时间排序，默认) 或 "random"(随机)
+	FallbackSelectionMode string `mapstructure:"fallback_selection_mode"`
 
 	// 负载计算
 	LoadBatchEnabled bool `mapstructure:"load_batch_enabled"`
@@ -366,6 +428,8 @@ type RedisConfig struct {
 	PoolSize int `mapstructure:"pool_size"`
 	// MinIdleConns: 最小空闲连接数，保持热连接减少冷启动延迟
 	MinIdleConns int `mapstructure:"min_idle_conns"`
+	// EnableTLS: 是否启用 TLS/SSL 连接
+	EnableTLS bool `mapstructure:"enable_tls"`
 }
 
 func (r *RedisConfig) Address() string {
@@ -416,6 +480,23 @@ type OpsMetricsCollectorCacheConfig struct {
 type JWTConfig struct {
 	Secret     string `mapstructure:"secret"`
 	ExpireHour int    `mapstructure:"expire_hour"`
+	// AccessTokenExpireMinutes: Access Token有效期（分钟），默认15分钟
+	// 短有效期减少被盗用风险，配合Refresh Token实现无感续期
+	AccessTokenExpireMinutes int `mapstructure:"access_token_expire_minutes"`
+	// RefreshTokenExpireDays: Refresh Token有效期（天），默认30天
+	RefreshTokenExpireDays int `mapstructure:"refresh_token_expire_days"`
+	// RefreshWindowMinutes: 刷新窗口（分钟），在Access Token过期前多久开始允许刷新
+	RefreshWindowMinutes int `mapstructure:"refresh_window_minutes"`
+}
+
+// TotpConfig TOTP 双因素认证配置
+type TotpConfig struct {
+	// EncryptionKey 用于加密 TOTP 密钥的 AES-256 密钥（32 字节 hex 编码）
+	// 如果为空，将自动生成一个随机密钥（仅适用于开发环境）
+	EncryptionKey string `mapstructure:"encryption_key"`
+	// EncryptionKeyConfigured 标记加密密钥是否为手动配置（非自动生成）
+	// 只有手动配置了密钥才允许在管理后台启用 TOTP 功能
+	EncryptionKeyConfigured bool `mapstructure:"-"`
 }
 
 type TurnstileConfig struct {
@@ -435,7 +516,6 @@ type RateLimitConfig struct {
 	OverloadCooldownMinutes int `mapstructure:"overload_cooldown_minutes"` // 529过载冷却时间(分钟)
 }
 
-// [LITE] NormalizeRunMode function removed - always Lite mode
 
 // APIKeyAuthCacheConfig API Key 认证缓存配置
 type APIKeyAuthCacheConfig struct {
@@ -486,6 +566,29 @@ type DashboardAggregationRetentionConfig struct {
 	DailyDays     int `mapstructure:"daily_days"`
 }
 
+// UsageCleanupConfig 使用记录清理任务配置
+type UsageCleanupConfig struct {
+	// Enabled: 是否启用清理任务执行器
+	Enabled bool `mapstructure:"enabled"`
+	// MaxRangeDays: 单次任务允许的最大时间跨度（天）
+	MaxRangeDays int `mapstructure:"max_range_days"`
+	// BatchSize: 单批删除数量
+	BatchSize int `mapstructure:"batch_size"`
+	// WorkerIntervalSeconds: 后台任务轮询间隔（秒）
+	WorkerIntervalSeconds int `mapstructure:"worker_interval_seconds"`
+	// TaskTimeoutSeconds: 单次任务最大执行时长（秒）
+	TaskTimeoutSeconds int `mapstructure:"task_timeout_seconds"`
+}
+
+func NormalizeRunMode(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case RunModeStandard, RunModeSimple, RunModeLite:
+		return normalized
+	default:
+		return RunModeStandard
+	}
+}
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -523,7 +626,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config error: %w", err)
 	}
 
-	// [LITE] RunMode normalization removed - always Lite mode
+	cfg.RunMode = NormalizeRunMode(cfg.RunMode)
 	cfg.Server.Mode = strings.ToLower(strings.TrimSpace(cfg.Server.Mode))
 	if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "debug"
@@ -556,6 +659,20 @@ func Load() (*Config, error) {
 		log.Println("Warning: JWT secret auto-generated. Consider setting a fixed secret for production.")
 	}
 
+	// Auto-generate TOTP encryption key if not set (32 bytes = 64 hex chars for AES-256)
+	cfg.Totp.EncryptionKey = strings.TrimSpace(cfg.Totp.EncryptionKey)
+	if cfg.Totp.EncryptionKey == "" {
+		key, err := generateJWTSecret(32) // Reuse the same random generation function
+		if err != nil {
+			return nil, fmt.Errorf("generate totp encryption key error: %w", err)
+		}
+		cfg.Totp.EncryptionKey = key
+		cfg.Totp.EncryptionKeyConfigured = false
+		log.Println("Warning: TOTP encryption key auto-generated. Consider setting a fixed key for production.")
+	} else {
+		cfg.Totp.EncryptionKeyConfigured = true
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate config error: %w", err)
 	}
@@ -581,7 +698,7 @@ func Load() (*Config, error) {
 }
 
 func setDefaults() {
-	// [LITE] run_mode default removed - always Lite mode
+	viper.SetDefault("run_mode", RunModeStandard)
 
 	// Server
 	viper.SetDefault("server.host", "0.0.0.0")
@@ -590,6 +707,14 @@ func setDefaults() {
 	viper.SetDefault("server.read_header_timeout", 30) // 30秒读取请求头
 	viper.SetDefault("server.idle_timeout", 120)       // 120秒空闲超时
 	viper.SetDefault("server.trusted_proxies", []string{})
+	viper.SetDefault("server.max_request_body_size", int64(100*1024*1024))
+	// H2C 默认配置
+	viper.SetDefault("server.h2c.enabled", false)
+	viper.SetDefault("server.h2c.max_concurrent_streams", uint32(50))      // 50 个并发流
+	viper.SetDefault("server.h2c.idle_timeout", 75)                        // 75 秒
+	viper.SetDefault("server.h2c.max_read_frame_size", 1<<20)              // 1MB（够用）
+	viper.SetDefault("server.h2c.max_upload_buffer_per_connection", 2<<20) // 2MB
+	viper.SetDefault("server.h2c.max_upload_buffer_per_stream", 512<<10)   // 512KB
 
 	// CORS
 	viper.SetDefault("cors.allowed_origins", []string{})
@@ -667,6 +792,7 @@ func setDefaults() {
 	viper.SetDefault("redis.write_timeout_seconds", 3)
 	viper.SetDefault("redis.pool_size", 128)
 	viper.SetDefault("redis.min_idle_conns", 10)
+	viper.SetDefault("redis.enable_tls", false)
 
 	// Ops (vNext)
 	viper.SetDefault("ops.enabled", true)
@@ -685,6 +811,12 @@ func setDefaults() {
 	// JWT
 	viper.SetDefault("jwt.secret", "")
 	viper.SetDefault("jwt.expire_hour", 24)
+	viper.SetDefault("jwt.access_token_expire_minutes", 360) // 6小时Access Token有效期
+	viper.SetDefault("jwt.refresh_token_expire_days", 30)    // 30天Refresh Token有效期
+	viper.SetDefault("jwt.refresh_window_minutes", 2)        // 过期前2分钟开始允许刷新
+
+	// TOTP
+	viper.SetDefault("totp.encryption_key", "")
 
 	// Default
 	// Admin credentials are created via the setup flow (web wizard / CLI / AUTO_SETUP).
@@ -736,12 +868,22 @@ func setDefaults() {
 	viper.SetDefault("dashboard_aggregation.retention.daily_days", 730)
 	viper.SetDefault("dashboard_aggregation.recompute_days", 2)
 
+	// Usage cleanup task
+	viper.SetDefault("usage_cleanup.enabled", true)
+	viper.SetDefault("usage_cleanup.max_range_days", 31)
+	viper.SetDefault("usage_cleanup.batch_size", 5000)
+	viper.SetDefault("usage_cleanup.worker_interval_seconds", 10)
+	viper.SetDefault("usage_cleanup.task_timeout_seconds", 1800)
+
 	// Gateway
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久
 	viper.SetDefault("gateway.log_upstream_error_body", true)
 	viper.SetDefault("gateway.log_upstream_error_body_max_bytes", 2048)
 	viper.SetDefault("gateway.inject_beta_for_apikey", false)
 	viper.SetDefault("gateway.failover_on_400", false)
+	viper.SetDefault("gateway.max_account_switches", 10)
+	viper.SetDefault("gateway.max_account_switches_gemini", 3)
+	viper.SetDefault("gateway.antigravity_fallback_cooldown_minutes", 1)
 	viper.SetDefault("gateway.max_body_size", int64(100*1024*1024))
 	viper.SetDefault("gateway.connection_pool_isolation", ConnectionPoolIsolationAccountProxy)
 	// HTTP 上游连接池配置（针对 5000+ 并发用户优化）
@@ -754,11 +896,12 @@ func setDefaults() {
 	viper.SetDefault("gateway.concurrency_slot_ttl_minutes", 30) // 并发槽位过期时间（支持超长请求）
 	viper.SetDefault("gateway.stream_data_interval_timeout", 180)
 	viper.SetDefault("gateway.stream_keepalive_interval", 10)
-	viper.SetDefault("gateway.max_line_size", 10*1024*1024)
+	viper.SetDefault("gateway.max_line_size", 40*1024*1024)
 	viper.SetDefault("gateway.scheduling.sticky_session_max_waiting", 3)
 	viper.SetDefault("gateway.scheduling.sticky_session_wait_timeout", 120*time.Second)
 	viper.SetDefault("gateway.scheduling.fallback_wait_timeout", 30*time.Second)
 	viper.SetDefault("gateway.scheduling.fallback_max_waiting", 100)
+	viper.SetDefault("gateway.scheduling.fallback_selection_mode", "last_used")
 	viper.SetDefault("gateway.scheduling.load_batch_enabled", true)
 	viper.SetDefault("gateway.scheduling.slot_cleanup_interval", 30*time.Second)
 	viper.SetDefault("gateway.scheduling.db_fallback_enabled", true)
@@ -770,6 +913,8 @@ func setDefaults() {
 	viper.SetDefault("gateway.scheduling.outbox_lag_rebuild_failures", 3)
 	viper.SetDefault("gateway.scheduling.outbox_backlog_rebuild_rows", 10000)
 	viper.SetDefault("gateway.scheduling.full_rebuild_interval_seconds", 300)
+	// TLS指纹伪装配置（默认关闭，需要账号级别单独启用）
+	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
 	viper.SetDefault("concurrency.ping_interval", 10)
 
 	// TokenRefresh
@@ -797,6 +942,22 @@ func (c *Config) Validate() error {
 	}
 	if c.JWT.ExpireHour > 24 {
 		log.Printf("Warning: jwt.expire_hour is %d hours (> 24). Consider shorter expiration for security.", c.JWT.ExpireHour)
+	}
+	// JWT Refresh Token配置验证
+	if c.JWT.AccessTokenExpireMinutes <= 0 {
+		return fmt.Errorf("jwt.access_token_expire_minutes must be positive")
+	}
+	if c.JWT.AccessTokenExpireMinutes > 720 {
+		log.Printf("Warning: jwt.access_token_expire_minutes is %d (> 720). Consider shorter expiration for security.", c.JWT.AccessTokenExpireMinutes)
+	}
+	if c.JWT.RefreshTokenExpireDays <= 0 {
+		return fmt.Errorf("jwt.refresh_token_expire_days must be positive")
+	}
+	if c.JWT.RefreshTokenExpireDays > 90 {
+		log.Printf("Warning: jwt.refresh_token_expire_days is %d (> 90). Consider shorter expiration for security.", c.JWT.RefreshTokenExpireDays)
+	}
+	if c.JWT.RefreshWindowMinutes < 0 {
+		return fmt.Errorf("jwt.refresh_window_minutes must be non-negative")
 	}
 	if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
 		return fmt.Errorf("security.csp.policy is required when CSP is enabled")
@@ -970,6 +1131,33 @@ func (c *Config) Validate() error {
 		}
 		if c.DashboardAgg.RecomputeDays < 0 {
 			return fmt.Errorf("dashboard_aggregation.recompute_days must be non-negative")
+		}
+	}
+	if c.UsageCleanup.Enabled {
+		if c.UsageCleanup.MaxRangeDays <= 0 {
+			return fmt.Errorf("usage_cleanup.max_range_days must be positive")
+		}
+		if c.UsageCleanup.BatchSize <= 0 {
+			return fmt.Errorf("usage_cleanup.batch_size must be positive")
+		}
+		if c.UsageCleanup.WorkerIntervalSeconds <= 0 {
+			return fmt.Errorf("usage_cleanup.worker_interval_seconds must be positive")
+		}
+		if c.UsageCleanup.TaskTimeoutSeconds <= 0 {
+			return fmt.Errorf("usage_cleanup.task_timeout_seconds must be positive")
+		}
+	} else {
+		if c.UsageCleanup.MaxRangeDays < 0 {
+			return fmt.Errorf("usage_cleanup.max_range_days must be non-negative")
+		}
+		if c.UsageCleanup.BatchSize < 0 {
+			return fmt.Errorf("usage_cleanup.batch_size must be non-negative")
+		}
+		if c.UsageCleanup.WorkerIntervalSeconds < 0 {
+			return fmt.Errorf("usage_cleanup.worker_interval_seconds must be non-negative")
+		}
+		if c.UsageCleanup.TaskTimeoutSeconds < 0 {
+			return fmt.Errorf("usage_cleanup.task_timeout_seconds must be non-negative")
 		}
 	}
 	if c.Gateway.MaxBodySize <= 0 {

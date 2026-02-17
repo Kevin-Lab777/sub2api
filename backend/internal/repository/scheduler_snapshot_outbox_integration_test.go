@@ -19,7 +19,7 @@ func TestSchedulerSnapshotOutboxReplay(t *testing.T) {
 
 	_, _ = integrationDB.ExecContext(ctx, "TRUNCATE scheduler_outbox")
 
-	accountRepo := newAccountRepositoryWithSQL(client, integrationDB)
+	accountRepo := newAccountRepositoryWithSQL(client, integrationDB, nil)
 	outboxRepo := NewSchedulerOutboxRepository(integrationDB)
 	cache := NewSchedulerCache(rdb)
 
@@ -27,7 +27,7 @@ func TestSchedulerSnapshotOutboxReplay(t *testing.T) {
 		RunMode: config.RunModeStandard,
 		Gateway: config.GatewayConfig{
 			Scheduling: config.GatewaySchedulingConfig{
-				OutboxPollIntervalSeconds: 1,
+				OutboxPollIntervalSeconds:  1,
 				FullRebuildIntervalSeconds: 0,
 				DbFallbackEnabled:          true,
 			},

@@ -3,13 +3,11 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"fmt"
-	"strings"
+	"time"
 
 	dbent "github.com/Kevin-Lab777/sub2api/ent"
+	"github.com/Kevin-Lab777/sub2api/ent/apikey"
 	dbuser "github.com/Kevin-Lab777/sub2api/ent/user"
-	// [LITE:DELETED] userallowedgroup import
 	"github.com/Kevin-Lab777/sub2api/ent/usersubscription"
 	"github.com/Kevin-Lab777/sub2api/internal/pkg/pagination"
 	"github.com/Kevin-Lab777/sub2api/internal/service"
@@ -33,23 +31,7 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		return nil
 	}
 
-	// 统一使用 ent 的事务：保证用户与允许分组的更新原子化，
-	// 并避免基于 *sql.Tx 手动构造 ent client 导致的 ExecQuerier 断言错误。
-	tx, err := r.client.Tx(ctx)
-	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
-		return err
-	}
-
-	var txClient *dbent.Client
-	if err == nil {
-		defer func() { _ = tx.Rollback() }()
-		txClient = tx.Client()
-	} else {
-		// 已处于外部事务中（ErrTxStarted），复用当前 client 并由调用方负责提交/回滚。
-		txClient = r.client
-	}
-
-	created, err := txClient.User.Create().
+	created, err := r.client.User.Create().
 		SetEmail(userIn.Email).
 		SetUsername(userIn.Username).
 		SetNotes(userIn.Notes).
@@ -63,16 +45,6 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		return translatePersistenceError(err, nil, service.ErrEmailExists)
 	}
 
-	if err := r.syncUserAllowedGroupsWithClient(ctx, txClient, created.ID, userIn.AllowedGroups); err != nil {
-		return err
-	}
-
-	if tx != nil {
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-	}
-
 	applyUserEntityToService(userIn, created)
 	return nil
 }
@@ -84,13 +56,6 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 	}
 
 	out := userEntityToService(m)
-	groups, err := r.loadAllowedGroups(ctx, []int64{id})
-	if err != nil {
-		return nil, err
-	}
-	if v, ok := groups[id]; ok {
-		out.AllowedGroups = v
-	}
 	return out, nil
 }
 
@@ -101,13 +66,6 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 	}
 
 	out := userEntityToService(m)
-	groups, err := r.loadAllowedGroups(ctx, []int64{m.ID})
-	if err != nil {
-		return nil, err
-	}
-	if v, ok := groups[m.ID]; ok {
-		out.AllowedGroups = v
-	}
 	return out, nil
 }
 
@@ -116,22 +74,7 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		return nil
 	}
 
-	// 使用 ent 事务包裹用户更新与 allowed_groups 同步，避免跨层事务不一致。
-	tx, err := r.client.Tx(ctx)
-	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
-		return err
-	}
-
-	var txClient *dbent.Client
-	if err == nil {
-		defer func() { _ = tx.Rollback() }()
-		txClient = tx.Client()
-	} else {
-		// 已处于外部事务中（ErrTxStarted），复用当前 client 并由调用方负责提交/回滚。
-		txClient = r.client
-	}
-
-	updated, err := txClient.User.UpdateOneID(userIn.ID).
+	updated, err := r.client.User.UpdateOneID(userIn.ID).
 		SetEmail(userIn.Email).
 		SetUsername(userIn.Username).
 		SetNotes(userIn.Notes).
@@ -143,16 +86,6 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, service.ErrEmailExists)
-	}
-
-	if err := r.syncUserAllowedGroupsWithClient(ctx, txClient, updated.ID, userIn.AllowedGroups); err != nil {
-		return err
-	}
-
-	if tx != nil {
-		if err := tx.Commit(); err != nil {
-			return err
-		}
 	}
 
 	userIn.UpdatedAt = updated.UpdatedAt
@@ -188,23 +121,10 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 			dbuser.Or(
 				dbuser.EmailContainsFold(filters.Search),
 				dbuser.UsernameContainsFold(filters.Search),
+				dbuser.NotesContainsFold(filters.Search),
+				dbuser.HasAPIKeysWith(apikey.KeyContainsFold(filters.Search)),
 			),
 		)
-	}
-
-	// If attribute filters are specified, we need to filter by user IDs first
-	var allowedUserIDs []int64
-	if len(filters.Attributes) > 0 {
-		var attrErr error
-		allowedUserIDs, attrErr = r.filterUsersByAttributes(ctx, filters.Attributes)
-		if attrErr != nil {
-			return nil, nil, attrErr
-		}
-		if len(allowedUserIDs) == 0 {
-			// No users match the attribute filters
-			return []service.User{}, paginationResultFromTotal(0, params), nil
-		}
-		q = q.Where(dbuser.IDIn(allowedUserIDs...))
 	}
 
 	total, err := q.Clone().Count(ctx)
@@ -253,67 +173,7 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 		}
 	}
 
-	allowedGroupsByUser, err := r.loadAllowedGroups(ctx, userIDs)
-	if err != nil {
-		return nil, nil, err
-	}
-	for id, u := range userMap {
-		if groups, ok := allowedGroupsByUser[id]; ok {
-			u.AllowedGroups = groups
-		}
-	}
-
 	return outUsers, paginationResultFromTotal(int64(total), params), nil
-}
-
-// filterUsersByAttributes returns user IDs that match ALL the given attribute filters
-func (r *userRepository) filterUsersByAttributes(ctx context.Context, attrs map[int64]string) ([]int64, error) {
-	if len(attrs) == 0 {
-		return nil, nil
-	}
-
-	if r.sql == nil {
-		return nil, fmt.Errorf("sql executor is not configured")
-	}
-
-	clauses := make([]string, 0, len(attrs))
-	args := make([]any, 0, len(attrs)*2+1)
-	argIndex := 1
-	for attrID, value := range attrs {
-		clauses = append(clauses, fmt.Sprintf("(attribute_id = $%d AND value ILIKE $%d)", argIndex, argIndex+1))
-		args = append(args, attrID, "%"+value+"%")
-		argIndex += 2
-	}
-
-	query := fmt.Sprintf(
-		`SELECT user_id
-		 FROM user_attribute_values
-		 WHERE %s
-		 GROUP BY user_id
-		 HAVING COUNT(DISTINCT attribute_id) = $%d`,
-		strings.Join(clauses, " OR "),
-		argIndex,
-	)
-	args = append(args, len(attrs))
-
-	rows, err := r.sql.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	result := make([]int64, 0)
-	for rows.Next() {
-		var userID int64
-		if scanErr := rows.Scan(&userID); scanErr != nil {
-			return nil, scanErr
-		}
-		result = append(result, userID)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount float64) error {
@@ -362,10 +222,8 @@ func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	return r.client.User.Query().Where(dbuser.EmailEQ(email)).Exist(ctx)
 }
 
-// [LITE:DELETED] RemoveGroupFromAllowedGroups function - no longer needed without UserAllowedGroup
-
+// [LITE] RemoveGroupFromAllowedGroups - no-op in Lite mode (UserAllowedGroup schema removed)
 func (r *userRepository) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
-	// [LITE] UserAllowedGroup 功能已移除，直接返回 0
 	return 0, nil
 }
 
@@ -382,22 +240,7 @@ func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, erro
 	}
 
 	out := userEntityToService(m)
-	// [LITE:DELETED] AllowedGroups loading
 	return out, nil
-}
-
-// [LITE:DELETED] loadAllowedGroups function - no longer needed
-
-func (r *userRepository) loadAllowedGroups(ctx context.Context, userIDs []int64) (map[int64][]int64, error) {
-	// [LITE] UserAllowedGroup 功能已移除，返回空 map
-	return make(map[int64][]int64), nil
-}
-
-// [LITE:DELETED] syncUserAllowedGroupsWithClient function - no longer needed
-
-func (r *userRepository) syncUserAllowedGroupsWithClient(ctx context.Context, client *dbent.Client, userID int64, groupIDs []int64) error {
-	// [LITE] UserAllowedGroup 功能已移除
-	return nil
 }
 
 func applyUserEntityToService(dst *service.User, src *dbent.User) {
@@ -407,4 +250,47 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 	dst.ID = src.ID
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
+}
+
+// UpdateTotpSecret 更新用户的 TOTP 加密密钥
+func (r *userRepository) UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error {
+	client := clientFromContext(ctx, r.client)
+	update := client.User.UpdateOneID(userID)
+	if encryptedSecret == nil {
+		update = update.ClearTotpSecretEncrypted()
+	} else {
+		update = update.SetTotpSecretEncrypted(*encryptedSecret)
+	}
+	_, err := update.Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	return nil
+}
+
+// EnableTotp 启用用户的 TOTP 双因素认证
+func (r *userRepository) EnableTotp(ctx context.Context, userID int64) error {
+	client := clientFromContext(ctx, r.client)
+	_, err := client.User.UpdateOneID(userID).
+		SetTotpEnabled(true).
+		SetTotpEnabledAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	return nil
+}
+
+// DisableTotp 禁用用户的 TOTP 双因素认证
+func (r *userRepository) DisableTotp(ctx context.Context, userID int64) error {
+	client := clientFromContext(ctx, r.client)
+	_, err := client.User.UpdateOneID(userID).
+		SetTotpEnabled(false).
+		ClearTotpEnabledAt().
+		ClearTotpSecretEncrypted().
+		Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	return nil
 }

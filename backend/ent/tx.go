@@ -20,12 +20,20 @@ type Tx struct {
 	Account *AccountClient
 	// AccountGroup is the client for interacting with the AccountGroup builders.
 	AccountGroup *AccountGroupClient
+	// Announcement is the client for interacting with the Announcement builders.
+	Announcement *AnnouncementClient
+	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
+	AnnouncementRead *AnnouncementReadClient
+	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
+	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
+	UsageCleanupTask *UsageCleanupTaskClient
 	// UsageLog is the client for interacting with the UsageLog builders.
 	UsageLog *UsageLogClient
 	// User is the client for interacting with the User builders.
@@ -166,9 +174,13 @@ func (tx *Tx) init() {
 	tx.APIKey = NewAPIKeyClient(tx.config)
 	tx.Account = NewAccountClient(tx.config)
 	tx.AccountGroup = NewAccountGroupClient(tx.config)
+	tx.Announcement = NewAnnouncementClient(tx.config)
+	tx.AnnouncementRead = NewAnnouncementReadClient(tx.config)
+	tx.ErrorPassthroughRule = NewErrorPassthroughRuleClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.Proxy = NewProxyClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
+	tx.UsageCleanupTask = NewUsageCleanupTaskClient(tx.config)
 	tx.UsageLog = NewUsageLogClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 	tx.UserSubscription = NewUserSubscriptionClient(tx.config)

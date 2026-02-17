@@ -57,6 +57,12 @@ const (
 	FieldUsageResetWeekly = "usage_reset_weekly"
 	// FieldUsageResetMonthly holds the string denoting the usage_reset_monthly field in the database.
 	FieldUsageResetMonthly = "usage_reset_monthly"
+	// FieldQuota holds the string denoting the quota field in the database.
+	FieldQuota = "quota"
+	// FieldQuotaUsed holds the string denoting the quota_used field in the database.
+	FieldQuotaUsed = "quota_used"
+	// FieldExpiresAt holds the string denoting the expires_at field in the database.
+	FieldExpiresAt = "expires_at"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
@@ -112,6 +118,9 @@ var Columns = []string{
 	FieldUsageResetDaily,
 	FieldUsageResetWeekly,
 	FieldUsageResetMonthly,
+	FieldQuota,
+	FieldQuotaUsed,
+	FieldExpiresAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -154,6 +163,10 @@ var (
 	DefaultMonthlyUsageUsd float64
 	// DefaultTotalUsageUsd holds the default value on creation for the "total_usage_usd" field.
 	DefaultTotalUsageUsd float64
+	// DefaultQuota holds the default value on creation for the "quota" field.
+	DefaultQuota float64
+	// DefaultQuotaUsed holds the default value on creation for the "quota_used" field.
+	DefaultQuotaUsed float64
 )
 
 // OrderOption defines the ordering options for the APIKey queries.
@@ -257,6 +270,21 @@ func ByUsageResetWeekly(opts ...sql.OrderTermOption) OrderOption {
 // ByUsageResetMonthly orders the results by the usage_reset_monthly field.
 func ByUsageResetMonthly(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUsageResetMonthly, opts...).ToFunc()
+}
+
+// ByQuota orders the results by the quota field.
+func ByQuota(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuota, opts...).ToFunc()
+}
+
+// ByQuotaUsed orders the results by the quota_used field.
+func ByQuotaUsed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaUsed, opts...).ToFunc()
+}
+
+// ByExpiresAt orders the results by the expires_at field.
+func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.

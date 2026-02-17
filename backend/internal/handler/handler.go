@@ -10,6 +10,7 @@ type AdminHandlers struct {
 	Dashboard        *admin.DashboardHandler
 	Group            *admin.GroupHandler
 	Account          *admin.AccountHandler
+	Announcement     *admin.AnnouncementHandler
 	OAuth            *admin.OAuthHandler
 	OpenAIOAuth      *admin.OpenAIOAuthHandler
 	GeminiOAuth      *admin.GeminiOAuthHandler
@@ -20,6 +21,7 @@ type AdminHandlers struct {
 	System           *admin.SystemHandler
 	Subscription     *admin.SubscriptionHandler
 	Usage            *admin.UsageHandler
+	ErrorPassthrough *admin.ErrorPassthroughHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -29,11 +31,13 @@ type Handlers struct {
 	User          *UserHandler
 	APIKey        *APIKeyHandler
 	Usage         *UsageHandler
+	Announcement  *AnnouncementHandler
 	Admin         *AdminHandlers
 	Gateway       *GatewayHandler
 	OpenAIGateway *OpenAIGatewayHandler
 	Setting       *SettingHandler
 	Public        *PublicHandler
+	Totp          *TotpHandler
 }
 
 // BuildInfo contains build-time information

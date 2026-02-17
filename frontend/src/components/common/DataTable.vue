@@ -1,7 +1,68 @@
 <template>
+  <div class="md:hidden space-y-3">
+    <template v-if="loading">
+      <div v-for="i in 5" :key="i" class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900">
+        <div class="space-y-3">
+          <div v-for="column in columns.filter(c => c.key !== 'actions')" :key="column.key" class="flex justify-between">
+            <div class="h-4 w-20 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+            <div class="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+          </div>
+          <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
+            <div class="h-8 w-full animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template v-else-if="!data || data.length === 0">
+      <div class="rounded-lg border border-gray-200 bg-white p-12 text-center dark:border-dark-700 dark:bg-dark-900">
+        <slot name="empty">
+          <div class="flex flex-col items-center">
+            <Icon
+              name="inbox"
+              size="xl"
+              class="mb-4 h-12 w-12 text-gray-400 dark:text-dark-500"
+            />
+            <p class="text-lg font-medium text-gray-900 dark:text-gray-100">
+              {{ t('empty.noData') }}
+            </p>
+          </div>
+        </slot>
+      </div>
+    </template>
+
+    <template v-else>
+      <div
+        v-for="(row, index) in sortedData"
+        :key="resolveRowKey(row, index)"
+        class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900"
+      >
+        <div class="space-y-3">
+          <div
+            v-for="column in columns.filter(c => c.key !== 'actions')"
+            :key="column.key"
+            class="flex items-start justify-between gap-4"
+          >
+            <span class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-dark-400">
+              {{ column.label }}
+            </span>
+            <div class="text-right text-sm text-gray-900 dark:text-gray-100">
+              <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]" :expanded="actionsExpanded">
+                {{ column.formatter ? column.formatter(row[column.key], row) : row[column.key] }}
+              </slot>
+            </div>
+          </div>
+          <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
+            <slot name="cell-actions" :row="row" :value="row['actions']" :expanded="actionsExpanded"></slot>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
   <div
     ref="tableWrapperRef"
-    class="table-wrapper"
+    class="table-wrapper hidden md:block"
     :class="{
       'actions-expanded': actionsExpanded,
       'is-scrollable': isScrollable
@@ -22,29 +83,36 @@
             ]"
             @click="column.sortable && handleSort(column.key)"
           >
-            <div class="flex items-center space-x-1">
-              <span>{{ column.label }}</span>
-              <span v-if="column.sortable" class="text-gray-400 dark:text-dark-500">
-                <svg
-                  v-if="sortKey === column.key"
-                  class="h-4 w-4"
-                  :class="{ 'rotate-180 transform': sortOrder === 'desc' }"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fill-rule="evenodd"
-                    d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-                <svg v-else class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                  />
-                </svg>
-              </span>
-            </div>
+            <slot
+              :name="`header-${column.key}`"
+              :column="column"
+              :sort-key="sortKey"
+              :sort-order="sortOrder"
+            >
+              <div class="flex items-center space-x-1">
+                <span>{{ column.label }}</span>
+                <span v-if="column.sortable" class="text-gray-400 dark:text-dark-500">
+                  <svg
+                    v-if="sortKey === column.key"
+                    class="h-4 w-4"
+                    :class="{ 'rotate-180 transform': sortOrder === 'desc' }"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <svg v-else class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                    />
+                  </svg>
+                </span>
+              </div>
+            </slot>
           </th>
         </tr>
       </thead>
@@ -112,6 +180,10 @@ import type { Column } from './types'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
+
+const emit = defineEmits<{
+  sort: [key: string, order: 'asc' | 'desc']
+}>()
 
 // 表格容器引用
 const tableWrapperRef = ref<HTMLElement | null>(null)
@@ -211,18 +283,149 @@ interface Props {
   expandableActions?: boolean
   actionsCount?: number // 操作按钮总数，用于判断是否需要展开功能
   rowKey?: string | ((row: any) => string | number)
+  /**
+   * Default sort configuration (only applied when there is no persisted sort state)
+   */
+  defaultSortKey?: string
+  defaultSortOrder?: 'asc' | 'desc'
+  /**
+   * Persist sort state (key + order) to localStorage using this key.
+   * If provided, DataTable will load the stored sort state on mount.
+   */
+  sortStorageKey?: string
+  /**
+   * Enable server-side sorting mode. When true, clicking sort headers
+   * will emit 'sort' events instead of performing client-side sorting.
+   */
+  serverSideSort?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   stickyFirstColumn: true,
   stickyActionsColumn: true,
-  expandableActions: true
+  expandableActions: true,
+  defaultSortOrder: 'asc',
+  serverSideSort: false
 })
 
 const sortKey = ref<string>('')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const actionsExpanded = ref(false)
+
+type PersistedSortState = {
+  key: string
+  order: 'asc' | 'desc'
+}
+
+const collator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base'
+})
+
+const getSortableKeys = () => {
+  const keys = new Set<string>()
+  for (const col of props.columns) {
+    if (col.sortable) keys.add(col.key)
+  }
+  return keys
+}
+
+const normalizeSortKey = (candidate: string) => {
+  if (!candidate) return ''
+  const sortableKeys = getSortableKeys()
+  return sortableKeys.has(candidate) ? candidate : ''
+}
+
+const normalizeSortOrder = (candidate: any): 'asc' | 'desc' => {
+  return candidate === 'desc' ? 'desc' : 'asc'
+}
+
+const readPersistedSortState = (): PersistedSortState | null => {
+  if (!props.sortStorageKey) return null
+  try {
+    const raw = localStorage.getItem(props.sortStorageKey)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<PersistedSortState>
+    const key = normalizeSortKey(typeof parsed.key === 'string' ? parsed.key : '')
+    if (!key) return null
+    return { key, order: normalizeSortOrder(parsed.order) }
+  } catch (e) {
+    console.error('[DataTable] Failed to read persisted sort state:', e)
+    return null
+  }
+}
+
+const writePersistedSortState = (state: PersistedSortState) => {
+  if (!props.sortStorageKey) return
+  try {
+    localStorage.setItem(props.sortStorageKey, JSON.stringify(state))
+  } catch (e) {
+    console.error('[DataTable] Failed to persist sort state:', e)
+  }
+}
+
+const resolveInitialSortState = (): PersistedSortState | null => {
+  const persisted = readPersistedSortState()
+  if (persisted) return persisted
+
+  const key = normalizeSortKey(props.defaultSortKey || '')
+  if (!key) return null
+  return { key, order: normalizeSortOrder(props.defaultSortOrder) }
+}
+
+const applySortState = (state: PersistedSortState | null) => {
+  if (!state) return
+  sortKey.value = state.key
+  sortOrder.value = state.order
+}
+
+const isNullishOrEmpty = (value: any) => value === null || value === undefined || value === ''
+
+const toFiniteNumberOrNull = (value: any): number | null => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'boolean') return value ? 1 : 0
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const n = Number(trimmed)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
+const toSortableString = (value: any): string => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value instanceof Date) return value.toISOString()
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+const compareSortValues = (a: any, b: any): number => {
+  const aEmpty = isNullishOrEmpty(a)
+  const bEmpty = isNullishOrEmpty(b)
+  if (aEmpty && bEmpty) return 0
+  if (aEmpty) return 1
+  if (bEmpty) return -1
+
+  const aNum = toFiniteNumberOrNull(a)
+  const bNum = toFiniteNumberOrNull(b)
+  if (aNum !== null && bNum !== null) {
+    if (aNum === bNum) return 0
+    return aNum < bNum ? -1 : 1
+  }
+
+  const aStr = toSortableString(a)
+  const bStr = toSortableString(b)
+  const res = collator.compare(aStr, bStr)
+  if (res === 0) return 0
+  return res < 0 ? -1 : 1
+}
 const resolveRowKey = (row: any, index: number) => {
   if (typeof props.rowKey === 'function') {
     const key = props.rowKey(row)
@@ -255,29 +458,45 @@ watch(actionsExpanded, async () => {
 })
 
 const handleSort = (key: string) => {
+  let newOrder: 'asc' | 'desc' = 'asc'
   if (sortKey.value === key) {
-    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
-  } else {
+    newOrder = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  }
+
+  if (props.serverSideSort) {
+    // Server-side sort mode: emit event and update internal state for UI feedback
     sortKey.value = key
-    sortOrder.value = 'asc'
+    sortOrder.value = newOrder
+    emit('sort', key, newOrder)
+  } else {
+    // Client-side sort mode: just update internal state
+    sortKey.value = key
+    sortOrder.value = newOrder
   }
 }
 
 const sortedData = computed(() => {
-  if (!sortKey.value || !props.data) return props.data
+  // Server-side sort mode: return data as-is (server handles sorting)
+  if (props.serverSideSort || !sortKey.value || !props.data) return props.data
 
-  return [...props.data].sort((a, b) => {
-    const aVal = a[sortKey.value]
-    const bVal = b[sortKey.value]
+  const key = sortKey.value
+  const order = sortOrder.value
 
-    if (aVal === bVal) return 0
-
-    const comparison = aVal > bVal ? 1 : -1
-    return sortOrder.value === 'asc' ? comparison : -comparison
-  })
+  // Stable sort (tie-break with original index) to avoid jitter when values are equal.
+  return props.data
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const cmp = compareSortValues(a.row?.[key], b.row?.[key])
+      if (cmp !== 0) return order === 'asc' ? cmp : -cmp
+      return a.index - b.index
+    })
+    .map(item => item.row)
 })
 
-// 检查第一列是否为勾选列
+const hasActionsColumn = computed(() => {
+  return props.columns.some(column => column.key === 'actions')
+})
+
 const hasSelectColumn = computed(() => {
   return props.columns.length > 0 && props.columns[0].key === 'select'
 })
@@ -325,6 +544,51 @@ const getAdaptivePaddingClass = () => {
     return 'px-6' // 24px (原始值)
   }
 }
+
+// Init + keep persisted sort state consistent with current columns
+const didInitSort = ref(false)
+
+onMounted(() => {
+  const initial = resolveInitialSortState()
+  applySortState(initial)
+  didInitSort.value = true
+})
+
+watch(
+  () => props.columns,
+  () => {
+    // If current sort key is no longer sortable/visible, fall back to default/persisted.
+    const normalized = normalizeSortKey(sortKey.value)
+    if (!sortKey.value) {
+      const initial = resolveInitialSortState()
+      applySortState(initial)
+      return
+    }
+
+    if (!normalized) {
+      const fallback = resolveInitialSortState()
+      if (fallback) {
+        applySortState(fallback)
+      } else {
+        sortKey.value = ''
+        sortOrder.value = 'asc'
+      }
+    }
+  },
+  { deep: true }
+)
+
+watch(
+  [sortKey, sortOrder],
+  ([nextKey, nextOrder]) => {
+    if (!didInitSort.value) return
+    if (!props.sortStorageKey) return
+    const key = normalizeSortKey(nextKey)
+    if (!key) return
+    writePersistedSortState({ key, order: normalizeSortOrder(nextOrder) })
+  },
+  { flush: 'post' }
+)
 </script>
 
 <style scoped>

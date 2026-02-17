@@ -39,6 +39,12 @@ type User struct {
 	Username string `json:"username,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
+	// TotpSecretEncrypted holds the value of the "totp_secret_encrypted" field.
+	TotpSecretEncrypted *string `json:"totp_secret_encrypted,omitempty"`
+	// TotpEnabled holds the value of the "totp_enabled" field.
+	TotpEnabled bool `json:"totp_enabled,omitempty"`
+	// TotpEnabledAt holds the value of the "totp_enabled_at" field.
+	TotpEnabledAt *time.Time `json:"totp_enabled_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
 	Edges        UserEdges `json:"edges"`
@@ -53,11 +59,13 @@ type UserEdges struct {
 	Subscriptions []*UserSubscription `json:"subscriptions,omitempty"`
 	// AssignedSubscriptions holds the value of the assigned_subscriptions edge.
 	AssignedSubscriptions []*UserSubscription `json:"assigned_subscriptions,omitempty"`
+	// AnnouncementReads holds the value of the announcement_reads edge.
+	AnnouncementReads []*AnnouncementRead `json:"announcement_reads,omitempty"`
 	// UsageLogs holds the value of the usage_logs edge.
 	UsageLogs []*UsageLog `json:"usage_logs,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -87,10 +95,19 @@ func (e UserEdges) AssignedSubscriptionsOrErr() ([]*UserSubscription, error) {
 	return nil, &NotLoadedError{edge: "assigned_subscriptions"}
 }
 
+// AnnouncementReadsOrErr returns the AnnouncementReads value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) AnnouncementReadsOrErr() ([]*AnnouncementRead, error) {
+	if e.loadedTypes[3] {
+		return e.AnnouncementReads, nil
+	}
+	return nil, &NotLoadedError{edge: "announcement_reads"}
+}
+
 // UsageLogsOrErr returns the UsageLogs value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UsageLogsOrErr() ([]*UsageLog, error) {
-	if e.loadedTypes[3] {
+	if e.loadedTypes[4] {
 		return e.UsageLogs, nil
 	}
 	return nil, &NotLoadedError{edge: "usage_logs"}
@@ -101,13 +118,15 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case user.FieldTotpEnabled:
+			values[i] = new(sql.NullBool)
 		case user.FieldBalance:
 			values[i] = new(sql.NullFloat64)
 		case user.FieldID, user.FieldConcurrency:
 			values[i] = new(sql.NullInt64)
-		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes:
+		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted:
 			values[i] = new(sql.NullString)
-		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldDeletedAt:
+		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldDeletedAt, user.FieldTotpEnabledAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -197,6 +216,26 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Notes = value.String
 			}
+		case user.FieldTotpSecretEncrypted:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field totp_secret_encrypted", values[i])
+			} else if value.Valid {
+				_m.TotpSecretEncrypted = new(string)
+				*_m.TotpSecretEncrypted = value.String
+			}
+		case user.FieldTotpEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field totp_enabled", values[i])
+			} else if value.Valid {
+				_m.TotpEnabled = value.Bool
+			}
+		case user.FieldTotpEnabledAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field totp_enabled_at", values[i])
+			} else if value.Valid {
+				_m.TotpEnabledAt = new(time.Time)
+				*_m.TotpEnabledAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -223,6 +262,11 @@ func (_m *User) QuerySubscriptions() *UserSubscriptionQuery {
 // QueryAssignedSubscriptions queries the "assigned_subscriptions" edge of the User entity.
 func (_m *User) QueryAssignedSubscriptions() *UserSubscriptionQuery {
 	return NewUserClient(_m.config).QueryAssignedSubscriptions(_m)
+}
+
+// QueryAnnouncementReads queries the "announcement_reads" edge of the User entity.
+func (_m *User) QueryAnnouncementReads() *AnnouncementReadQuery {
+	return NewUserClient(_m.config).QueryAnnouncementReads(_m)
 }
 
 // QueryUsageLogs queries the "usage_logs" edge of the User entity.
@@ -287,6 +331,19 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)
+	builder.WriteString(", ")
+	if v := _m.TotpSecretEncrypted; v != nil {
+		builder.WriteString("totp_secret_encrypted=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("totp_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TotpEnabled))
+	builder.WriteString(", ")
+	if v := _m.TotpEnabledAt; v != nil {
+		builder.WriteString("totp_enabled_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

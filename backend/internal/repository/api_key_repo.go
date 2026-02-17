@@ -22,12 +22,6 @@ func NewAPIKeyRepository(client *dbent.Client) service.APIKeyRepository {
 	return &apiKeyRepository{client: client}
 }
 
-// ProvideAPIKeyUsageRepository [LITE] 提供 APIKeyUsageRepository 接口
-// 使用与 APIKeyRepository 相同的实现
-func ProvideAPIKeyUsageRepository(client *dbent.Client) service.APIKeyUsageRepository {
-	return &apiKeyRepository{client: client}
-}
-
 func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 	// 默认过滤已软删除记录，避免删除后仍被查询到。
 	return r.client.APIKey.Query().Where(apikey.DeletedAtIsNil())
@@ -39,7 +33,10 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 		SetKey(key.Key).
 		SetName(key.Name).
 		SetStatus(key.Status).
-		SetNillableGroupID(key.GroupID)
+		SetNillableGroupID(key.GroupID).
+		SetQuota(key.Quota).
+		SetQuotaUsed(key.QuotaUsed).
+		SetNillableExpiresAt(key.ExpiresAt)
 
 	if len(key.IPWhitelist) > 0 {
 		builder.SetIPWhitelist(key.IPWhitelist)
@@ -116,6 +113,21 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
 			apikey.FieldIPBlacklist,
+			apikey.FieldQuota,
+			apikey.FieldQuotaUsed,
+			apikey.FieldExpiresAt,
+			// [LITE] 限额和用量字段
+			apikey.FieldDailyLimitUsd,
+			apikey.FieldWeeklyLimitUsd,
+			apikey.FieldMonthlyLimitUsd,
+			apikey.FieldTotalLimitUsd,
+			apikey.FieldDailyUsageUsd,
+			apikey.FieldWeeklyUsageUsd,
+			apikey.FieldMonthlyUsageUsd,
+			apikey.FieldTotalUsageUsd,
+			apikey.FieldUsageResetDaily,
+			apikey.FieldUsageResetWeekly,
+			apikey.FieldUsageResetMonthly,
 		).
 		WithUser(func(q *dbent.UserQuery) {
 			q.Select(
@@ -142,6 +154,11 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldImagePrice4k,
 				group.FieldClaudeCodeOnly,
 				group.FieldFallbackGroupID,
+				group.FieldFallbackGroupIDOnInvalidRequest,
+				group.FieldModelRoutingEnabled,
+				group.FieldModelRouting,
+				group.FieldMcpXMLInject,
+				group.FieldSupportedModelScopes,
 			)
 		}).
 		Only(ctx)
@@ -165,11 +182,20 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
 		SetName(key.Name).
 		SetStatus(key.Status).
+		SetQuota(key.Quota).
+		SetQuotaUsed(key.QuotaUsed).
 		SetUpdatedAt(now)
 	if key.GroupID != nil {
 		builder.SetGroupID(*key.GroupID)
 	} else {
 		builder.ClearGroupID()
+	}
+
+	// Expiration time
+	if key.ExpiresAt != nil {
+		builder.SetExpiresAt(*key.ExpiresAt)
+	} else {
+		builder.ClearExpiresAt()
 	}
 
 	// IP 限制字段
@@ -339,82 +365,6 @@ func (r *apiKeyRepository) CountByGroupID(ctx context.Context, groupID int64) (i
 	return int64(count), err
 }
 
-// [LITE] 用量更新方法
-
-// IncrementUsage 增加 API Key 用量（原子操作）
-func (r *apiKeyRepository) IncrementUsage(ctx context.Context, id int64, costUSD float64) error {
-	if costUSD <= 0 {
-		return nil
-	}
-	affected, err := r.client.APIKey.Update().
-		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
-		AddDailyUsageUsd(costUSD).
-		AddWeeklyUsageUsd(costUSD).
-		AddMonthlyUsageUsd(costUSD).
-		AddTotalUsageUsd(costUSD).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return service.ErrAPIKeyNotFound
-	}
-	return nil
-}
-
-// ResetDailyUsage 重置日用量
-func (r *apiKeyRepository) ResetDailyUsage(ctx context.Context, id int64, resetTime time.Time) error {
-	affected, err := r.client.APIKey.Update().
-		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
-		SetDailyUsageUsd(0).
-		SetUsageResetDaily(resetTime).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return service.ErrAPIKeyNotFound
-	}
-	return nil
-}
-
-// ResetWeeklyUsage 重置周用量
-func (r *apiKeyRepository) ResetWeeklyUsage(ctx context.Context, id int64, resetTime time.Time) error {
-	affected, err := r.client.APIKey.Update().
-		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
-		SetWeeklyUsageUsd(0).
-		SetUsageResetWeekly(resetTime).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return service.ErrAPIKeyNotFound
-	}
-	return nil
-}
-
-// ResetMonthlyUsage 重置月用量
-func (r *apiKeyRepository) ResetMonthlyUsage(ctx context.Context, id int64, resetTime time.Time) error {
-	affected, err := r.client.APIKey.Update().
-		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
-		SetMonthlyUsageUsd(0).
-		SetUsageResetMonthly(resetTime).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return service.ErrAPIKeyNotFound
-	}
-	return nil
-}
-
-// ListKeysByUserID 返回指定用户的所有 API Key（用于缓存失效）
 func (r *apiKeyRepository) ListKeysByUserID(ctx context.Context, userID int64) ([]string, error) {
 	keys, err := r.activeQuery().
 		Where(apikey.UserIDEQ(userID)).
@@ -426,7 +376,6 @@ func (r *apiKeyRepository) ListKeysByUserID(ctx context.Context, userID int64) (
 	return keys, nil
 }
 
-// ListKeysByGroupID 返回指定分组的所有 API Key（用于缓存失效）
 func (r *apiKeyRepository) ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error) {
 	keys, err := r.activeQuery().
 		Where(apikey.GroupIDEQ(groupID)).
@@ -436,6 +385,38 @@ func (r *apiKeyRepository) ListKeysByGroupID(ctx context.Context, groupID int64)
 		return nil, err
 	}
 	return keys, nil
+}
+
+// IncrementQuotaUsed atomically increments the quota_used field and returns the new value
+func (r *apiKeyRepository) IncrementQuotaUsed(ctx context.Context, id int64, amount float64) (float64, error) {
+	// Use raw SQL for atomic increment to avoid race conditions
+	// First get current value
+	m, err := r.activeQuery().
+		Where(apikey.IDEQ(id)).
+		Select(apikey.FieldQuotaUsed).
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return 0, service.ErrAPIKeyNotFound
+		}
+		return 0, err
+	}
+
+	newValue := m.QuotaUsed + amount
+
+	// Update with new value
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetQuotaUsed(newValue).
+		Save(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if affected == 0 {
+		return 0, service.ErrAPIKeyNotFound
+	}
+
+	return newValue, nil
 }
 
 func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
@@ -453,20 +434,18 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
 		GroupID:     m.GroupID,
-
+		Quota:       m.Quota,
+		QuotaUsed:   m.QuotaUsed,
+		ExpiresAt:   m.ExpiresAt,
 		// [LITE] 限额字段
-		DailyLimitUSD:   m.DailyLimitUsd,
-		WeeklyLimitUSD:  m.WeeklyLimitUsd,
-		MonthlyLimitUSD: m.MonthlyLimitUsd,
-		TotalLimitUSD:   m.TotalLimitUsd,
-
-		// [LITE] 用量追踪字段
-		DailyUsageUSD:   m.DailyUsageUsd,
-		WeeklyUsageUSD:  m.WeeklyUsageUsd,
-		MonthlyUsageUSD: m.MonthlyUsageUsd,
-		TotalUsageUSD:   m.TotalUsageUsd,
-
-		// [LITE] 用量重置时间字段
+		DailyLimitUSD:     m.DailyLimitUsd,
+		WeeklyLimitUSD:    m.WeeklyLimitUsd,
+		MonthlyLimitUSD:   m.MonthlyLimitUsd,
+		TotalLimitUSD:     m.TotalLimitUsd,
+		DailyUsageUSD:     m.DailyUsageUsd,
+		WeeklyUsageUSD:    m.WeeklyUsageUsd,
+		MonthlyUsageUSD:   m.MonthlyUsageUsd,
+		TotalUsageUSD:     m.TotalUsageUsd,
 		UsageResetDaily:   m.UsageResetDaily,
 		UsageResetWeekly:  m.UsageResetWeekly,
 		UsageResetMonthly: m.UsageResetMonthly,
@@ -485,17 +464,20 @@ func userEntityToService(u *dbent.User) *service.User {
 		return nil
 	}
 	return &service.User{
-		ID:           u.ID,
-		Email:        u.Email,
-		Username:     u.Username,
-		Notes:        u.Notes,
-		PasswordHash: u.PasswordHash,
-		Role:         u.Role,
-		Balance:      u.Balance,
-		Concurrency:  u.Concurrency,
-		Status:       u.Status,
-		CreatedAt:    u.CreatedAt,
-		UpdatedAt:    u.UpdatedAt,
+		ID:                  u.ID,
+		Email:               u.Email,
+		Username:            u.Username,
+		Notes:               u.Notes,
+		PasswordHash:        u.PasswordHash,
+		Role:                u.Role,
+		Balance:             u.Balance,
+		Concurrency:         u.Concurrency,
+		Status:              u.Status,
+		TotpSecretEncrypted: u.TotpSecretEncrypted,
+		TotpEnabled:         u.TotpEnabled,
+		TotpEnabledAt:       u.TotpEnabledAt,
+		CreatedAt:           u.CreatedAt,
+		UpdatedAt:           u.UpdatedAt,
 	}
 }
 
@@ -504,26 +486,32 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		return nil
 	}
 	return &service.Group{
-		ID:                  g.ID,
-		Name:                g.Name,
-		Description:         derefString(g.Description),
-		Platform:            g.Platform,
-		RateMultiplier:      g.RateMultiplier,
-		IsExclusive:         g.IsExclusive,
-		Status:              g.Status,
-		Hydrated:            true,
-		SubscriptionType:    g.SubscriptionType,
-		DailyLimitUSD:       g.DailyLimitUsd,
-		WeeklyLimitUSD:      g.WeeklyLimitUsd,
-		MonthlyLimitUSD:     g.MonthlyLimitUsd,
-		ImagePrice1K:        g.ImagePrice1k,
-		ImagePrice2K:        g.ImagePrice2k,
-		ImagePrice4K:        g.ImagePrice4k,
-		DefaultValidityDays: g.DefaultValidityDays,
-		ClaudeCodeOnly:      g.ClaudeCodeOnly,
-		FallbackGroupID:     g.FallbackGroupID,
-		CreatedAt:           g.CreatedAt,
-		UpdatedAt:           g.UpdatedAt,
+		ID:                              g.ID,
+		Name:                            g.Name,
+		Description:                     derefString(g.Description),
+		Platform:                        g.Platform,
+		RateMultiplier:                  g.RateMultiplier,
+		IsExclusive:                     g.IsExclusive,
+		Status:                          g.Status,
+		Hydrated:                        true,
+		SubscriptionType:                g.SubscriptionType,
+		DailyLimitUSD:                   g.DailyLimitUsd,
+		WeeklyLimitUSD:                  g.WeeklyLimitUsd,
+		MonthlyLimitUSD:                 g.MonthlyLimitUsd,
+		ImagePrice1K:                    g.ImagePrice1k,
+		ImagePrice2K:                    g.ImagePrice2k,
+		ImagePrice4K:                    g.ImagePrice4k,
+		DefaultValidityDays:             g.DefaultValidityDays,
+		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
+		FallbackGroupID:                 g.FallbackGroupID,
+		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
+		ModelRouting:                    g.ModelRouting,
+		ModelRoutingEnabled:             g.ModelRoutingEnabled,
+		MCPXMLInject:                    g.McpXMLInject,
+		SupportedModelScopes:            g.SupportedModelScopes,
+		SortOrder:                       g.SortOrder,
+		CreatedAt:                       g.CreatedAt,
+		UpdatedAt:                       g.UpdatedAt,
 	}
 }
 
@@ -532,4 +520,75 @@ func derefString(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// ProvideAPIKeyUsageRepository provides the APIKeyUsageRepository from the existing apiKeyRepository.
+func ProvideAPIKeyUsageRepository(client *dbent.Client) service.APIKeyUsageRepository {
+	return &apiKeyRepository{client: client}
+}
+
+// [LITE] IncrementUsage atomically increments all usage counters for an API key.
+func (r *apiKeyRepository) IncrementUsage(ctx context.Context, id int64, costUSD float64) error {
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		AddDailyUsageUsd(costUSD).
+		AddWeeklyUsageUsd(costUSD).
+		AddMonthlyUsageUsd(costUSD).
+		AddTotalUsageUsd(costUSD).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+// [LITE] ResetDailyUsage resets the daily usage counter and sets the next reset time.
+func (r *apiKeyRepository) ResetDailyUsage(ctx context.Context, id int64, resetTime time.Time) error {
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetDailyUsageUsd(0).
+		SetUsageResetDaily(resetTime).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+// [LITE] ResetWeeklyUsage resets the weekly usage counter and sets the next reset time.
+func (r *apiKeyRepository) ResetWeeklyUsage(ctx context.Context, id int64, resetTime time.Time) error {
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetWeeklyUsageUsd(0).
+		SetUsageResetWeekly(resetTime).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+// [LITE] ResetMonthlyUsage resets the monthly usage counter and sets the next reset time.
+func (r *apiKeyRepository) ResetMonthlyUsage(ctx context.Context, id int64, resetTime time.Time) error {
+	affected, err := r.client.APIKey.Update().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		SetMonthlyUsageUsd(0).
+		SetUsageResetMonthly(resetTime).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAPIKeyNotFound
+	}
+	return nil
 }

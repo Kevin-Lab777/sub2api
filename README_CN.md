@@ -1,14 +1,14 @@
-# Sub2API Lite
+# Sub2API
 
 <div align="center">
 
-[![Go](https://img.shields.io/badge/Go-1.25.5-00ADD8.svg)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.25.7-00ADD8.svg)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 
-**AI API 网关平台 - 轻量版 (个人/小团队)**
+**AI API 网关平台 - 订阅配额分发管理**
 
 [English](README.md) | 中文
 
@@ -16,53 +16,25 @@
 
 ---
 
-## 关于 Lite 版本
+## 在线体验
 
-Sub2API Lite 是基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 的轻量化版本，专为**个人开发者和小团队**设计。
+体验地址：**https://v2.pincc.ai/**
 
-### 与原版的区别
+演示账号（共享演示环境；自建部署不会自动创建该账号）：
 
-| 功能 | 原版 Standard | Lite 版本 |
-|------|--------------|-----------|
-| 用户注册/登录 | ✅ 多用户系统 | ❌ 仅管理员 |
-| 兑换码系统 | ✅ | ❌ 移除 |
-| 优惠码系统 | ✅ | ❌ 移除 |
-| 用户属性 | ✅ | ❌ 移除 |
-| LinuxDO OAuth | ✅ | ❌ 移除 |
-| 邮件验证 | ✅ | ❌ 移除 |
-| **计费模式** | 扣用户余额 | **限额控制（不扣余额）** |
-| 订阅系统 | ✅ | ✅ 保留 |
-| 账号/代理/分组管理 | ✅ | ✅ 保留 |
-| API Key 管理 | ✅ | ✅ 增强（支持限额） |
-
-### Lite 限额控制
-
-Lite 版本使用**限额控制**替代余额扣费：
-
-```
-请求进入 → API Key 有限额？ → 检查限额
-                ↓ 没有
-          Group 有限额？ → 检查限额
-                ↓ 没有
-          无限制通过 ✅
-```
-
-API Key 支持设置：
-- 日限额 (`daily_limit_usd`)
-- 周限额 (`weekly_limit_usd`)
-- 月限额 (`monthly_limit_usd`)
-
----
+| 邮箱 | 密码 |
+|------|------|
+| admin@sub2api.com | admin123 |
 
 ## 项目概述
 
-Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅（如 Claude Code $200/月）的 API 配额。管理员通过平台生成 API Key 分发给用户，平台负责鉴权、限额控制、负载均衡和请求转发。
+Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅（如 Claude Code $200/月）的 API 配额。用户通过平台生成的 API Key 调用上游 AI 服务，平台负责鉴权、计费、负载均衡和请求转发。
 
 ## 核心功能
 
 - **多账号管理** - 支持多种上游账号类型（OAuth、API Key）
-- **API Key 分发** - 生成和管理 API Key，支持限额控制
-- **限额控制** - API Key/分组级别的日/周/月用量限制
+- **API Key 分发** - 为用户生成和管理 API Key
+- **精确计费** - Token 级别的用量追踪和成本计算
 - **智能调度** - 智能账号选择，支持粘性会话
 - **并发控制** - 用户级和账号级并发限制
 - **速率限制** - 可配置的请求和 Token 速率限制
@@ -72,7 +44,7 @@ Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅（
 
 | 组件 | 技术 |
 |------|------|
-| 后端 | Go 1.25.5, Gin, Ent |
+| 后端 | Go 1.25.7, Gin, Ent |
 | 前端 | Vue 3.4+, Vite 5+, TailwindCSS |
 | 数据库 | PostgreSQL 15+ |
 | 缓存/队列 | Redis 7+ |
@@ -82,6 +54,13 @@ Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅（
 ## 文档
 
 - 依赖安全：`docs/dependency-security.md`
+
+---
+
+## OpenAI Responses 兼容注意事项
+
+- 当请求包含 `function_call_output` 时，需要携带 `previous_response_id`，或在 `input` 中包含带 `call_id` 的 `tool_call`/`function_call`，或带非空 `id` 且与 `function_call_output.call_id` 匹配的 `item_reference`。
+- 若依赖上游历史记录，网关会强制 `store=true` 并需要复用 `previous_response_id`，以避免出现 “No tool call found for function call output” 错误。
 
 ---
 
@@ -101,7 +80,7 @@ Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅（
 #### 安装步骤
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | sudo bash
 ```
 
 脚本会自动：
@@ -151,12 +130,12 @@ sudo journalctl -u sub2api -f
 sudo systemctl restart sub2api
 
 # 卸载
-curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | sudo bash -s -- uninstall -y
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
 ```
 
 ---
 
-### 方式二：Docker Compose
+### 方式二：Docker Compose（推荐）
 
 使用 Docker Compose 部署，包含 PostgreSQL 和 Redis 容器。
 
@@ -165,71 +144,157 @@ curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/in
 - Docker 20.10+
 - Docker Compose v2+
 
-#### 安装步骤
+#### 快速开始（一键部署）
+
+使用自动化部署脚本快速搭建：
 
 ```bash
-# 1. 创建目录并下载文件
-mkdir sub2api && cd sub2api
-curl -O https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/docker-compose.yml
-curl -O https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/.env.example
+# 创建部署目录
+mkdir -p sub2api-deploy && cd sub2api-deploy
 
-# 2. 创建 .env 配置文件
-mv .env.example .env
+# 下载并运行部署准备脚本
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/docker-deploy.sh | bash
 
-# 3. 编辑配置
+# 启动服务
+docker-compose -f docker-compose.local.yml up -d
+
+# 查看日志
+docker-compose -f docker-compose.local.yml logs -f sub2api
+```
+
+**脚本功能：**
+- 下载 `docker-compose.local.yml` 和 `.env.example`
+- 自动生成安全凭证（JWT_SECRET、TOTP_ENCRYPTION_KEY、POSTGRES_PASSWORD）
+- 创建 `.env` 文件并填充自动生成的密钥
+- 创建数据目录（使用本地目录，便于备份和迁移）
+- 显示生成的凭证供你记录
+
+#### 手动部署
+
+如果你希望手动配置：
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/Kevin-Lab777/sub2api.git
+cd sub2api/deploy
+
+# 2. 复制环境配置文件
+cp .env.example .env
+
+# 3. 编辑配置（生成安全密码）
 nano .env
 ```
 
 **`.env` 必须配置项：**
 
 ```bash
-# 系统架构（必须修改！）
-# amd64: Intel/AMD 处理器 (大多数服务器, Intel Mac)
-# arm64: ARM 处理器 (Apple Silicon M1/M2/M3, AWS Graviton)
-ARCH=amd64
-
-# PostgreSQL 密码（必须修改！）
+# PostgreSQL 密码（必需）
 POSTGRES_PASSWORD=your_secure_password_here
+
+# JWT 密钥（推荐 - 重启后保持用户登录状态）
+JWT_SECRET=your_jwt_secret_here
+
+# TOTP 加密密钥（推荐 - 重启后保留双因素认证）
+TOTP_ENCRYPTION_KEY=your_totp_key_here
 
 # 可选：管理员账号
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=your_admin_password
+
+# 可选：自定义端口
+SERVER_PORT=8080
+```
+
+**生成安全密钥：**
+```bash
+# 生成 JWT_SECRET
+openssl rand -hex 32
+
+# 生成 TOTP_ENCRYPTION_KEY
+openssl rand -hex 32
+
+# 生成 POSTGRES_PASSWORD
+openssl rand -hex 32
 ```
 
 ```bash
-# 4. 启动所有服务
+# 4. 创建数据目录（本地版）
+mkdir -p data postgres_data redis_data
+
+# 5. 启动所有服务
+# 选项 A：本地目录版（推荐 - 易于迁移）
+docker-compose -f docker-compose.local.yml up -d
+
+# 选项 B：命名卷版（简单设置）
 docker-compose up -d
 
-# 5. 查看状态
-docker-compose ps
+# 6. 查看状态
+docker-compose -f docker-compose.local.yml ps
 
-# 6. 查看日志
-docker-compose logs -f sub2api
+# 7. 查看日志
+docker-compose -f docker-compose.local.yml logs -f sub2api
 ```
+
+#### 部署版本对比
+
+| 版本 | 数据存储 | 迁移便利性 | 适用场景 |
+|------|---------|-----------|---------|
+| **docker-compose.local.yml** | 本地目录 | ✅ 简单（打包整个目录） | 生产环境、频繁备份 |
+| **docker-compose.yml** | 命名卷 | ⚠️ 需要 docker 命令 | 简单设置 |
+
+**推荐：** 使用 `docker-compose.local.yml`（脚本部署）以便更轻松地管理数据。
 
 #### 访问
 
 在浏览器中打开 `http://你的服务器IP:8080`
 
+如果管理员密码是自动生成的，在日志中查找：
+```bash
+docker-compose -f docker-compose.local.yml logs sub2api | grep "admin password"
+```
+
 #### 升级
 
 ```bash
 # 拉取最新镜像并重建容器
-docker-compose pull
-docker-compose up -d
+docker-compose -f docker-compose.local.yml pull
+docker-compose -f docker-compose.local.yml up -d
+```
+
+#### 轻松迁移（本地目录版）
+
+使用 `docker-compose.local.yml` 时，可以轻松迁移到新服务器：
+
+```bash
+# 源服务器
+docker-compose -f docker-compose.local.yml down
+cd ..
+tar czf sub2api-complete.tar.gz sub2api-deploy/
+
+# 传输到新服务器
+scp sub2api-complete.tar.gz user@new-server:/path/
+
+# 新服务器
+tar xzf sub2api-complete.tar.gz
+cd sub2api-deploy/
+docker-compose -f docker-compose.local.yml up -d
 ```
 
 #### 常用命令
 
 ```bash
 # 停止所有服务
-docker-compose down
+docker-compose -f docker-compose.local.yml down
 
 # 重启
-docker-compose restart
+docker-compose -f docker-compose.local.yml restart
 
 # 查看所有日志
-docker-compose logs -f
+docker-compose -f docker-compose.local.yml logs -f
+
+# 删除所有数据（谨慎！）
+docker-compose -f docker-compose.local.yml down
+rm -rf data/ postgres_data/ redis_data/
 ```
 
 ---
@@ -384,6 +449,16 @@ cd backend
 go generate ./ent
 go generate ./cmd/server
 ```
+
+---
+
+## 简易模式
+
+简易模式适合个人开发者或内部团队快速使用，不依赖完整 SaaS 功能。
+
+- 启用方式：设置环境变量 `RUN_MODE=simple`
+- 功能差异：隐藏 SaaS 相关功能，跳过计费流程
+- 安全注意事项：生产环境需同时设置 `SIMPLE_MODE_CONFIRM=true` 才允许启动
 
 ---
 
