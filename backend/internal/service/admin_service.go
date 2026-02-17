@@ -22,6 +22,11 @@ type AdminService interface {
 	UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error)
 	GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int) ([]APIKey, int64, error)
 	GetUserUsageStats(ctx context.Context, userID int64, period string) (any, error)
+	// GetUserBalanceHistory returns paginated balance/concurrency change records for a user.
+	// codeType is optional - pass empty string to return all types.
+	// Also returns totalRecharged (sum of all positive balance top-ups).
+	// [LITE] Redeem service removed - this method is a no-op stub.
+	GetUserBalanceHistory(ctx context.Context, userID int64, page, pageSize int, codeType string) ([]BalanceHistoryRecord, int64, float64, error)
 
 	// Group management
 	ListGroups(ctx context.Context, page, pageSize int, platform, status, search string, isExclusive *bool) ([]Group, int64, error)
@@ -32,9 +37,10 @@ type AdminService interface {
 	UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error)
 	DeleteGroup(ctx context.Context, id int64) error
 	GetGroupAPIKeys(ctx context.Context, groupID int64, page, pageSize int) ([]APIKey, int64, error)
+	UpdateGroupSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error
 
 	// Account management
-	ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string) ([]Account, int64, error)
+	ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64) ([]Account, int64, error)
 	GetAccount(ctx context.Context, id int64) (*Account, error)
 	GetAccountsByIDs(ctx context.Context, ids []int64) ([]*Account, error)
 	CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error)
@@ -42,6 +48,7 @@ type AdminService interface {
 	DeleteAccount(ctx context.Context, id int64) error
 	RefreshAccountCredentials(ctx context.Context, id int64) (*Account, error)
 	ClearAccountError(ctx context.Context, id int64) (*Account, error)
+	SetAccountError(ctx context.Context, id int64, errorMsg string) error
 	SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error)
 	BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error)
 
@@ -51,14 +58,14 @@ type AdminService interface {
 	GetAllProxies(ctx context.Context) ([]Proxy, error)
 	GetAllProxiesWithAccountCount(ctx context.Context) ([]ProxyWithAccountCount, error)
 	GetProxy(ctx context.Context, id int64) (*Proxy, error)
+	GetProxiesByIDs(ctx context.Context, ids []int64) ([]Proxy, error)
 	CreateProxy(ctx context.Context, input *CreateProxyInput) (*Proxy, error)
 	UpdateProxy(ctx context.Context, id int64, input *UpdateProxyInput) (*Proxy, error)
 	DeleteProxy(ctx context.Context, id int64) error
-	GetProxyAccounts(ctx context.Context, proxyID int64, page, pageSize int) ([]Account, int64, error)
+	BatchDeleteProxies(ctx context.Context, ids []int64) (*ProxyBatchDeleteResult, error)
+	GetProxyAccounts(ctx context.Context, proxyID int64) ([]ProxyAccountSummary, error)
 	CheckProxyExists(ctx context.Context, host string, port int, username, password string) (bool, error)
 	TestProxy(ctx context.Context, id int64) (*ProxyTestResult, error)
-
-	// [LITE:DELETED] Redeem code management methods
 }
 
 // CreateUserInput represents input for creating a new user via admin operations.
@@ -81,6 +88,9 @@ type UpdateUserInput struct {
 	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
 	Status        string
 	AllowedGroups *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	// GroupRates 用户专属分组倍率配置
+	// map[groupID]*rate，nil 表示删除该分组的专属倍率
+	GroupRates map[int64]*float64
 }
 
 type CreateGroupInput struct {
@@ -99,6 +109,16 @@ type CreateGroupInput struct {
 	ImagePrice4K    *float64
 	ClaudeCodeOnly  bool   // 仅允许 Claude Code 客户端
 	FallbackGroupID *int64 // 降级分组 ID
+	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
+	FallbackGroupIDOnInvalidRequest *int64
+	// 模型路由配置（仅 anthropic 平台使用）
+	ModelRouting        map[string][]int64
+	ModelRoutingEnabled bool // 是否启用模型路由
+	MCPXMLInject        *bool
+	// 支持的模型系列（仅 antigravity 平台使用）
+	SupportedModelScopes []string
+	// 从指定分组复制账号（创建分组后在同一事务内绑定）
+	CopyAccountsFromGroupIDs []int64
 }
 
 type UpdateGroupInput struct {
@@ -118,6 +138,16 @@ type UpdateGroupInput struct {
 	ImagePrice4K    *float64
 	ClaudeCodeOnly  *bool  // 仅允许 Claude Code 客户端
 	FallbackGroupID *int64 // 降级分组 ID
+	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
+	FallbackGroupIDOnInvalidRequest *int64
+	// 模型路由配置（仅 anthropic 平台使用）
+	ModelRouting        map[string][]int64
+	ModelRoutingEnabled *bool // 是否启用模型路由
+	MCPXMLInject        *bool
+	// 支持的模型系列（仅 antigravity 平台使用）
+	SupportedModelScopes *[]string
+	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
+	CopyAccountsFromGroupIDs []int64
 }
 
 type CreateAccountInput struct {
@@ -130,9 +160,12 @@ type CreateAccountInput struct {
 	ProxyID            *int64
 	Concurrency        int
 	Priority           int
+	RateMultiplier     *float64 // 账号计费倍率（>=0，允许 0）
 	GroupIDs           []int64
 	ExpiresAt          *int64
 	AutoPauseOnExpired *bool
+	// SkipDefaultGroupBind prevents auto-binding to platform default group when GroupIDs is empty.
+	SkipDefaultGroupBind bool
 	// SkipMixedChannelCheck skips the mixed channel risk check when binding groups.
 	// This should only be set when the caller has explicitly confirmed the risk.
 	SkipMixedChannelCheck bool
@@ -145,8 +178,9 @@ type UpdateAccountInput struct {
 	Credentials           map[string]any
 	Extra                 map[string]any
 	ProxyID               *int64
-	Concurrency           *int // 使用指针区分"未提供"和"设置为0"
-	Priority              *int // 使用指针区分"未提供"和"设置为0"
+	Concurrency           *int     // 使用指针区分"未提供"和"设置为0"
+	Priority              *int     // 使用指针区分"未提供"和"设置为0"
+	RateMultiplier        *float64 // 账号计费倍率（>=0，允许 0）
 	Status                string
 	GroupIDs              *[]int64
 	ExpiresAt             *int64
@@ -156,16 +190,17 @@ type UpdateAccountInput struct {
 
 // BulkUpdateAccountsInput describes the payload for bulk updating accounts.
 type BulkUpdateAccountsInput struct {
-	AccountIDs  []int64
-	Name        string
-	ProxyID     *int64
-	Concurrency *int
-	Priority    *int
-	Status      string
-	Schedulable *bool
-	GroupIDs    *[]int64
-	Credentials map[string]any
-	Extra       map[string]any
+	AccountIDs     []int64
+	Name           string
+	ProxyID        *int64
+	Concurrency    *int
+	Priority       *int
+	RateMultiplier *float64 // 账号计费倍率（>=0，允许 0）
+	Status         string
+	Schedulable    *bool
+	GroupIDs       *[]int64
+	Credentials    map[string]any
+	Extra          map[string]any
 	// SkipMixedChannelCheck skips the mixed channel risk check when binding groups.
 	// This should only be set when the caller has explicitly confirmed the risk.
 	SkipMixedChannelCheck bool
@@ -206,25 +241,35 @@ type UpdateProxyInput struct {
 	Status   string
 }
 
-// [LITE:DELETED] GenerateRedeemCodesInput struct
+type ProxyBatchDeleteResult struct {
+	DeletedIDs []int64                   `json:"deleted_ids"`
+	Skipped    []ProxyBatchDeleteSkipped `json:"skipped"`
+}
+
+type ProxyBatchDeleteSkipped struct {
+	ID     int64  `json:"id"`
+	Reason string `json:"reason"`
+}
 
 // ProxyTestResult represents the result of testing a proxy
 type ProxyTestResult struct {
-	Success   bool   `json:"success"`
-	Message   string `json:"message"`
-	LatencyMs int64  `json:"latency_ms,omitempty"`
-	IPAddress string `json:"ip_address,omitempty"`
-	City      string `json:"city,omitempty"`
-	Region    string `json:"region,omitempty"`
-	Country   string `json:"country,omitempty"`
+	Success     bool   `json:"success"`
+	Message     string `json:"message"`
+	LatencyMs   int64  `json:"latency_ms,omitempty"`
+	IPAddress   string `json:"ip_address,omitempty"`
+	City        string `json:"city,omitempty"`
+	Region      string `json:"region,omitempty"`
+	Country     string `json:"country,omitempty"`
+	CountryCode string `json:"country_code,omitempty"`
 }
 
-// ProxyExitInfo represents proxy exit information from ipinfo.io
+// ProxyExitInfo represents proxy exit information from ip-api.com
 type ProxyExitInfo struct {
-	IP      string
-	City    string
-	Region  string
-	Country string
+	IP          string
+	City        string
+	Region      string
+	Country     string
+	CountryCode string
 }
 
 // ProxyExitInfoProber tests proxy connectivity and retrieves exit information
@@ -239,10 +284,11 @@ type adminServiceImpl struct {
 	accountRepo          AccountRepository
 	proxyRepo            ProxyRepository
 	apiKeyRepo           APIKeyRepository
-	// [LITE:DELETED] redeemCodeRepo
+	userGroupRateRepo    UserGroupRateRepository
 	billingCacheService  *BillingCacheService
 	proxyProber          ProxyExitInfoProber
-	authCacheInvalidator APIKeyAuthCacheInvalidator // 上游新增
+	proxyLatencyCache    ProxyLatencyCache
+	authCacheInvalidator APIKeyAuthCacheInvalidator
 }
 
 // NewAdminService creates a new AdminService
@@ -252,9 +298,10 @@ func NewAdminService(
 	accountRepo AccountRepository,
 	proxyRepo ProxyRepository,
 	apiKeyRepo APIKeyRepository,
-	// [LITE:DELETED] redeemCodeRepo parameter
+	userGroupRateRepo UserGroupRateRepository,
 	billingCacheService *BillingCacheService,
 	proxyProber ProxyExitInfoProber,
+	proxyLatencyCache ProxyLatencyCache,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 ) AdminService {
 	return &adminServiceImpl{
@@ -263,10 +310,11 @@ func NewAdminService(
 		accountRepo:          accountRepo,
 		proxyRepo:            proxyRepo,
 		apiKeyRepo:           apiKeyRepo,
-		// [LITE:DELETED] redeemCodeRepo assignment
+		userGroupRateRepo:    userGroupRateRepo,
 		billingCacheService:  billingCacheService,
 		proxyProber:          proxyProber,
-		authCacheInvalidator: authCacheInvalidator, // 上游新增
+		proxyLatencyCache:    proxyLatencyCache,
+		authCacheInvalidator: authCacheInvalidator,
 	}
 }
 
@@ -277,11 +325,35 @@ func (s *adminServiceImpl) ListUsers(ctx context.Context, page, pageSize int, fi
 	if err != nil {
 		return nil, 0, err
 	}
+	// 批量加载用户专属分组倍率
+	if s.userGroupRateRepo != nil && len(users) > 0 {
+		for i := range users {
+			rates, err := s.userGroupRateRepo.GetByUserID(ctx, users[i].ID)
+			if err != nil {
+				log.Printf("failed to load user group rates: user_id=%d err=%v", users[i].ID, err)
+				continue
+			}
+			users[i].GroupRates = rates
+		}
+	}
 	return users, result.Total, nil
 }
 
 func (s *adminServiceImpl) GetUser(ctx context.Context, id int64) (*User, error) {
-	return s.userRepo.GetByID(ctx, id)
+	user, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// 加载用户专属分组倍率
+	if s.userGroupRateRepo != nil {
+		rates, err := s.userGroupRateRepo.GetByUserID(ctx, id)
+		if err != nil {
+			log.Printf("failed to load user group rates: user_id=%d err=%v", id, err)
+		} else {
+			user.GroupRates = rates
+		}
+	}
+	return user, nil
 }
 
 func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (*User, error) {
@@ -315,7 +387,6 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		return nil, errors.New("cannot disable admin user")
 	}
 
-	// 上游新增：用于 authCacheInvalidator 检测变化
 	oldConcurrency := user.Concurrency
 	oldStatus := user.Status
 	oldRole := user.Role
@@ -351,13 +422,19 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
+
+	// 同步用户专属分组倍率
+	if input.GroupRates != nil && s.userGroupRateRepo != nil {
+		if err := s.userGroupRateRepo.SyncUserGroupRates(ctx, user.ID, input.GroupRates); err != nil {
+			log.Printf("failed to sync user group rates: user_id=%d err=%v", user.ID, err)
+		}
+	}
+
 	if s.authCacheInvalidator != nil {
 		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}
-
-	// [LITE:DELETED] concurrency adjustment audit logging via RedeemCode
 
 	return user, nil
 }
@@ -387,8 +464,7 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		return nil, err
 	}
 
-	// [LITE:DELETED] oldBalance tracking (no longer needed without RedeemCode audit)
-	currentBalance := user.Balance
+	oldBalance := user.Balance
 
 	switch operation {
 	case "set":
@@ -400,13 +476,13 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 	}
 
 	if user.Balance < 0 {
-		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", currentBalance, user.Balance)
+		return nil, fmt.Errorf("balance cannot be negative, current balance: %.2f, requested operation would result in: %.2f", oldBalance, user.Balance)
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
-	balanceDiff := user.Balance - currentBalance
+	balanceDiff := user.Balance - oldBalance
 	if s.authCacheInvalidator != nil && balanceDiff != 0 {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
@@ -421,7 +497,9 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		}()
 	}
 
-	// [LITE:DELETED] balance adjustment audit logging via RedeemCode
+	if balanceDiff != 0 {
+		log.Printf("admin balance adjustment: user_id=%d diff=%.4f notes=%s", userID, balanceDiff, notes)
+	}
 
 	return user, nil
 }
@@ -444,6 +522,21 @@ func (s *adminServiceImpl) GetUserUsageStats(ctx context.Context, userID int64, 
 		"total_tokens":    0,
 		"avg_duration_ms": 0,
 	}, nil
+}
+
+// BalanceHistoryRecord is a placeholder type for balance history records.
+// [LITE] Redeem service removed - balance history is not available.
+type BalanceHistoryRecord struct {
+	Type      string     `json:"type"`
+	Value     float64    `json:"value"`
+	Notes     string     `json:"notes,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+// GetUserBalanceHistory returns paginated balance/concurrency change records for a user.
+// [LITE] Redeem service removed - returns empty results.
+func (s *adminServiceImpl) GetUserBalanceHistory(ctx context.Context, userID int64, page, pageSize int, codeType string) ([]BalanceHistoryRecord, int64, float64, error) {
+	return []BalanceHistoryRecord{}, 0, 0, nil
 }
 
 // Group management implementations
@@ -495,27 +588,88 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 			return nil, err
 		}
 	}
+	fallbackOnInvalidRequest := input.FallbackGroupIDOnInvalidRequest
+	if fallbackOnInvalidRequest != nil && *fallbackOnInvalidRequest <= 0 {
+		fallbackOnInvalidRequest = nil
+	}
+	// 校验无效请求兜底分组
+	if fallbackOnInvalidRequest != nil {
+		if err := s.validateFallbackGroupOnInvalidRequest(ctx, 0, platform, subscriptionType, *fallbackOnInvalidRequest); err != nil {
+			return nil, err
+		}
+	}
+
+	// MCPXMLInject：默认为 true，仅当显式传入 false 时关闭
+	mcpXMLInject := true
+	if input.MCPXMLInject != nil {
+		mcpXMLInject = *input.MCPXMLInject
+	}
+
+	// 如果指定了复制账号的源分组，先获取账号 ID 列表
+	var accountIDsToCopy []int64
+	if len(input.CopyAccountsFromGroupIDs) > 0 {
+		// 去重源分组 IDs
+		seen := make(map[int64]struct{})
+		uniqueSourceGroupIDs := make([]int64, 0, len(input.CopyAccountsFromGroupIDs))
+		for _, srcGroupID := range input.CopyAccountsFromGroupIDs {
+			if _, exists := seen[srcGroupID]; !exists {
+				seen[srcGroupID] = struct{}{}
+				uniqueSourceGroupIDs = append(uniqueSourceGroupIDs, srcGroupID)
+			}
+		}
+
+		// 校验源分组的平台是否与新分组一致
+		for _, srcGroupID := range uniqueSourceGroupIDs {
+			srcGroup, err := s.groupRepo.GetByIDLite(ctx, srcGroupID)
+			if err != nil {
+				return nil, fmt.Errorf("source group %d not found: %w", srcGroupID, err)
+			}
+			if srcGroup.Platform != platform {
+				return nil, fmt.Errorf("source group %d platform mismatch: expected %s, got %s", srcGroupID, platform, srcGroup.Platform)
+			}
+		}
+
+		// 获取所有源分组的账号（去重）
+		var err error
+		accountIDsToCopy, err = s.groupRepo.GetAccountIDsByGroupIDs(ctx, uniqueSourceGroupIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get accounts from source groups: %w", err)
+		}
+	}
 
 	group := &Group{
-		Name:             input.Name,
-		Description:      input.Description,
-		Platform:         platform,
-		RateMultiplier:   input.RateMultiplier,
-		IsExclusive:      input.IsExclusive,
-		Status:           StatusActive,
-		SubscriptionType: subscriptionType,
-		DailyLimitUSD:    dailyLimit,
-		WeeklyLimitUSD:   weeklyLimit,
-		MonthlyLimitUSD:  monthlyLimit,
-		ImagePrice1K:     imagePrice1K,
-		ImagePrice2K:     imagePrice2K,
-		ImagePrice4K:     imagePrice4K,
-		ClaudeCodeOnly:   input.ClaudeCodeOnly,
-		FallbackGroupID:  input.FallbackGroupID,
+		Name:                            input.Name,
+		Description:                     input.Description,
+		Platform:                        platform,
+		RateMultiplier:                  input.RateMultiplier,
+		IsExclusive:                     input.IsExclusive,
+		Status:                          StatusActive,
+		SubscriptionType:                subscriptionType,
+		DailyLimitUSD:                   dailyLimit,
+		WeeklyLimitUSD:                  weeklyLimit,
+		MonthlyLimitUSD:                 monthlyLimit,
+		ImagePrice1K:                    imagePrice1K,
+		ImagePrice2K:                    imagePrice2K,
+		ImagePrice4K:                    imagePrice4K,
+		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
+		FallbackGroupID:                 input.FallbackGroupID,
+		FallbackGroupIDOnInvalidRequest: fallbackOnInvalidRequest,
+		ModelRouting:                    input.ModelRouting,
+		MCPXMLInject:                    mcpXMLInject,
+		SupportedModelScopes:            input.SupportedModelScopes,
 	}
 	if err := s.groupRepo.Create(ctx, group); err != nil {
 		return nil, err
 	}
+
+	// 如果有需要复制的账号，绑定到新分组
+	if len(accountIDsToCopy) > 0 {
+		if err := s.groupRepo.BindAccountsToGroup(ctx, group.ID, accountIDsToCopy); err != nil {
+			return nil, fmt.Errorf("failed to bind accounts to new group: %w", err)
+		}
+		group.AccountCount = int64(len(accountIDsToCopy))
+	}
+
 	return group, nil
 }
 
@@ -571,6 +725,37 @@ func (s *adminServiceImpl) validateFallbackGroup(ctx context.Context, currentGro
 		}
 		nextID = *fallbackGroup.FallbackGroupID
 	}
+}
+
+// validateFallbackGroupOnInvalidRequest 校验无效请求兜底分组的有效性
+// currentGroupID: 当前分组 ID（新建时为 0）
+// platform/subscriptionType: 当前分组的有效平台/订阅类型
+// fallbackGroupID: 兜底分组 ID
+func (s *adminServiceImpl) validateFallbackGroupOnInvalidRequest(ctx context.Context, currentGroupID int64, platform, subscriptionType string, fallbackGroupID int64) error {
+	if platform != PlatformAnthropic && platform != PlatformAntigravity {
+		return fmt.Errorf("invalid request fallback only supported for anthropic or antigravity groups")
+	}
+	if subscriptionType == SubscriptionTypeSubscription {
+		return fmt.Errorf("subscription groups cannot set invalid request fallback")
+	}
+	if currentGroupID > 0 && currentGroupID == fallbackGroupID {
+		return fmt.Errorf("cannot set self as invalid request fallback group")
+	}
+
+	fallbackGroup, err := s.groupRepo.GetByIDLite(ctx, fallbackGroupID)
+	if err != nil {
+		return fmt.Errorf("fallback group not found: %w", err)
+	}
+	if fallbackGroup.Platform != PlatformAnthropic {
+		return fmt.Errorf("fallback group must be anthropic platform")
+	}
+	if fallbackGroup.SubscriptionType == SubscriptionTypeSubscription {
+		return fmt.Errorf("fallback group cannot be subscription type")
+	}
+	if fallbackGroup.FallbackGroupIDOnInvalidRequest != nil {
+		return fmt.Errorf("fallback group cannot have invalid request fallback configured")
+	}
+	return nil
 }
 
 func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error) {
@@ -639,10 +824,88 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			group.FallbackGroupID = nil
 		}
 	}
+	fallbackOnInvalidRequest := group.FallbackGroupIDOnInvalidRequest
+	if input.FallbackGroupIDOnInvalidRequest != nil {
+		if *input.FallbackGroupIDOnInvalidRequest > 0 {
+			fallbackOnInvalidRequest = input.FallbackGroupIDOnInvalidRequest
+		} else {
+			fallbackOnInvalidRequest = nil
+		}
+	}
+	if fallbackOnInvalidRequest != nil {
+		if err := s.validateFallbackGroupOnInvalidRequest(ctx, id, group.Platform, group.SubscriptionType, *fallbackOnInvalidRequest); err != nil {
+			return nil, err
+		}
+	}
+	group.FallbackGroupIDOnInvalidRequest = fallbackOnInvalidRequest
+
+	// 模型路由配置
+	if input.ModelRouting != nil {
+		group.ModelRouting = input.ModelRouting
+	}
+	if input.ModelRoutingEnabled != nil {
+		group.ModelRoutingEnabled = *input.ModelRoutingEnabled
+	}
+	if input.MCPXMLInject != nil {
+		group.MCPXMLInject = *input.MCPXMLInject
+	}
+
+	// 支持的模型系列（仅 antigravity 平台使用）
+	if input.SupportedModelScopes != nil {
+		group.SupportedModelScopes = *input.SupportedModelScopes
+	}
 
 	if err := s.groupRepo.Update(ctx, group); err != nil {
 		return nil, err
 	}
+
+	// 如果指定了复制账号的源分组，同步绑定（替换当前分组的账号）
+	if len(input.CopyAccountsFromGroupIDs) > 0 {
+		// 去重源分组 IDs
+		seen := make(map[int64]struct{})
+		uniqueSourceGroupIDs := make([]int64, 0, len(input.CopyAccountsFromGroupIDs))
+		for _, srcGroupID := range input.CopyAccountsFromGroupIDs {
+			// 校验：源分组不能是自身
+			if srcGroupID == id {
+				return nil, fmt.Errorf("cannot copy accounts from self")
+			}
+			// 去重
+			if _, exists := seen[srcGroupID]; !exists {
+				seen[srcGroupID] = struct{}{}
+				uniqueSourceGroupIDs = append(uniqueSourceGroupIDs, srcGroupID)
+			}
+		}
+
+		// 校验源分组的平台是否与当前分组一致
+		for _, srcGroupID := range uniqueSourceGroupIDs {
+			srcGroup, err := s.groupRepo.GetByIDLite(ctx, srcGroupID)
+			if err != nil {
+				return nil, fmt.Errorf("source group %d not found: %w", srcGroupID, err)
+			}
+			if srcGroup.Platform != group.Platform {
+				return nil, fmt.Errorf("source group %d platform mismatch: expected %s, got %s", srcGroupID, group.Platform, srcGroup.Platform)
+			}
+		}
+
+		// 获取所有源分组的账号（去重）
+		accountIDsToCopy, err := s.groupRepo.GetAccountIDsByGroupIDs(ctx, uniqueSourceGroupIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get accounts from source groups: %w", err)
+		}
+
+		// 先清空当前分组的所有账号绑定
+		if _, err := s.groupRepo.DeleteAccountGroupsByGroupID(ctx, id); err != nil {
+			return nil, fmt.Errorf("failed to clear existing account bindings: %w", err)
+		}
+
+		// 再绑定源分组的账号
+		if len(accountIDsToCopy) > 0 {
+			if err := s.groupRepo.BindAccountsToGroup(ctx, id, accountIDsToCopy); err != nil {
+				return nil, fmt.Errorf("failed to bind accounts to group: %w", err)
+			}
+		}
+	}
+
 	if s.authCacheInvalidator != nil {
 		s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, id)
 	}
@@ -662,6 +925,7 @@ func (s *adminServiceImpl) DeleteGroup(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
+	// 注意：user_group_rate_multipliers 表通过外键 ON DELETE CASCADE 自动清理
 
 	// 事务成功后，异步失效受影响用户的订阅缓存
 	if len(affectedUserIDs) > 0 && s.billingCacheService != nil {
@@ -694,10 +958,14 @@ func (s *adminServiceImpl) GetGroupAPIKeys(ctx context.Context, groupID int64, p
 	return keys, result.Total, nil
 }
 
+func (s *adminServiceImpl) UpdateGroupSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error {
+	return s.groupRepo.UpdateSortOrders(ctx, updates)
+}
+
 // Account management implementations
-func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string) ([]Account, int64, error) {
+func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64) ([]Account, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
-	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search)
+	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -725,7 +993,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	// 绑定分组
 	groupIDs := input.GroupIDs
 	// 如果没有指定分组,自动绑定对应平台的默认分组
-	if len(groupIDs) == 0 {
+	if len(groupIDs) == 0 && !input.SkipDefaultGroupBind {
 		defaultGroupName := input.Platform + "-default"
 		groups, err := s.groupRepo.ListActiveByPlatform(ctx, input.Platform)
 		if err == nil {
@@ -766,6 +1034,12 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		account.AutoPauseOnExpired = *input.AutoPauseOnExpired
 	} else {
 		account.AutoPauseOnExpired = true
+	}
+	if input.RateMultiplier != nil {
+		if *input.RateMultiplier < 0 {
+			return nil, errors.New("rate_multiplier must be >= 0")
+		}
+		account.RateMultiplier = input.RateMultiplier
 	}
 	if err := s.accountRepo.Create(ctx, account); err != nil {
 		return nil, err
@@ -818,6 +1092,12 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	// 只在指针非 nil 时更新 Priority（支持设置为 0）
 	if input.Priority != nil {
 		account.Priority = *input.Priority
+	}
+	if input.RateMultiplier != nil {
+		if *input.RateMultiplier < 0 {
+			return nil, errors.New("rate_multiplier must be >= 0")
+		}
+		account.RateMultiplier = input.RateMultiplier
 	}
 	if input.Status != "" {
 		account.Status = input.Status
@@ -892,6 +1172,12 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		}
 	}
 
+	if input.RateMultiplier != nil {
+		if *input.RateMultiplier < 0 {
+			return nil, errors.New("rate_multiplier must be >= 0")
+		}
+	}
+
 	// Prepare bulk updates for columns and JSONB fields.
 	repoUpdates := AccountBulkUpdate{
 		Credentials: input.Credentials,
@@ -908,6 +1194,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	}
 	if input.Priority != nil {
 		repoUpdates.Priority = input.Priority
+	}
+	if input.RateMultiplier != nil {
+		repoUpdates.RateMultiplier = input.RateMultiplier
 	}
 	if input.Status != "" {
 		repoUpdates.Status = &input.Status
@@ -996,6 +1285,10 @@ func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Ac
 	return account, nil
 }
 
+func (s *adminServiceImpl) SetAccountError(ctx context.Context, id int64, errorMsg string) error {
+	return s.accountRepo.SetError(ctx, id, errorMsg)
+}
+
 func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error) {
 	if err := s.accountRepo.SetSchedulable(ctx, id, schedulable); err != nil {
 		return nil, err
@@ -1019,6 +1312,7 @@ func (s *adminServiceImpl) ListProxiesWithAccountCount(ctx context.Context, page
 	if err != nil {
 		return nil, 0, err
 	}
+	s.attachProxyLatency(ctx, proxies)
 	return proxies, result.Total, nil
 }
 
@@ -1027,11 +1321,20 @@ func (s *adminServiceImpl) GetAllProxies(ctx context.Context) ([]Proxy, error) {
 }
 
 func (s *adminServiceImpl) GetAllProxiesWithAccountCount(ctx context.Context) ([]ProxyWithAccountCount, error) {
-	return s.proxyRepo.ListActiveWithAccountCount(ctx)
+	proxies, err := s.proxyRepo.ListActiveWithAccountCount(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.attachProxyLatency(ctx, proxies)
+	return proxies, nil
 }
 
 func (s *adminServiceImpl) GetProxy(ctx context.Context, id int64) (*Proxy, error) {
 	return s.proxyRepo.GetByID(ctx, id)
+}
+
+func (s *adminServiceImpl) GetProxiesByIDs(ctx context.Context, ids []int64) ([]Proxy, error) {
+	return s.proxyRepo.ListByIDs(ctx, ids)
 }
 
 func (s *adminServiceImpl) CreateProxy(ctx context.Context, input *CreateProxyInput) (*Proxy, error) {
@@ -1047,6 +1350,8 @@ func (s *adminServiceImpl) CreateProxy(ctx context.Context, input *CreateProxyIn
 	if err := s.proxyRepo.Create(ctx, proxy); err != nil {
 		return nil, err
 	}
+	// Probe latency asynchronously so creation isn't blocked by network timeout.
+	go s.probeProxyLatency(context.Background(), proxy)
 	return proxy, nil
 }
 
@@ -1085,19 +1390,58 @@ func (s *adminServiceImpl) UpdateProxy(ctx context.Context, id int64, input *Upd
 }
 
 func (s *adminServiceImpl) DeleteProxy(ctx context.Context, id int64) error {
+	count, err := s.proxyRepo.CountAccountsByProxyID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrProxyInUse
+	}
 	return s.proxyRepo.Delete(ctx, id)
 }
 
-func (s *adminServiceImpl) GetProxyAccounts(ctx context.Context, proxyID int64, page, pageSize int) ([]Account, int64, error) {
-	// Return mock data for now - would need a dedicated repository method
-	return []Account{}, 0, nil
+func (s *adminServiceImpl) BatchDeleteProxies(ctx context.Context, ids []int64) (*ProxyBatchDeleteResult, error) {
+	result := &ProxyBatchDeleteResult{}
+	if len(ids) == 0 {
+		return result, nil
+	}
+
+	for _, id := range ids {
+		count, err := s.proxyRepo.CountAccountsByProxyID(ctx, id)
+		if err != nil {
+			result.Skipped = append(result.Skipped, ProxyBatchDeleteSkipped{
+				ID:     id,
+				Reason: err.Error(),
+			})
+			continue
+		}
+		if count > 0 {
+			result.Skipped = append(result.Skipped, ProxyBatchDeleteSkipped{
+				ID:     id,
+				Reason: ErrProxyInUse.Error(),
+			})
+			continue
+		}
+		if err := s.proxyRepo.Delete(ctx, id); err != nil {
+			result.Skipped = append(result.Skipped, ProxyBatchDeleteSkipped{
+				ID:     id,
+				Reason: err.Error(),
+			})
+			continue
+		}
+		result.DeletedIDs = append(result.DeletedIDs, id)
+	}
+
+	return result, nil
+}
+
+func (s *adminServiceImpl) GetProxyAccounts(ctx context.Context, proxyID int64) ([]ProxyAccountSummary, error) {
+	return s.proxyRepo.ListAccountSummariesByProxyID(ctx, proxyID)
 }
 
 func (s *adminServiceImpl) CheckProxyExists(ctx context.Context, host string, port int, username, password string) (bool, error) {
 	return s.proxyRepo.ExistsByHostPortAuth(ctx, host, port, username, password)
 }
-
-// [LITE:DELETED] Redeem code management implementations (ListRedeemCodes, GetRedeemCode, GenerateRedeemCodes, DeleteRedeemCode, BatchDeleteRedeemCodes, ExpireRedeemCode)
 
 func (s *adminServiceImpl) TestProxy(ctx context.Context, id int64) (*ProxyTestResult, error) {
 	proxy, err := s.proxyRepo.GetByID(ctx, id)
@@ -1108,21 +1452,67 @@ func (s *adminServiceImpl) TestProxy(ctx context.Context, id int64) (*ProxyTestR
 	proxyURL := proxy.URL()
 	exitInfo, latencyMs, err := s.proxyProber.ProbeProxy(ctx, proxyURL)
 	if err != nil {
+		s.saveProxyLatency(ctx, id, &ProxyLatencyInfo{
+			Success:   false,
+			Message:   err.Error(),
+			UpdatedAt: time.Now(),
+		})
 		return &ProxyTestResult{
 			Success: false,
 			Message: err.Error(),
 		}, nil
 	}
 
+	latency := latencyMs
+	s.saveProxyLatency(ctx, id, &ProxyLatencyInfo{
+		Success:     true,
+		LatencyMs:   &latency,
+		Message:     "Proxy is accessible",
+		IPAddress:   exitInfo.IP,
+		Country:     exitInfo.Country,
+		CountryCode: exitInfo.CountryCode,
+		Region:      exitInfo.Region,
+		City:        exitInfo.City,
+		UpdatedAt:   time.Now(),
+	})
 	return &ProxyTestResult{
-		Success:   true,
-		Message:   "Proxy is accessible",
-		LatencyMs: latencyMs,
-		IPAddress: exitInfo.IP,
-		City:      exitInfo.City,
-		Region:    exitInfo.Region,
-		Country:   exitInfo.Country,
+		Success:     true,
+		Message:     "Proxy is accessible",
+		LatencyMs:   latencyMs,
+		IPAddress:   exitInfo.IP,
+		City:        exitInfo.City,
+		Region:      exitInfo.Region,
+		Country:     exitInfo.Country,
+		CountryCode: exitInfo.CountryCode,
 	}, nil
+}
+
+func (s *adminServiceImpl) probeProxyLatency(ctx context.Context, proxy *Proxy) {
+	if s.proxyProber == nil || proxy == nil {
+		return
+	}
+	exitInfo, latencyMs, err := s.proxyProber.ProbeProxy(ctx, proxy.URL())
+	if err != nil {
+		s.saveProxyLatency(ctx, proxy.ID, &ProxyLatencyInfo{
+			Success:   false,
+			Message:   err.Error(),
+			UpdatedAt: time.Now(),
+		})
+		return
+	}
+
+	latency := latencyMs
+	s.saveProxyLatency(ctx, proxy.ID, &ProxyLatencyInfo{
+		Success:     true,
+		LatencyMs:   &latency,
+		Message:     "Proxy is accessible",
+		IPAddress:   exitInfo.IP,
+		Country:     exitInfo.Country,
+		CountryCode: exitInfo.CountryCode,
+		Region:      exitInfo.Region,
+		City:        exitInfo.City,
+		UpdatedAt:   time.Now(),
+	})
 }
 
 // checkMixedChannelRisk 检查分组中是否存在混合渠道（Antigravity + Anthropic）
@@ -1172,6 +1562,51 @@ func (s *adminServiceImpl) checkMixedChannelRisk(ctx context.Context, currentAcc
 	}
 
 	return nil
+}
+
+func (s *adminServiceImpl) attachProxyLatency(ctx context.Context, proxies []ProxyWithAccountCount) {
+	if s.proxyLatencyCache == nil || len(proxies) == 0 {
+		return
+	}
+
+	ids := make([]int64, 0, len(proxies))
+	for i := range proxies {
+		ids = append(ids, proxies[i].ID)
+	}
+
+	latencies, err := s.proxyLatencyCache.GetProxyLatencies(ctx, ids)
+	if err != nil {
+		log.Printf("Warning: load proxy latency cache failed: %v", err)
+		return
+	}
+
+	for i := range proxies {
+		info := latencies[proxies[i].ID]
+		if info == nil {
+			continue
+		}
+		if info.Success {
+			proxies[i].LatencyStatus = "success"
+			proxies[i].LatencyMs = info.LatencyMs
+		} else {
+			proxies[i].LatencyStatus = "failed"
+		}
+		proxies[i].LatencyMessage = info.Message
+		proxies[i].IPAddress = info.IPAddress
+		proxies[i].Country = info.Country
+		proxies[i].CountryCode = info.CountryCode
+		proxies[i].Region = info.Region
+		proxies[i].City = info.City
+	}
+}
+
+func (s *adminServiceImpl) saveProxyLatency(ctx context.Context, proxyID int64, info *ProxyLatencyInfo) {
+	if s.proxyLatencyCache == nil || info == nil {
+		return
+	}
+	if err := s.proxyLatencyCache.SetProxyLatency(ctx, proxyID, info); err != nil {
+		log.Printf("Warning: store proxy latency cache failed: %v", err)
+	}
 }
 
 // getAccountPlatform 根据账号 platform 判断混合渠道检查用的平台标识

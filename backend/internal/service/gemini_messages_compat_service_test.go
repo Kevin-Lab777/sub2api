@@ -1,7 +1,11 @@
 package service
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestConvertClaudeToolsToGeminiTools_CustomType 测试custom类型工具转换
@@ -123,6 +127,148 @@ func TestConvertClaudeToolsToGeminiTools_CustomType(t *testing.T) {
 				t.Errorf("%s: expected %d function declarations, got %d",
 					tt.description, expectedFuncCount, len(funcDecls))
 			}
+		})
+	}
+}
+
+func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToolUse(t *testing.T) {
+	claudeReq := map[string]any{
+		"model":      "claude-haiku-4-5-20251001",
+		"max_tokens": 10,
+		"messages": []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{"type": "text", "text": "hi"},
+				},
+			},
+			map[string]any{
+				"role": "assistant",
+				"content": []any{
+					map[string]any{"type": "text", "text": "ok"},
+					map[string]any{
+						"type":  "tool_use",
+						"id":    "toolu_123",
+						"name":  "default_api:write_file",
+						"input": map[string]any{"path": "a.txt", "content": "x"},
+						// no signature on purpose
+					},
+				},
+			},
+		},
+		"tools": []any{
+			map[string]any{
+				"name":        "default_api:write_file",
+				"description": "write file",
+				"input_schema": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{"path": map[string]any{"type": "string"}},
+				},
+			},
+		},
+	}
+	b, _ := json.Marshal(claudeReq)
+
+	out, err := convertClaudeMessagesToGeminiGenerateContent(b)
+	if err != nil {
+		t.Fatalf("convert failed: %v", err)
+	}
+	s := string(out)
+	if !strings.Contains(s, "\"functionCall\"") {
+		t.Fatalf("expected functionCall in output, got: %s", s)
+	}
+	if !strings.Contains(s, "\"thoughtSignature\":\""+geminiDummyThoughtSignature+"\"") {
+		t.Fatalf("expected injected thoughtSignature %q, got: %s", geminiDummyThoughtSignature, s)
+	}
+}
+
+func TestEnsureGeminiFunctionCallThoughtSignatures_InsertsWhenMissing(t *testing.T) {
+	geminiReq := map[string]any{
+		"contents": []any{
+			map[string]any{
+				"role": "user",
+				"parts": []any{
+					map[string]any{
+						"functionCall": map[string]any{
+							"name": "default_api:write_file",
+							"args": map[string]any{"path": "a.txt"},
+						},
+					},
+				},
+			},
+		},
+	}
+	b, _ := json.Marshal(geminiReq)
+	out := ensureGeminiFunctionCallThoughtSignatures(b)
+	s := string(out)
+	if !strings.Contains(s, "\"thoughtSignature\":\""+geminiDummyThoughtSignature+"\"") {
+		t.Fatalf("expected injected thoughtSignature %q, got: %s", geminiDummyThoughtSignature, s)
+	}
+}
+
+func TestExtractGeminiUsage_ThoughtsTokenCount(t *testing.T) {
+	tests := []struct {
+		name          string
+		resp          map[string]any
+		wantInput     int
+		wantOutput    int
+		wantCacheRead int
+		wantNil       bool
+	}{
+		{
+			name: "with thoughtsTokenCount",
+			resp: map[string]any{
+				"usageMetadata": map[string]any{
+					"promptTokenCount":     float64(100),
+					"candidatesTokenCount": float64(20),
+					"thoughtsTokenCount":   float64(50),
+				},
+			},
+			wantInput:  100,
+			wantOutput: 70,
+		},
+		{
+			name: "with thoughtsTokenCount and cache",
+			resp: map[string]any{
+				"usageMetadata": map[string]any{
+					"promptTokenCount":        float64(100),
+					"candidatesTokenCount":    float64(20),
+					"cachedContentTokenCount": float64(30),
+					"thoughtsTokenCount":      float64(50),
+				},
+			},
+			wantInput:     70,
+			wantOutput:    70,
+			wantCacheRead: 30,
+		},
+		{
+			name: "without thoughtsTokenCount (old model)",
+			resp: map[string]any{
+				"usageMetadata": map[string]any{
+					"promptTokenCount":     float64(100),
+					"candidatesTokenCount": float64(20),
+				},
+			},
+			wantInput:  100,
+			wantOutput: 20,
+		},
+		{
+			name:    "no usageMetadata",
+			resp:    map[string]any{},
+			wantNil: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usage := extractGeminiUsage(tt.resp)
+			if tt.wantNil {
+				require.Nil(t, usage)
+				return
+			}
+			require.NotNil(t, usage)
+			require.Equal(t, tt.wantInput, usage.InputTokens)
+			require.Equal(t, tt.wantOutput, usage.OutputTokens)
+			require.Equal(t, tt.wantCacheRead, usage.CacheReadInputTokens)
 		})
 	}
 }

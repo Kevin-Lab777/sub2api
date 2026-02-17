@@ -39,7 +39,9 @@
                 ? 'https://api.openai.com'
                 : account.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
-                  : 'https://api.anthropic.com'
+                  : account.platform === 'antigravity'
+                    ? 'https://cloudcode-pa.googleapis.com'
+                    : 'https://api.anthropic.com'
             "
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
@@ -55,14 +57,16 @@
                 ? 'sk-proj-...'
                 : account.platform === 'gemini'
                   ? 'AIza...'
-                  : 'sk-ant-...'
+                  : account.platform === 'antigravity'
+                    ? 'sk-...'
+                    : 'sk-ant-...'
             "
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
         </div>
 
-        <!-- Model Restriction Section (不适用于 Gemini) -->
-        <div v-if="account.platform !== 'gemini'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <!-- Model Restriction Section (不适用于 Gemini 和 Antigravity) -->
+        <div v-if="account.platform !== 'gemini' && account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <!-- Mode Toggle -->
@@ -364,6 +368,120 @@
         </div>
       </div>
 
+      <!-- Upstream fields (only for upstream type) -->
+      <div v-if="account.type === 'upstream'" class="space-y-4">
+        <div>
+          <label class="input-label">{{ t('admin.accounts.upstream.baseUrl') }}</label>
+          <input
+            v-model="editBaseUrl"
+            type="text"
+            class="input"
+            placeholder="https://cloudcode-pa.googleapis.com"
+          />
+          <p class="input-hint">{{ t('admin.accounts.upstream.baseUrlHint') }}</p>
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.accounts.upstream.apiKey') }}</label>
+          <input
+            v-model="editApiKey"
+            type="password"
+            class="input font-mono"
+            placeholder="sk-..."
+          />
+          <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
+        </div>
+      </div>
+
+      <!-- Antigravity model restriction (applies to all antigravity types) -->
+      <!-- Antigravity 只支持模型映射模式，不支持白名单模式 -->
+      <div v-if="account.platform === 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
+
+        <!-- Mapping Mode Only (no toggle for Antigravity) -->
+        <div>
+          <div class="mb-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
+            <p class="text-xs text-purple-700 dark:text-purple-400">{{ t('admin.accounts.mapRequestModels') }}</p>
+          </div>
+
+          <div v-if="antigravityModelMappings.length > 0" class="mb-3 space-y-2">
+            <div
+              v-for="(mapping, index) in antigravityModelMappings"
+              :key="index"
+              class="space-y-1"
+            >
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="mapping.from"
+                  type="text"
+                  :class="[
+                    'input flex-1',
+                    !isValidWildcardPattern(mapping.from) ? 'border-red-500 dark:border-red-500' : '',
+                    mapping.to.includes('*') ? '' : ''
+                  ]"
+                  :placeholder="t('admin.accounts.requestModel')"
+                />
+                <svg class="h-4 w-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+                <input
+                  v-model="mapping.to"
+                  type="text"
+                  :class="[
+                    'input flex-1',
+                    mapping.to.includes('*') ? 'border-red-500 dark:border-red-500' : ''
+                  ]"
+                  :placeholder="t('admin.accounts.actualModel')"
+                />
+                <button
+                  type="button"
+                  @click="removeAntigravityModelMapping(index)"
+                  class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <!-- 校验错误提示 -->
+              <p v-if="!isValidWildcardPattern(mapping.from)" class="text-xs text-red-500">
+                {{ t('admin.accounts.wildcardOnlyAtEnd') }}
+              </p>
+              <p v-if="mapping.to.includes('*')" class="text-xs text-red-500">
+                {{ t('admin.accounts.targetNoWildcard') }}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            @click="addAntigravityModelMapping"
+            class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+          >
+            <svg class="mr-1 inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            {{ t('admin.accounts.addMapping') }}
+          </button>
+
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="preset in antigravityPresetMappings"
+              :key="preset.label"
+              type="button"
+              @click="addAntigravityPresetMapping(preset.from, preset.to)"
+              :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
+            >
+              + {{ preset.label }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Temp Unschedulable Rules -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
         <div class="mb-3 flex items-center justify-between">
@@ -549,7 +667,7 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <div>
           <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
           <input v-model.number="form.concurrency" type="number" min="1" class="input" />
@@ -563,6 +681,11 @@
             class="input"
             data-tour="account-form-priority"
           />
+        </div>
+        <div>
+          <label class="input-label">{{ t('admin.accounts.billingRateMultiplier') }}</label>
+          <input v-model.number="form.rate_multiplier" type="number" min="0" step="0.001" class="input" />
+          <p class="input-hint">{{ t('admin.accounts.billingRateMultiplierHint') }}</p>
         </div>
       </div>
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -596,6 +719,190 @@
               ]"
             />
           </button>
+        </div>
+      </div>
+
+      <!-- Quota Control Section (Anthropic OAuth/SetupToken only) -->
+      <div
+        v-if="account?.platform === 'anthropic' && (account?.type === 'oauth' || account?.type === 'setup-token')"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4"
+      >
+        <div class="mb-3">
+          <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaControl.title') }}</h3>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.quotaControl.hint') }}
+          </p>
+        </div>
+
+        <!-- Window Cost Limit -->
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+          <div class="mb-3 flex items-center justify-between">
+            <div>
+              <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.windowCost.label') }}</label>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.quotaControl.windowCost.hint') }}
+              </p>
+            </div>
+            <button
+              type="button"
+              @click="windowCostEnabled = !windowCostEnabled"
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                windowCostEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  windowCostEnabled ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+
+          <div v-if="windowCostEnabled" class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="input-label">{{ t('admin.accounts.quotaControl.windowCost.limit') }}</label>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+                <input
+                  v-model.number="windowCostLimit"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="input pl-7"
+                  :placeholder="t('admin.accounts.quotaControl.windowCost.limitPlaceholder')"
+                />
+              </div>
+              <p class="input-hint">{{ t('admin.accounts.quotaControl.windowCost.limitHint') }}</p>
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.accounts.quotaControl.windowCost.stickyReserve') }}</label>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+                <input
+                  v-model.number="windowCostStickyReserve"
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="input pl-7"
+                  :placeholder="t('admin.accounts.quotaControl.windowCost.stickyReservePlaceholder')"
+                />
+              </div>
+              <p class="input-hint">{{ t('admin.accounts.quotaControl.windowCost.stickyReserveHint') }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Session Limit -->
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+          <div class="mb-3 flex items-center justify-between">
+            <div>
+              <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.sessionLimit.label') }}</label>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.quotaControl.sessionLimit.hint') }}
+              </p>
+            </div>
+            <button
+              type="button"
+              @click="sessionLimitEnabled = !sessionLimitEnabled"
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                sessionLimitEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  sessionLimitEnabled ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+
+          <div v-if="sessionLimitEnabled" class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="input-label">{{ t('admin.accounts.quotaControl.sessionLimit.maxSessions') }}</label>
+              <input
+                v-model.number="maxSessions"
+                type="number"
+                min="1"
+                step="1"
+                class="input"
+                :placeholder="t('admin.accounts.quotaControl.sessionLimit.maxSessionsPlaceholder')"
+              />
+              <p class="input-hint">{{ t('admin.accounts.quotaControl.sessionLimit.maxSessionsHint') }}</p>
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.accounts.quotaControl.sessionLimit.idleTimeout') }}</label>
+              <div class="relative">
+                <input
+                  v-model.number="sessionIdleTimeout"
+                  type="number"
+                  min="1"
+                  step="1"
+                  class="input pr-12"
+                  :placeholder="t('admin.accounts.quotaControl.sessionLimit.idleTimeoutPlaceholder')"
+                />
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">{{ t('common.minutes') }}</span>
+              </div>
+              <p class="input-hint">{{ t('admin.accounts.quotaControl.sessionLimit.idleTimeoutHint') }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TLS Fingerprint -->
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.tlsFingerprint.label') }}</label>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.quotaControl.tlsFingerprint.hint') }}
+              </p>
+            </div>
+            <button
+              type="button"
+              @click="tlsFingerprintEnabled = !tlsFingerprintEnabled"
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                tlsFingerprintEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  tlsFingerprintEnabled ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+        </div>
+
+        <!-- Session ID Masking -->
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.sessionIdMasking.label') }}</label>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.quotaControl.sessionIdMasking.hint') }}
+              </p>
+            </div>
+            <button
+              type="button"
+              @click="sessionIdMaskingEnabled = !sessionIdMaskingEnabled"
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                sessionIdMaskingEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  sessionIdMaskingEnabled ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -685,6 +992,18 @@
       </div>
     </template>
   </BaseDialog>
+
+  <!-- Mixed Channel Warning Dialog -->
+  <ConfirmDialog
+    :show="showMixedChannelWarning"
+    :title="t('admin.accounts.mixedChannelWarningTitle')"
+    :message="mixedChannelWarningDetails ? t('admin.accounts.mixedChannelWarning', mixedChannelWarningDetails) : ''"
+    :confirm-text="t('common.confirm')"
+    :cancel-text="t('common.cancel')"
+    :danger="true"
+    @confirm="handleMixedChannelConfirm"
+    @cancel="handleMixedChannelCancel"
+  />
 </template>
 
 <script setup lang="ts">
@@ -692,8 +1011,9 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
-import type { Account, Proxy, Group } from '@/types'
+import type { Account, Proxy, AdminGroup } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
@@ -703,14 +1023,15 @@ import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/forma
 import {
   getPresetMappingsByPlatform,
   commonErrorCodes,
-  buildModelMappingObject
+  buildModelMappingObject,
+  isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
 
 interface Props {
   show: boolean
   account: Account | null
   proxies: Proxy[]
-  groups: Group[]
+  groups: AdminGroup[]
 }
 
 const props = defineProps<Props>()
@@ -729,6 +1050,8 @@ const baseUrlHint = computed(() => {
   if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
   return t('admin.accounts.baseUrlHint')
 })
+
+const antigravityPresetMappings = computed(() => getPresetMappingsByPlatform('antigravity'))
 
 // Model mapping type
 interface ModelMapping {
@@ -756,8 +1079,26 @@ const customErrorCodeInput = ref<number | null>(null)
 const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(false)
 const mixedScheduling = ref(false) // For antigravity accounts: enable mixed scheduling
+const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
+const antigravityWhitelistModels = ref<string[]>([])
+const antigravityModelMappings = ref<ModelMapping[]>([])
 const tempUnschedEnabled = ref(false)
 const tempUnschedRules = ref<TempUnschedRuleForm[]>([])
+
+// Mixed channel warning dialog state
+const showMixedChannelWarning = ref(false)
+const mixedChannelWarningDetails = ref<{ groupName: string; currentPlatform: string; otherPlatform: string } | null>(null)
+const pendingUpdatePayload = ref<Record<string, unknown> | null>(null)
+
+// Quota control state (Anthropic OAuth/SetupToken only)
+const windowCostEnabled = ref(false)
+const windowCostLimit = ref<number | null>(null)
+const windowCostStickyReserve = ref<number | null>(null)
+const sessionLimitEnabled = ref(false)
+const maxSessions = ref<number | null>(null)
+const sessionIdleTimeout = ref<number | null>(null)
+const tlsFingerprintEnabled = ref(false)
+const sessionIdMaskingEnabled = ref(false)
 
 // Computed: current preset mappings based on platform
 const presetMappings = computed(() => getPresetMappingsByPlatform(props.account?.platform || 'anthropic'))
@@ -804,6 +1145,7 @@ const form = reactive({
   proxy_id: null as number | null,
   concurrency: 1,
   priority: 1,
+  rate_multiplier: 1,
   status: 'active' as 'active' | 'inactive',
   group_ids: [] as number[],
   expires_at: null as number | null
@@ -831,6 +1173,7 @@ watch(
       form.proxy_id = newAccount.proxy_id
       form.concurrency = newAccount.concurrency
       form.priority = newAccount.priority
+      form.rate_multiplier = newAccount.rate_multiplier ?? 1
       form.status = newAccount.status as 'active' | 'inactive'
       form.group_ids = newAccount.group_ids || []
       form.expires_at = newAccount.expires_at ?? null
@@ -843,6 +1186,41 @@ watch(
       // Load mixed scheduling setting (only for antigravity accounts)
       const extra = newAccount.extra as Record<string, unknown> | undefined
       mixedScheduling.value = extra?.mixed_scheduling === true
+
+      // Load antigravity model mapping (Antigravity 只支持映射模式)
+      if (newAccount.platform === 'antigravity') {
+        const credentials = newAccount.credentials as Record<string, unknown> | undefined
+
+        // Antigravity 始终使用映射模式
+        antigravityModelRestrictionMode.value = 'mapping'
+        antigravityWhitelistModels.value = []
+
+        // 从 model_mapping 读取映射配置
+        const rawAgMapping = credentials?.model_mapping as Record<string, string> | undefined
+        if (rawAgMapping && typeof rawAgMapping === 'object') {
+          const entries = Object.entries(rawAgMapping)
+          // 无论是白名单样式(key===value)还是真正的映射，都统一转换为映射列表
+          antigravityModelMappings.value = entries.map(([from, to]) => ({ from, to }))
+        } else {
+          // 兼容旧数据：从 model_whitelist 读取，转换为映射格式
+          const rawWhitelist = credentials?.model_whitelist
+          if (Array.isArray(rawWhitelist) && rawWhitelist.length > 0) {
+            antigravityModelMappings.value = rawWhitelist
+              .map((v) => String(v).trim())
+              .filter((v) => v.length > 0)
+              .map((m) => ({ from: m, to: m }))
+          } else {
+            antigravityModelMappings.value = []
+          }
+        }
+      } else {
+        antigravityModelRestrictionMode.value = 'mapping'
+        antigravityWhitelistModels.value = []
+        antigravityModelMappings.value = []
+      }
+
+      // Load quota control settings (Anthropic OAuth/SetupToken only)
+      loadQuotaControlSettings(newAccount)
 
       loadTempUnschedRules(credentials)
 
@@ -891,6 +1269,9 @@ watch(
         } else {
           selectedErrorCodes.value = []
         }
+      } else if (newAccount.type === 'upstream' && newAccount.credentials) {
+        const credentials = newAccount.credentials as Record<string, unknown>
+        editBaseUrl.value = (credentials.base_url as string) || ''
       } else {
         const platformDefaultUrl =
           newAccount.platform === 'openai'
@@ -927,6 +1308,23 @@ const addPresetMapping = (from: string, to: string) => {
     return
   }
   modelMappings.value.push({ from, to })
+}
+
+const addAntigravityModelMapping = () => {
+  antigravityModelMappings.value.push({ from: '', to: '' })
+}
+
+const removeAntigravityModelMapping = (index: number) => {
+  antigravityModelMappings.value.splice(index, 1)
+}
+
+const addAntigravityPresetMapping = (from: string, to: string) => {
+  const exists = antigravityModelMappings.value.some((m) => m.from === from)
+  if (exists) {
+    appStore.showInfo(t('admin.accounts.mappingExists', { model: from }))
+    return
+  }
+  antigravityModelMappings.value.push({ from, to })
 }
 
 // Error code toggle helper
@@ -1077,6 +1475,47 @@ function loadTempUnschedRules(credentials?: Record<string, unknown>) {
   })
 }
 
+// Load quota control settings from account (Anthropic OAuth/SetupToken only)
+function loadQuotaControlSettings(account: Account) {
+  // Reset all quota control state first
+  windowCostEnabled.value = false
+  windowCostLimit.value = null
+  windowCostStickyReserve.value = null
+  sessionLimitEnabled.value = false
+  maxSessions.value = null
+  sessionIdleTimeout.value = null
+  tlsFingerprintEnabled.value = false
+  sessionIdMaskingEnabled.value = false
+
+  // Only applies to Anthropic OAuth/SetupToken accounts
+  if (account.platform !== 'anthropic' || (account.type !== 'oauth' && account.type !== 'setup-token')) {
+    return
+  }
+
+  // Load from extra field (via backend DTO fields)
+  if (account.window_cost_limit != null && account.window_cost_limit > 0) {
+    windowCostEnabled.value = true
+    windowCostLimit.value = account.window_cost_limit
+    windowCostStickyReserve.value = account.window_cost_sticky_reserve ?? 10
+  }
+
+  if (account.max_sessions != null && account.max_sessions > 0) {
+    sessionLimitEnabled.value = true
+    maxSessions.value = account.max_sessions
+    sessionIdleTimeout.value = account.session_idle_timeout_minutes ?? 5
+  }
+
+  // Load TLS fingerprint setting
+  if (account.enable_tls_fingerprint === true) {
+    tlsFingerprintEnabled.value = true
+  }
+
+  // Load session ID masking setting
+  if (account.session_id_masking_enabled === true) {
+    sessionIdMaskingEnabled.value = true
+  }
+}
+
 function formatTempUnschedKeywords(value: unknown) {
   if (Array.isArray(value)) {
     return value
@@ -1118,8 +1557,8 @@ const handleSubmit = async () => {
   if (!props.account) return
 
   submitting.value = true
+  const updatePayload: Record<string, unknown> = { ...form }
   try {
-    const updatePayload: Record<string, unknown> = { ...form }
     // 后端期望 proxy_id: 0 表示清除代理，而不是 null
     if (updatePayload.proxy_id === null) {
       updatePayload.proxy_id = 0
@@ -1174,6 +1613,22 @@ const handleSubmit = async () => {
       }
 
       updatePayload.credentials = newCredentials
+    } else if (props.account.type === 'upstream') {
+      const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      const newCredentials: Record<string, unknown> = { ...currentCredentials }
+
+      newCredentials.base_url = editBaseUrl.value.trim()
+
+      if (editApiKey.value.trim()) {
+        newCredentials.api_key = editApiKey.value.trim()
+      }
+
+      if (!applyTempUnschedConfig(newCredentials)) {
+        submitting.value = false
+        return
+      }
+
+      updatePayload.credentials = newCredentials
     } else {
       // For oauth/setup-token types, only update intercept_warmup_requests if changed
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
@@ -1192,6 +1647,30 @@ const handleSubmit = async () => {
       updatePayload.credentials = newCredentials
     }
 
+    // Antigravity: persist model mapping to credentials (applies to all antigravity types)
+    // Antigravity 只支持映射模式
+    if (props.account.platform === 'antigravity') {
+      const currentCredentials = (updatePayload.credentials as Record<string, unknown>) ||
+        ((props.account.credentials as Record<string, unknown>) || {})
+      const newCredentials: Record<string, unknown> = { ...currentCredentials }
+
+      // 移除旧字段
+      delete newCredentials.model_whitelist
+      delete newCredentials.model_mapping
+
+      // 只使用映射模式
+      const antigravityModelMapping = buildModelMappingObject(
+        'mapping',
+        [],
+        antigravityModelMappings.value
+      )
+      if (antigravityModelMapping) {
+        newCredentials.model_mapping = antigravityModelMapping
+      }
+
+      updatePayload.credentials = newCredentials
+    }
+
     // For antigravity accounts, handle mixed_scheduling in extra
     if (props.account.platform === 'antigravity') {
       const currentExtra = (props.account.extra as Record<string, unknown>) || {}
@@ -1204,14 +1683,92 @@ const handleSubmit = async () => {
       updatePayload.extra = newExtra
     }
 
+    // For Anthropic OAuth/SetupToken accounts, handle quota control settings in extra
+    if (props.account.platform === 'anthropic' && (props.account.type === 'oauth' || props.account.type === 'setup-token')) {
+      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
+      const newExtra: Record<string, unknown> = { ...currentExtra }
+
+      // Window cost limit settings
+      if (windowCostEnabled.value && windowCostLimit.value != null && windowCostLimit.value > 0) {
+        newExtra.window_cost_limit = windowCostLimit.value
+        newExtra.window_cost_sticky_reserve = windowCostStickyReserve.value ?? 10
+      } else {
+        delete newExtra.window_cost_limit
+        delete newExtra.window_cost_sticky_reserve
+      }
+
+      // Session limit settings
+      if (sessionLimitEnabled.value && maxSessions.value != null && maxSessions.value > 0) {
+        newExtra.max_sessions = maxSessions.value
+        newExtra.session_idle_timeout_minutes = sessionIdleTimeout.value ?? 5
+      } else {
+        delete newExtra.max_sessions
+        delete newExtra.session_idle_timeout_minutes
+      }
+
+      // TLS fingerprint setting
+      if (tlsFingerprintEnabled.value) {
+        newExtra.enable_tls_fingerprint = true
+      } else {
+        delete newExtra.enable_tls_fingerprint
+      }
+
+      // Session ID masking setting
+      if (sessionIdMaskingEnabled.value) {
+        newExtra.session_id_masking_enabled = true
+      } else {
+        delete newExtra.session_id_masking_enabled
+      }
+
+      updatePayload.extra = newExtra
+    }
+
     await adminAPI.accounts.update(props.account.id, updatePayload)
     appStore.showSuccess(t('admin.accounts.accountUpdated'))
     emit('updated')
     handleClose()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.message || error.response?.data?.detail || t('admin.accounts.failedToUpdate'))
+    // Handle 409 mixed_channel_warning - show confirmation dialog
+    if (error.response?.status === 409 && error.response?.data?.error === 'mixed_channel_warning') {
+      const details = error.response.data.details || {}
+      mixedChannelWarningDetails.value = {
+        groupName: details.group_name || 'Unknown',
+        currentPlatform: details.current_platform || 'Unknown',
+        otherPlatform: details.other_platform || 'Unknown'
+      }
+      pendingUpdatePayload.value = updatePayload
+      showMixedChannelWarning.value = true
+    } else {
+      appStore.showError(error.response?.data?.message || error.response?.data?.detail || t('admin.accounts.failedToUpdate'))
+    }
   } finally {
     submitting.value = false
   }
+}
+
+// Handle mixed channel warning confirmation
+const handleMixedChannelConfirm = async () => {
+  showMixedChannelWarning.value = false
+  if (pendingUpdatePayload.value && props.account) {
+    pendingUpdatePayload.value.confirm_mixed_channel_risk = true
+    submitting.value = true
+    try {
+      await adminAPI.accounts.update(props.account.id, pendingUpdatePayload.value)
+      appStore.showSuccess(t('admin.accounts.accountUpdated'))
+      emit('updated')
+      handleClose()
+    } catch (error: any) {
+      appStore.showError(error.response?.data?.message || error.response?.data?.detail || t('admin.accounts.failedToUpdate'))
+    } finally {
+      submitting.value = false
+      pendingUpdatePayload.value = null
+    }
+  }
+}
+
+const handleMixedChannelCancel = () => {
+  showMixedChannelWarning.value = false
+  pendingUpdatePayload.value = null
+  mixedChannelWarningDetails.value = null
 }
 </script>

@@ -21,8 +21,23 @@
         </div>
       </div>
 
-      <!-- Right: Language + Subscriptions + Balance + User Dropdown -->
+      <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex items-center gap-3">
+        <!-- Announcement Bell -->
+        <AnnouncementBell v-if="user" />
+
+        <!-- Docs Link -->
+        <a
+          v-if="docUrl"
+          :href="docUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+        >
+          <Icon name="book" size="sm" />
+          <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
+        </a>
+
         <!-- Language Switcher -->
         <LocaleSwitcher />
 
@@ -186,6 +201,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { usageAPI } from '@/api'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const router = useRouter()
@@ -199,6 +215,7 @@ const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
+const docUrl = computed(() => appStore.docUrl)
 
 // [LITE] 今日使用额度
 const todayCost = ref<number | null>(null)
@@ -257,7 +274,12 @@ function closeDropdown() {
 
 async function handleLogout() {
   closeDropdown()
-  authStore.logout()
+  try {
+    await authStore.logout()
+  } catch (error) {
+    // Ignore logout errors - still redirect to login
+    console.error('Logout error:', error)
+  }
   await router.push('/login')
 }
 

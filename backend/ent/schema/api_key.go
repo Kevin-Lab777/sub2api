@@ -2,7 +2,7 @@ package schema
 
 import (
 	"github.com/Kevin-Lab777/sub2api/ent/schema/mixins"
-	"github.com/Kevin-Lab777/sub2api/internal/service"
+	"github.com/Kevin-Lab777/sub2api/internal/domain"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -46,7 +46,7 @@ func (APIKey) Fields() []ent.Field {
 			Nillable(),
 		field.String("status").
 			MaxLen(20).
-			Default(service.StatusActive),
+			Default(domain.StatusActive),
 		field.JSON("ip_whitelist", []string{}).
 			Optional().
 			Comment("Allowed IPs/CIDRs, e.g. [\"192.168.1.100\", \"10.0.0.0/8\"]"),
@@ -107,6 +107,23 @@ func (APIKey) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("月用量重置时间"),
+
+		// ========== Quota fields (from upstream) ==========
+		// Quota limit in USD (0 = unlimited)
+		field.Float("quota").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Quota limit in USD for this API key (0 = unlimited)"),
+		// Used quota amount
+		field.Float("quota_used").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Used quota amount in USD"),
+		// Expiration time (nil = never expires)
+		field.Time("expires_at").
+			Optional().
+			Nillable().
+			Comment("Expiration time for this API key (null = never expires)"),
 	}
 }
 
@@ -132,5 +149,8 @@ func (APIKey) Indexes() []ent.Index {
 		index.Fields("group_id"),
 		index.Fields("status"),
 		index.Fields("deleted_at"),
+		// Index for quota queries
+		index.Fields("quota", "quota_used"),
+		index.Fields("expires_at"),
 	}
 }

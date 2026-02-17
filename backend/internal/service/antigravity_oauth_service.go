@@ -82,13 +82,14 @@ type AntigravityExchangeCodeInput struct {
 
 // AntigravityTokenInfo token 信息
 type AntigravityTokenInfo struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int64  `json:"expires_in"`
-	ExpiresAt    int64  `json:"expires_at"`
-	TokenType    string `json:"token_type"`
-	Email        string `json:"email,omitempty"`
-	ProjectID    string `json:"project_id,omitempty"`
+	AccessToken      string `json:"access_token"`
+	RefreshToken     string `json:"refresh_token"`
+	ExpiresIn        int64  `json:"expires_in"`
+	ExpiresAt        int64  `json:"expires_at"`
+	TokenType        string `json:"token_type"`
+	Email            string `json:"email,omitempty"`
+	ProjectID        string `json:"project_id,omitempty"`
+	ProjectIDMissing bool   `json:"-"` // LoadCodeAssist 未返回 project_id
 }
 
 // ExchangeCode 用 authorization code 交换 token
@@ -141,18 +142,13 @@ func (s *AntigravityOAuthService) ExchangeCode(ctx context.Context, input *Antig
 		result.Email = userInfo.Email
 	}
 
-	// 获取 project_id（部分账户类型可能没有）
-	loadResp, _, err := client.LoadCodeAssist(ctx, tokenResp.AccessToken)
-	if err != nil {
-		fmt.Printf("[AntigravityOAuth] 警告: 获取 project_id 失败: %v\n", err)
-	} else if loadResp != nil && loadResp.CloudAICompanionProject != "" {
-		result.ProjectID = loadResp.CloudAICompanionProject
-	}
-
-	// 兜底：随机生成 project_id
-	if result.ProjectID == "" {
-		result.ProjectID = antigravity.GenerateMockProjectID()
-		fmt.Printf("[AntigravityOAuth] 使用随机生成的 project_id: %s\n", result.ProjectID)
+	// 获取 project_id（部分账户类型可能没有），失败时重试
+	projectID, loadErr := s.loadProjectIDWithRetry(ctx, tokenResp.AccessToken, proxyURL, 3)
+	if loadErr != nil {
+		fmt.Printf("[AntigravityOAuth] 警告: 获取 project_id 失败（重试后）: %v\n", loadErr)
+		result.ProjectIDMissing = true
+	} else {
+		result.ProjectID = projectID
 	}
 
 	return result, nil
@@ -196,6 +192,43 @@ func (s *AntigravityOAuthService) RefreshToken(ctx context.Context, refreshToken
 	return nil, fmt.Errorf("token 刷新失败 (重试后): %w", lastErr)
 }
 
+// ValidateRefreshToken 用 refresh token 验证并获取完整的 token 信息（含 email 和 project_id）
+func (s *AntigravityOAuthService) ValidateRefreshToken(ctx context.Context, refreshToken string, proxyID *int64) (*AntigravityTokenInfo, error) {
+	var proxyURL string
+	if proxyID != nil {
+		proxy, err := s.proxyRepo.GetByID(ctx, *proxyID)
+		if err == nil && proxy != nil {
+			proxyURL = proxy.URL()
+		}
+	}
+
+	// 刷新 token
+	tokenInfo, err := s.RefreshToken(ctx, refreshToken, proxyURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取用户信息（email）
+	client := antigravity.NewClient(proxyURL)
+	userInfo, err := client.GetUserInfo(ctx, tokenInfo.AccessToken)
+	if err != nil {
+		fmt.Printf("[AntigravityOAuth] 警告: 获取用户信息失败: %v\n", err)
+	} else {
+		tokenInfo.Email = userInfo.Email
+	}
+
+	// 获取 project_id（容错，失败不阻塞）
+	projectID, loadErr := s.loadProjectIDWithRetry(ctx, tokenInfo.AccessToken, proxyURL, 3)
+	if loadErr != nil {
+		fmt.Printf("[AntigravityOAuth] 警告: 获取 project_id 失败（重试后）: %v\n", loadErr)
+		tokenInfo.ProjectIDMissing = true
+	} else {
+		tokenInfo.ProjectID = projectID
+	}
+
+	return tokenInfo, nil
+}
+
 func isNonRetryableAntigravityOAuthError(err error) bool {
 	msg := err.Error()
 	nonRetryable := []string{
@@ -236,17 +269,132 @@ func (s *AntigravityOAuthService) RefreshAccountToken(ctx context.Context, accou
 		return nil, err
 	}
 
-	// 保留原有的 project_id 和 email
-	existingProjectID := strings.TrimSpace(account.GetCredential("project_id"))
-	if existingProjectID != "" {
-		tokenInfo.ProjectID = existingProjectID
-	}
+	// 保留原有的 email
 	existingEmail := strings.TrimSpace(account.GetCredential("email"))
 	if existingEmail != "" {
 		tokenInfo.Email = existingEmail
 	}
 
+	// 每次刷新都调用 LoadCodeAssist 获取 project_id，失败时重试
+	existingProjectID := strings.TrimSpace(account.GetCredential("project_id"))
+	projectID, loadErr := s.loadProjectIDWithRetry(ctx, tokenInfo.AccessToken, proxyURL, 3)
+
+	if loadErr != nil {
+		// LoadCodeAssist 失败，保留原有 project_id
+		tokenInfo.ProjectID = existingProjectID
+		// 只有从未获取过 project_id 且本次也获取失败时，才标记为真正缺失
+		// 如果之前有 project_id，本次只是临时故障，不应标记为错误
+		if existingProjectID == "" {
+			tokenInfo.ProjectIDMissing = true
+		}
+	} else {
+		tokenInfo.ProjectID = projectID
+	}
+
 	return tokenInfo, nil
+}
+
+// loadProjectIDWithRetry 带重试机制获取 project_id
+// 返回 project_id 和错误，失败时会重试指定次数
+func (s *AntigravityOAuthService) loadProjectIDWithRetry(ctx context.Context, accessToken, proxyURL string, maxRetries int) (string, error) {
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// 指数退避：1s, 2s, 4s
+			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+			if backoff > 8*time.Second {
+				backoff = 8 * time.Second
+			}
+			time.Sleep(backoff)
+		}
+
+		client := antigravity.NewClient(proxyURL)
+		loadResp, loadRaw, err := client.LoadCodeAssist(ctx, accessToken)
+
+		if err == nil && loadResp != nil && loadResp.CloudAICompanionProject != "" {
+			return loadResp.CloudAICompanionProject, nil
+		}
+
+		if err == nil {
+			if projectID, onboardErr := tryOnboardProjectID(ctx, client, accessToken, loadRaw); onboardErr == nil && projectID != "" {
+				return projectID, nil
+			} else if onboardErr != nil {
+				lastErr = onboardErr
+				continue
+			}
+		}
+
+		// 记录错误
+		if err != nil {
+			lastErr = err
+		} else if loadResp == nil {
+			lastErr = fmt.Errorf("LoadCodeAssist 返回空响应")
+		} else {
+			lastErr = fmt.Errorf("LoadCodeAssist 返回空 project_id")
+		}
+	}
+
+	return "", fmt.Errorf("获取 project_id 失败 (重试 %d 次后): %w", maxRetries, lastErr)
+}
+
+func tryOnboardProjectID(ctx context.Context, client *antigravity.Client, accessToken string, loadRaw map[string]any) (string, error) {
+	tierID := resolveDefaultTierID(loadRaw)
+	if tierID == "" {
+		return "", fmt.Errorf("loadCodeAssist 未返回可用的默认 tier")
+	}
+
+	projectID, err := client.OnboardUser(ctx, accessToken, tierID)
+	if err != nil {
+		return "", fmt.Errorf("onboardUser 失败 (tier=%s): %w", tierID, err)
+	}
+	return projectID, nil
+}
+
+func resolveDefaultTierID(loadRaw map[string]any) string {
+	if len(loadRaw) == 0 {
+		return ""
+	}
+
+	rawTiers, ok := loadRaw["allowedTiers"]
+	if !ok {
+		return ""
+	}
+
+	tiers, ok := rawTiers.([]any)
+	if !ok {
+		return ""
+	}
+
+	for _, rawTier := range tiers {
+		tier, ok := rawTier.(map[string]any)
+		if !ok {
+			continue
+		}
+		if isDefault, _ := tier["isDefault"].(bool); !isDefault {
+			continue
+		}
+		if id, ok := tier["id"].(string); ok {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				return id
+			}
+		}
+	}
+
+	return ""
+}
+
+// FillProjectID 仅获取 project_id，不刷新 OAuth token
+func (s *AntigravityOAuthService) FillProjectID(ctx context.Context, account *Account, accessToken string) (string, error) {
+	var proxyURL string
+	if account.ProxyID != nil {
+		proxy, err := s.proxyRepo.GetByID(ctx, *account.ProxyID)
+		if err == nil && proxy != nil {
+			proxyURL = proxy.URL()
+		}
+	}
+	return s.loadProjectIDWithRetry(ctx, accessToken, proxyURL, 3)
 }
 
 // BuildAccountCredentials 构建账户凭证

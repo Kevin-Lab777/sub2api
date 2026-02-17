@@ -10,7 +10,7 @@
     <div class="sidebar-header">
       <!-- Custom Logo or Default Logo -->
       <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow">
-        <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+        <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
       </div>
       <transition name="fade">
         <div v-if="!sidebarCollapsed" class="flex flex-col">
@@ -135,6 +135,7 @@ const isDark = ref(document.documentElement.classList.contains('dark'))
 const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
+const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 // SVG Icon Components
 const DashboardIcon = {
@@ -237,6 +238,21 @@ const ServerIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z'
+        })
+      ]
+    )
+}
+
+const BellIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0'
         })
       ]
     )
@@ -348,6 +364,7 @@ const adminNavItems = computed(() => {
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
+    { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/settings', label: t('nav.settings'), icon: CogIcon }

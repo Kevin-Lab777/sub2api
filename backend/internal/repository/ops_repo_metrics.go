@@ -43,6 +43,7 @@ INSERT INTO ops_system_metrics (
   upstream_529_count,
 
   token_consumed,
+  account_switch_count,
   qps,
   tps,
 
@@ -81,14 +82,14 @@ INSERT INTO ops_system_metrics (
   $1,$2,$3,$4,
   $5,$6,$7,$8,
   $9,$10,$11,
-  $12,$13,$14,
-  $15,$16,$17,$18,$19,$20,
-  $21,$22,$23,$24,$25,$26,
-  $27,$28,$29,$30,
-  $31,$32,
-  $33,$34,
-  $35,$36,$37,
-  $38,$39
+  $12,$13,$14,$15,
+  $16,$17,$18,$19,$20,$21,
+  $22,$23,$24,$25,$26,$27,
+  $28,$29,$30,$31,
+  $32,$33,
+  $34,$35,
+  $36,$37,$38,
+  $39,$40
 )`
 
 	_, err := r.db.ExecContext(
@@ -109,6 +110,7 @@ INSERT INTO ops_system_metrics (
 		input.Upstream529Count,
 
 		input.TokenConsumed,
+		input.AccountSwitchCount,
 		opsNullFloat64(input.QPS),
 		opsNullFloat64(input.TPS),
 
@@ -177,7 +179,8 @@ SELECT
   db_conn_waiting,
 
   goroutine_count,
-  concurrency_queue_depth
+  concurrency_queue_depth,
+  account_switch_count
 FROM ops_system_metrics
 WHERE window_minutes = $1
   AND platform IS NULL
@@ -199,6 +202,7 @@ LIMIT 1`
 	var dbWaiting sql.NullInt64
 	var goroutines sql.NullInt64
 	var queueDepth sql.NullInt64
+	var accountSwitchCount sql.NullInt64
 
 	if err := r.db.QueryRowContext(ctx, q, windowMinutes).Scan(
 		&out.ID,
@@ -217,6 +221,7 @@ LIMIT 1`
 		&dbWaiting,
 		&goroutines,
 		&queueDepth,
+		&accountSwitchCount,
 	); err != nil {
 		return nil, err
 	}
@@ -273,6 +278,10 @@ LIMIT 1`
 		v := int(queueDepth.Int64)
 		out.ConcurrencyQueueDepth = &v
 	}
+	if accountSwitchCount.Valid {
+		v := accountSwitchCount.Int64
+		out.AccountSwitchCount = &v
+	}
 
 	return &out, nil
 }
@@ -296,9 +305,10 @@ INSERT INTO ops_job_heartbeats (
   last_error_at,
   last_error,
   last_duration_ms,
+  last_result,
   updated_at
 ) VALUES (
-  $1,$2,$3,$4,$5,$6,NOW()
+  $1,$2,$3,$4,$5,$6,$7,NOW()
 )
 ON CONFLICT (job_name) DO UPDATE SET
   last_run_at = COALESCE(EXCLUDED.last_run_at, ops_job_heartbeats.last_run_at),
@@ -312,6 +322,10 @@ ON CONFLICT (job_name) DO UPDATE SET
     ELSE COALESCE(EXCLUDED.last_error, ops_job_heartbeats.last_error)
   END,
   last_duration_ms = COALESCE(EXCLUDED.last_duration_ms, ops_job_heartbeats.last_duration_ms),
+  last_result = CASE
+    WHEN EXCLUDED.last_success_at IS NOT NULL THEN COALESCE(EXCLUDED.last_result, ops_job_heartbeats.last_result)
+    ELSE ops_job_heartbeats.last_result
+  END,
   updated_at = NOW()`
 
 	_, err := r.db.ExecContext(
@@ -323,6 +337,7 @@ ON CONFLICT (job_name) DO UPDATE SET
 		opsNullTime(input.LastErrorAt),
 		opsNullString(input.LastError),
 		opsNullInt(input.LastDurationMs),
+		opsNullString(input.LastResult),
 	)
 	return err
 }
@@ -340,6 +355,7 @@ SELECT
   last_error_at,
   last_error,
   last_duration_ms,
+  last_result,
   updated_at
 FROM ops_job_heartbeats
 ORDER BY job_name ASC`
@@ -359,6 +375,8 @@ ORDER BY job_name ASC`
 		var lastError sql.NullString
 		var lastDuration sql.NullInt64
 
+		var lastResult sql.NullString
+
 		if err := rows.Scan(
 			&item.JobName,
 			&lastRun,
@@ -366,6 +384,7 @@ ORDER BY job_name ASC`
 			&lastErrorAt,
 			&lastError,
 			&lastDuration,
+			&lastResult,
 			&item.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -390,6 +409,10 @@ ORDER BY job_name ASC`
 		if lastDuration.Valid {
 			v := lastDuration.Int64
 			item.LastDurationMs = &v
+		}
+		if lastResult.Valid {
+			v := lastResult.String
+			item.LastResult = &v
 		}
 
 		out = append(out, &item)

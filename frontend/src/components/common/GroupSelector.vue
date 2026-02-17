@@ -22,6 +22,7 @@
         />
         <GroupBadge
           :name="group.name"
+          :platform="group.platform"
           :subscription-type="group.subscription_type"
           :rate-multiplier="group.rate_multiplier"
           class="min-w-0 flex-1"
@@ -42,13 +43,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from './GroupBadge.vue'
-import type { Group, GroupPlatform } from '@/types'
+import type { AdminGroup, GroupPlatform } from '@/types'
 
 const { t } = useI18n()
 
 interface Props {
   modelValue: number[]
-  groups: Group[]
+  groups: AdminGroup[]
   platform?: GroupPlatform // Optional platform filter
   mixedScheduling?: boolean // For antigravity accounts: allow anthropic/gemini groups
 }

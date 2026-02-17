@@ -37,12 +37,20 @@ const (
 	FieldUsername = "username"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldTotpSecretEncrypted holds the string denoting the totp_secret_encrypted field in the database.
+	FieldTotpSecretEncrypted = "totp_secret_encrypted"
+	// FieldTotpEnabled holds the string denoting the totp_enabled field in the database.
+	FieldTotpEnabled = "totp_enabled"
+	// FieldTotpEnabledAt holds the string denoting the totp_enabled_at field in the database.
+	FieldTotpEnabledAt = "totp_enabled_at"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
 	EdgeSubscriptions = "subscriptions"
 	// EdgeAssignedSubscriptions holds the string denoting the assigned_subscriptions edge name in mutations.
 	EdgeAssignedSubscriptions = "assigned_subscriptions"
+	// EdgeAnnouncementReads holds the string denoting the announcement_reads edge name in mutations.
+	EdgeAnnouncementReads = "announcement_reads"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
 	// Table holds the table name of the user in the database.
@@ -68,6 +76,13 @@ const (
 	AssignedSubscriptionsInverseTable = "user_subscriptions"
 	// AssignedSubscriptionsColumn is the table column denoting the assigned_subscriptions relation/edge.
 	AssignedSubscriptionsColumn = "assigned_by"
+	// AnnouncementReadsTable is the table that holds the announcement_reads relation/edge.
+	AnnouncementReadsTable = "announcement_reads"
+	// AnnouncementReadsInverseTable is the table name for the AnnouncementRead entity.
+	// It exists in this package in order to avoid circular dependency with the "announcementread" package.
+	AnnouncementReadsInverseTable = "announcement_reads"
+	// AnnouncementReadsColumn is the table column denoting the announcement_reads relation/edge.
+	AnnouncementReadsColumn = "user_id"
 	// UsageLogsTable is the table that holds the usage_logs relation/edge.
 	UsageLogsTable = "usage_logs"
 	// UsageLogsInverseTable is the table name for the UsageLog entity.
@@ -91,6 +106,9 @@ var Columns = []string{
 	FieldStatus,
 	FieldUsername,
 	FieldNotes,
+	FieldTotpSecretEncrypted,
+	FieldTotpEnabled,
+	FieldTotpEnabledAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -139,6 +157,8 @@ var (
 	UsernameValidator func(string) error
 	// DefaultNotes holds the default value on creation for the "notes" field.
 	DefaultNotes string
+	// DefaultTotpEnabled holds the default value on creation for the "totp_enabled" field.
+	DefaultTotpEnabled bool
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -204,6 +224,21 @@ func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
 }
 
+// ByTotpSecretEncrypted orders the results by the totp_secret_encrypted field.
+func ByTotpSecretEncrypted(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotpSecretEncrypted, opts...).ToFunc()
+}
+
+// ByTotpEnabled orders the results by the totp_enabled field.
+func ByTotpEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotpEnabled, opts...).ToFunc()
+}
+
+// ByTotpEnabledAt orders the results by the totp_enabled_at field.
+func ByTotpEnabledAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotpEnabledAt, opts...).ToFunc()
+}
+
 // ByAPIKeysCount orders the results by api_keys count.
 func ByAPIKeysCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -246,6 +281,20 @@ func ByAssignedSubscriptions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOp
 	}
 }
 
+// ByAnnouncementReadsCount orders the results by announcement_reads count.
+func ByAnnouncementReadsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAnnouncementReadsStep(), opts...)
+	}
+}
+
+// ByAnnouncementReads orders the results by announcement_reads terms.
+func ByAnnouncementReads(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAnnouncementReadsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUsageLogsCount orders the results by usage_logs count.
 func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -278,6 +327,13 @@ func newAssignedSubscriptionsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(AssignedSubscriptionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, AssignedSubscriptionsTable, AssignedSubscriptionsColumn),
+	)
+}
+func newAnnouncementReadsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AnnouncementReadsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, AnnouncementReadsTable, AnnouncementReadsColumn),
 	)
 }
 func newUsageLogsStep() *sqlgraph.Step {

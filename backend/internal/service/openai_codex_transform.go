@@ -1,6 +1,7 @@
 package service
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,7 +17,21 @@ const (
 	codexCacheTTL          = 15 * time.Minute
 )
 
+//go:embed prompts/codex_cli_instructions.md
+var codexCLIInstructions string
+
 var codexModelMap = map[string]string{
+	"gpt-5.3":                   "gpt-5.3",
+	"gpt-5.3-none":              "gpt-5.3",
+	"gpt-5.3-low":               "gpt-5.3",
+	"gpt-5.3-medium":            "gpt-5.3",
+	"gpt-5.3-high":              "gpt-5.3",
+	"gpt-5.3-xhigh":             "gpt-5.3",
+	"gpt-5.3-codex":             "gpt-5.3-codex",
+	"gpt-5.3-codex-low":         "gpt-5.3-codex",
+	"gpt-5.3-codex-medium":      "gpt-5.3-codex",
+	"gpt-5.3-codex-high":        "gpt-5.3-codex",
+	"gpt-5.3-codex-xhigh":       "gpt-5.3-codex",
 	"gpt-5.1-codex":             "gpt-5.1-codex",
 	"gpt-5.1-codex-low":         "gpt-5.1-codex",
 	"gpt-5.1-codex-medium":      "gpt-5.1-codex",
@@ -68,8 +83,10 @@ type opencodeCacheMetadata struct {
 	LastChecked int64  `json:"lastChecked"`
 }
 
-func applyCodexOAuthTransform(reqBody map[string]any) codexTransformResult {
+func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTransformResult {
 	result := codexTransformResult{}
+	// 工具续链需求会影响存储策略与 input 过滤逻辑。
+	needsToolContinuation := NeedsToolContinuation(reqBody)
 
 	model := ""
 	if v, ok := reqBody["model"].(string); ok {
@@ -84,6 +101,8 @@ func applyCodexOAuthTransform(reqBody map[string]any) codexTransformResult {
 		result.NormalizedModel = normalizedModel
 	}
 
+	// OAuth 走 ChatGPT internal API 时，store 必须为 false；显式 true 也会强制覆盖。
+	// 避免上游返回 "Store must be set to false"。
 	if v, ok := reqBody["store"].(bool); !ok || v {
 		reqBody["store"] = false
 		result.Modified = true
@@ -110,19 +129,14 @@ func applyCodexOAuthTransform(reqBody map[string]any) codexTransformResult {
 		result.PromptCacheKey = strings.TrimSpace(v)
 	}
 
-	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
-	existingInstructions, _ := reqBody["instructions"].(string)
-	existingInstructions = strings.TrimSpace(existingInstructions)
-
-	if instructions != "" {
-		if existingInstructions != instructions {
-			reqBody["instructions"] = instructions
-			result.Modified = true
-		}
+	// instructions 处理逻辑：根据是否是 Codex CLI 分别调用不同方法
+	if applyInstructions(reqBody, isCodexCLI) {
+		result.Modified = true
 	}
 
+	// 续链场景保留 item_reference 与 id，避免 call_id 上下文丢失。
 	if input, ok := reqBody["input"].([]any); ok {
-		input = filterCodexInput(input)
+		input = filterCodexInput(input, needsToolContinuation)
 		reqBody["input"] = input
 		result.Modified = true
 	}
@@ -152,6 +166,12 @@ func normalizeCodexModel(model string) string {
 	}
 	if strings.Contains(normalized, "gpt-5.2") || strings.Contains(normalized, "gpt 5.2") {
 		return "gpt-5.2"
+	}
+	if strings.Contains(normalized, "gpt-5.3-codex") || strings.Contains(normalized, "gpt 5.3 codex") {
+		return "gpt-5.3-codex"
+	}
+	if strings.Contains(normalized, "gpt-5.3") || strings.Contains(normalized, "gpt 5.3") {
+		return "gpt-5.3"
 	}
 	if strings.Contains(normalized, "gpt-5.1-codex-max") || strings.Contains(normalized, "gpt 5.1 codex max") {
 		return "gpt-5.1-codex-max"
@@ -235,14 +255,100 @@ func getOpenCodeCachedPrompt(url, cacheFileName, metaFileName string) string {
 }
 
 func getOpenCodeCodexHeader() string {
-	return getOpenCodeCachedPrompt(opencodeCodexHeaderURL, "opencode-codex-header.txt", "opencode-codex-header-meta.json")
+	// 优先从 opencode 仓库缓存获取指令。
+	opencodeInstructions := getOpenCodeCachedPrompt(opencodeCodexHeaderURL, "opencode-codex-header.txt", "opencode-codex-header-meta.json")
+
+	// 若 opencode 指令可用，直接返回。
+	if opencodeInstructions != "" {
+		return opencodeInstructions
+	}
+
+	// 否则回退使用本地 Codex CLI 指令。
+	return getCodexCLIInstructions()
+}
+
+func getCodexCLIInstructions() string {
+	return codexCLIInstructions
 }
 
 func GetOpenCodeInstructions() string {
 	return getOpenCodeCodexHeader()
 }
 
-func filterCodexInput(input []any) []any {
+// GetCodexCLIInstructions 返回内置的 Codex CLI 指令内容。
+func GetCodexCLIInstructions() string {
+	return getCodexCLIInstructions()
+}
+
+// applyInstructions 处理 instructions 字段
+// isCodexCLI=true: 仅补充缺失的 instructions（使用 opencode 指令）
+// isCodexCLI=false: 优先使用 opencode 指令覆盖
+func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
+	if isCodexCLI {
+		return applyCodexCLIInstructions(reqBody)
+	}
+	return applyOpenCodeInstructions(reqBody)
+}
+
+// applyCodexCLIInstructions 为 Codex CLI 请求补充缺失的 instructions
+// 仅在 instructions 为空时添加 opencode 指令
+func applyCodexCLIInstructions(reqBody map[string]any) bool {
+	if !isInstructionsEmpty(reqBody) {
+		return false // 已有有效 instructions，不修改
+	}
+
+	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
+	if instructions != "" {
+		reqBody["instructions"] = instructions
+		return true
+	}
+
+	return false
+}
+
+// applyOpenCodeInstructions 为非 Codex CLI 请求应用 opencode 指令
+// 优先使用 opencode 指令覆盖
+func applyOpenCodeInstructions(reqBody map[string]any) bool {
+	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
+	existingInstructions, _ := reqBody["instructions"].(string)
+	existingInstructions = strings.TrimSpace(existingInstructions)
+
+	if instructions != "" {
+		if existingInstructions != instructions {
+			reqBody["instructions"] = instructions
+			return true
+		}
+	} else if existingInstructions == "" {
+		codexInstructions := strings.TrimSpace(getCodexCLIInstructions())
+		if codexInstructions != "" {
+			reqBody["instructions"] = codexInstructions
+			return true
+		}
+	}
+
+	return false
+}
+
+// isInstructionsEmpty 检查 instructions 字段是否为空
+// 处理以下情况：字段不存在、nil、空字符串、纯空白字符串
+func isInstructionsEmpty(reqBody map[string]any) bool {
+	val, exists := reqBody["instructions"]
+	if !exists {
+		return true
+	}
+	if val == nil {
+		return true
+	}
+	str, ok := val.(string)
+	if !ok {
+		return true
+	}
+	return strings.TrimSpace(str) == ""
+}
+
+// filterCodexInput 按需过滤 item_reference 与 id。
+// preserveReferences 为 true 时保持引用与 id，以满足续链请求对上下文的依赖。
+func filterCodexInput(input []any, preserveReferences bool) []any {
 	filtered := make([]any, 0, len(input))
 	for _, item := range input {
 		m, ok := item.(map[string]any)
@@ -250,13 +356,60 @@ func filterCodexInput(input []any) []any {
 			filtered = append(filtered, item)
 			continue
 		}
-		if typ, ok := m["type"].(string); ok && typ == "item_reference" {
+		typ, _ := m["type"].(string)
+		if typ == "item_reference" {
+			if !preserveReferences {
+				continue
+			}
+			newItem := make(map[string]any, len(m))
+			for key, value := range m {
+				newItem[key] = value
+			}
+			filtered = append(filtered, newItem)
 			continue
 		}
-		delete(m, "id")
-		filtered = append(filtered, m)
+
+		newItem := m
+		copied := false
+		// 仅在需要修改字段时创建副本，避免直接改写原始输入。
+		ensureCopy := func() {
+			if copied {
+				return
+			}
+			newItem = make(map[string]any, len(m))
+			for key, value := range m {
+				newItem[key] = value
+			}
+			copied = true
+		}
+
+		if isCodexToolCallItemType(typ) {
+			if callID, ok := m["call_id"].(string); !ok || strings.TrimSpace(callID) == "" {
+				if id, ok := m["id"].(string); ok && strings.TrimSpace(id) != "" {
+					ensureCopy()
+					newItem["call_id"] = id
+				}
+			}
+		}
+
+		if !preserveReferences {
+			ensureCopy()
+			delete(newItem, "id")
+			if !isCodexToolCallItemType(typ) {
+				delete(newItem, "call_id")
+			}
+		}
+
+		filtered = append(filtered, newItem)
 	}
 	return filtered
+}
+
+func isCodexToolCallItemType(typ string) bool {
+	if typ == "" {
+		return false
+	}
+	return strings.HasSuffix(typ, "_call") || strings.HasSuffix(typ, "_call_output")
 }
 
 func normalizeCodexTools(reqBody map[string]any) bool {
@@ -270,19 +423,35 @@ func normalizeCodexTools(reqBody map[string]any) bool {
 	}
 
 	modified := false
-	for idx, tool := range tools {
+	validTools := make([]any, 0, len(tools))
+
+	for _, tool := range tools {
 		toolMap, ok := tool.(map[string]any)
 		if !ok {
+			// Keep unknown structure as-is to avoid breaking upstream behavior.
+			validTools = append(validTools, tool)
 			continue
 		}
 
 		toolType, _ := toolMap["type"].(string)
-		if strings.TrimSpace(toolType) != "function" {
+		toolType = strings.TrimSpace(toolType)
+		if toolType != "function" {
+			validTools = append(validTools, toolMap)
 			continue
 		}
 
-		function, ok := toolMap["function"].(map[string]any)
-		if !ok {
+		// OpenAI Responses-style tools use top-level name/parameters.
+		if name, ok := toolMap["name"].(string); ok && strings.TrimSpace(name) != "" {
+			validTools = append(validTools, toolMap)
+			continue
+		}
+
+		// ChatCompletions-style tools use {type:"function", function:{...}}.
+		functionValue, hasFunction := toolMap["function"]
+		function, ok := functionValue.(map[string]any)
+		if !hasFunction || functionValue == nil || !ok || function == nil {
+			// Drop invalid function tools.
+			modified = true
 			continue
 		}
 
@@ -311,11 +480,11 @@ func normalizeCodexTools(reqBody map[string]any) bool {
 			}
 		}
 
-		tools[idx] = toolMap
+		validTools = append(validTools, toolMap)
 	}
 
 	if modified {
-		reqBody["tools"] = tools
+		reqBody["tools"] = validTools
 	}
 
 	return modified

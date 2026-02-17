@@ -62,6 +62,12 @@ type APIKey struct {
 	UsageResetWeekly *time.Time `json:"usage_reset_weekly,omitempty"`
 	// 月用量重置时间
 	UsageResetMonthly *time.Time `json:"usage_reset_monthly,omitempty"`
+	// Quota limit in USD for this API key (0 = unlimited)
+	Quota float64 `json:"quota,omitempty"`
+	// Used quota amount in USD
+	QuotaUsed float64 `json:"quota_used,omitempty"`
+	// Expiration time for this API key (null = never expires)
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the APIKeyQuery when eager-loading is set.
 	Edges        APIKeyEdges `json:"edges"`
@@ -119,13 +125,13 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case apikey.FieldIPWhitelist, apikey.FieldIPBlacklist:
 			values[i] = new([]byte)
-		case apikey.FieldDailyLimitUsd, apikey.FieldWeeklyLimitUsd, apikey.FieldMonthlyLimitUsd, apikey.FieldTotalLimitUsd, apikey.FieldDailyUsageUsd, apikey.FieldWeeklyUsageUsd, apikey.FieldMonthlyUsageUsd, apikey.FieldTotalUsageUsd:
+		case apikey.FieldDailyLimitUsd, apikey.FieldWeeklyLimitUsd, apikey.FieldMonthlyLimitUsd, apikey.FieldTotalLimitUsd, apikey.FieldDailyUsageUsd, apikey.FieldWeeklyUsageUsd, apikey.FieldMonthlyUsageUsd, apikey.FieldTotalUsageUsd, apikey.FieldQuota, apikey.FieldQuotaUsed:
 			values[i] = new(sql.NullFloat64)
 		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID:
 			values[i] = new(sql.NullInt64)
 		case apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
 			values[i] = new(sql.NullString)
-		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldUsageResetDaily, apikey.FieldUsageResetWeekly, apikey.FieldUsageResetMonthly:
+		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldUsageResetDaily, apikey.FieldUsageResetWeekly, apikey.FieldUsageResetMonthly, apikey.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -287,6 +293,25 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 				_m.UsageResetMonthly = new(time.Time)
 				*_m.UsageResetMonthly = value.Time
 			}
+		case apikey.FieldQuota:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field quota", values[i])
+			} else if value.Valid {
+				_m.Quota = value.Float64
+			}
+		case apikey.FieldQuotaUsed:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field quota_used", values[i])
+			} else if value.Valid {
+				_m.QuotaUsed = value.Float64
+			}
+		case apikey.FieldExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field expires_at", values[i])
+			} else if value.Valid {
+				_m.ExpiresAt = new(time.Time)
+				*_m.ExpiresAt = value.Time
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -416,6 +441,17 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	if v := _m.UsageResetMonthly; v != nil {
 		builder.WriteString("usage_reset_monthly=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("quota=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Quota))
+	builder.WriteString(", ")
+	builder.WriteString("quota_used=")
+	builder.WriteString(fmt.Sprintf("%v", _m.QuotaUsed))
+	builder.WriteString(", ")
+	if v := _m.ExpiresAt; v != nil {
+		builder.WriteString("expires_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Kevin-Lab777/sub2api/internal/domain"
 	"github.com/Kevin-Lab777/sub2api/internal/handler/dto"
 	"github.com/Kevin-Lab777/sub2api/internal/pkg/claude"
 	"github.com/Kevin-Lab777/sub2api/internal/pkg/geminicli"
@@ -44,6 +45,8 @@ type AccountHandler struct {
 	accountTestService      *service.AccountTestService
 	concurrencyService      *service.ConcurrencyService
 	crsSyncService          *service.CRSSyncService
+	sessionLimitCache       service.SessionLimitCache
+	tokenCacheInvalidator   service.TokenCacheInvalidator
 }
 
 // NewAccountHandler creates a new admin account handler
@@ -58,6 +61,8 @@ func NewAccountHandler(
 	accountTestService *service.AccountTestService,
 	concurrencyService *service.ConcurrencyService,
 	crsSyncService *service.CRSSyncService,
+	sessionLimitCache service.SessionLimitCache,
+	tokenCacheInvalidator service.TokenCacheInvalidator,
 ) *AccountHandler {
 	return &AccountHandler{
 		adminService:            adminService,
@@ -70,6 +75,8 @@ func NewAccountHandler(
 		accountTestService:      accountTestService,
 		concurrencyService:      concurrencyService,
 		crsSyncService:          crsSyncService,
+		sessionLimitCache:       sessionLimitCache,
+		tokenCacheInvalidator:   tokenCacheInvalidator,
 	}
 }
 
@@ -78,12 +85,13 @@ type CreateAccountRequest struct {
 	Name                    string         `json:"name" binding:"required"`
 	Notes                   *string        `json:"notes"`
 	Platform                string         `json:"platform" binding:"required"`
-	Type                    string         `json:"type" binding:"required,oneof=oauth setup-token apikey"`
+	Type                    string         `json:"type" binding:"required,oneof=oauth setup-token apikey upstream"`
 	Credentials             map[string]any `json:"credentials" binding:"required"`
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
 	Concurrency             int            `json:"concurrency"`
 	Priority                int            `json:"priority"`
+	RateMultiplier          *float64       `json:"rate_multiplier"`
 	GroupIDs                []int64        `json:"group_ids"`
 	ExpiresAt               *int64         `json:"expires_at"`
 	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
@@ -95,12 +103,13 @@ type CreateAccountRequest struct {
 type UpdateAccountRequest struct {
 	Name                    string         `json:"name"`
 	Notes                   *string        `json:"notes"`
-	Type                    string         `json:"type" binding:"omitempty,oneof=oauth setup-token apikey"`
+	Type                    string         `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream"`
 	Credentials             map[string]any `json:"credentials"`
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
 	Concurrency             *int           `json:"concurrency"`
 	Priority                *int           `json:"priority"`
+	RateMultiplier          *float64       `json:"rate_multiplier"`
 	Status                  string         `json:"status" binding:"omitempty,oneof=active inactive"`
 	GroupIDs                *[]int64       `json:"group_ids"`
 	ExpiresAt               *int64         `json:"expires_at"`
@@ -115,6 +124,7 @@ type BulkUpdateAccountsRequest struct {
 	ProxyID                 *int64         `json:"proxy_id"`
 	Concurrency             *int           `json:"concurrency"`
 	Priority                *int           `json:"priority"`
+	RateMultiplier          *float64       `json:"rate_multiplier"`
 	Status                  string         `json:"status" binding:"omitempty,oneof=active inactive error"`
 	Schedulable             *bool          `json:"schedulable"`
 	GroupIDs                *[]int64       `json:"group_ids"`
@@ -127,6 +137,9 @@ type BulkUpdateAccountsRequest struct {
 type AccountWithConcurrency struct {
 	*dto.Account
 	CurrentConcurrency int `json:"current_concurrency"`
+	// 以下字段仅对 Anthropic OAuth/SetupToken 账号有效，且仅在启用相应功能时返回
+	CurrentWindowCost *float64 `json:"current_window_cost,omitempty"` // 当前窗口费用
+	ActiveSessions    *int     `json:"active_sessions,omitempty"`     // 当前活跃会话数
 }
 
 // List handles listing all accounts with pagination
@@ -143,7 +156,12 @@ func (h *AccountHandler) List(c *gin.Context) {
 		search = search[:100]
 	}
 
-	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search)
+	var groupID int64
+	if groupIDStr := c.Query("group"); groupIDStr != "" {
+		groupID, _ = strconv.ParseInt(groupIDStr, 10, 64)
+	}
+
+	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -161,13 +179,87 @@ func (h *AccountHandler) List(c *gin.Context) {
 		concurrencyCounts = make(map[int64]int)
 	}
 
+	// 识别需要查询窗口费用和会话数的账号（Anthropic OAuth/SetupToken 且启用了相应功能）
+	windowCostAccountIDs := make([]int64, 0)
+	sessionLimitAccountIDs := make([]int64, 0)
+	sessionIdleTimeouts := make(map[int64]time.Duration) // 各账号的会话空闲超时配置
+	for i := range accounts {
+		acc := &accounts[i]
+		if acc.IsAnthropicOAuthOrSetupToken() {
+			if acc.GetWindowCostLimit() > 0 {
+				windowCostAccountIDs = append(windowCostAccountIDs, acc.ID)
+			}
+			if acc.GetMaxSessions() > 0 {
+				sessionLimitAccountIDs = append(sessionLimitAccountIDs, acc.ID)
+				sessionIdleTimeouts[acc.ID] = time.Duration(acc.GetSessionIdleTimeoutMinutes()) * time.Minute
+			}
+		}
+	}
+
+	// 并行获取窗口费用和活跃会话数
+	var windowCosts map[int64]float64
+	var activeSessions map[int64]int
+
+	// 获取活跃会话数（批量查询，传入各账号的 idleTimeout 配置）
+	if len(sessionLimitAccountIDs) > 0 && h.sessionLimitCache != nil {
+		activeSessions, _ = h.sessionLimitCache.GetActiveSessionCountBatch(c.Request.Context(), sessionLimitAccountIDs, sessionIdleTimeouts)
+		if activeSessions == nil {
+			activeSessions = make(map[int64]int)
+		}
+	}
+
+	// 获取窗口费用（并行查询）
+	if len(windowCostAccountIDs) > 0 {
+		windowCosts = make(map[int64]float64)
+		var mu sync.Mutex
+		g, gctx := errgroup.WithContext(c.Request.Context())
+		g.SetLimit(10) // 限制并发数
+
+		for i := range accounts {
+			acc := &accounts[i]
+			if !acc.IsAnthropicOAuthOrSetupToken() || acc.GetWindowCostLimit() <= 0 {
+				continue
+			}
+			accCopy := acc // 闭包捕获
+			g.Go(func() error {
+				// 使用统一的窗口开始时间计算逻辑（考虑窗口过期情况）
+				startTime := accCopy.GetCurrentWindowStartTime()
+				stats, err := h.accountUsageService.GetAccountWindowStats(gctx, accCopy.ID, startTime)
+				if err == nil && stats != nil {
+					mu.Lock()
+					windowCosts[accCopy.ID] = stats.StandardCost // 使用标准费用
+					mu.Unlock()
+				}
+				return nil // 不返回错误，允许部分失败
+			})
+		}
+		_ = g.Wait()
+	}
+
 	// Build response with concurrency info
 	result := make([]AccountWithConcurrency, len(accounts))
 	for i := range accounts {
-		result[i] = AccountWithConcurrency{
-			Account:            dto.AccountFromService(&accounts[i]),
-			CurrentConcurrency: concurrencyCounts[accounts[i].ID],
+		acc := &accounts[i]
+		item := AccountWithConcurrency{
+			Account:            dto.AccountFromService(acc),
+			CurrentConcurrency: concurrencyCounts[acc.ID],
 		}
+
+		// 添加窗口费用（仅当启用时）
+		if windowCosts != nil {
+			if cost, ok := windowCosts[acc.ID]; ok {
+				item.CurrentWindowCost = &cost
+			}
+		}
+
+		// 添加活跃会话数（仅当启用时）
+		if activeSessions != nil {
+			if count, ok := activeSessions[acc.ID]; ok {
+				item.ActiveSessions = &count
+			}
+		}
+
+		result[i] = item
 	}
 
 	response.Paginated(c, result, total, page, pageSize)
@@ -199,6 +291,10 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	if req.RateMultiplier != nil && *req.RateMultiplier < 0 {
+		response.BadRequest(c, "rate_multiplier must be >= 0")
+		return
+	}
 
 	// 确定是否跳过混合渠道检查
 	skipCheck := req.ConfirmMixedChannelRisk != nil && *req.ConfirmMixedChannelRisk
@@ -213,6 +309,7 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		ProxyID:               req.ProxyID,
 		Concurrency:           req.Concurrency,
 		Priority:              req.Priority,
+		RateMultiplier:        req.RateMultiplier,
 		GroupIDs:              req.GroupIDs,
 		ExpiresAt:             req.ExpiresAt,
 		AutoPauseOnExpired:    req.AutoPauseOnExpired,
@@ -258,6 +355,10 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	if req.RateMultiplier != nil && *req.RateMultiplier < 0 {
+		response.BadRequest(c, "rate_multiplier must be >= 0")
+		return
+	}
 
 	// 确定是否跳过混合渠道检查
 	skipCheck := req.ConfirmMixedChannelRisk != nil && *req.ConfirmMixedChannelRisk
@@ -271,6 +372,7 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		ProxyID:               req.ProxyID,
 		Concurrency:           req.Concurrency, // 指针类型，nil 表示未提供
 		Priority:              req.Priority,    // 指针类型，nil 表示未提供
+		RateMultiplier:        req.RateMultiplier,
 		Status:                req.Status,
 		GroupIDs:              req.GroupIDs,
 		ExpiresAt:             req.ExpiresAt,
@@ -327,10 +429,17 @@ type TestAccountRequest struct {
 }
 
 type SyncFromCRSRequest struct {
-	BaseURL     string `json:"base_url" binding:"required"`
-	Username    string `json:"username" binding:"required"`
-	Password    string `json:"password" binding:"required"`
-	SyncProxies *bool  `json:"sync_proxies"`
+	BaseURL            string   `json:"base_url" binding:"required"`
+	Username           string   `json:"username" binding:"required"`
+	Password           string   `json:"password" binding:"required"`
+	SyncProxies        *bool    `json:"sync_proxies"`
+	SelectedAccountIDs []string `json:"selected_account_ids"`
+}
+
+type PreviewFromCRSRequest struct {
+	BaseURL  string `json:"base_url" binding:"required"`
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 // Test handles testing account connectivity with SSE streaming
@@ -369,14 +478,37 @@ func (h *AccountHandler) SyncFromCRS(c *gin.Context) {
 	}
 
 	result, err := h.crsSyncService.SyncFromCRS(c.Request.Context(), service.SyncFromCRSInput{
-		BaseURL:     req.BaseURL,
-		Username:    req.Username,
-		Password:    req.Password,
-		SyncProxies: syncProxies,
+		BaseURL:            req.BaseURL,
+		Username:           req.Username,
+		Password:           req.Password,
+		SyncProxies:        syncProxies,
+		SelectedAccountIDs: req.SelectedAccountIDs,
 	})
 	if err != nil {
 		// Provide detailed error message for CRS sync failures
 		response.InternalError(c, "CRS sync failed: "+err.Error())
+		return
+	}
+
+	response.Success(c, result)
+}
+
+// PreviewFromCRS handles previewing accounts from CRS before sync
+// POST /api/v1/admin/accounts/sync/crs/preview
+func (h *AccountHandler) PreviewFromCRS(c *gin.Context) {
+	var req PreviewFromCRSRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	result, err := h.crsSyncService.PreviewFromCRS(c.Request.Context(), service.SyncFromCRSInput{
+		BaseURL:  req.BaseURL,
+		Username: req.Username,
+		Password: req.Password,
+	})
+	if err != nil {
+		response.InternalError(c, "CRS preview failed: "+err.Error())
 		return
 	}
 
@@ -450,6 +582,41 @@ func (h *AccountHandler) Refresh(c *gin.Context) {
 				newCredentials[k] = v
 			}
 		}
+
+		// 特殊处理 project_id：如果新值为空但旧值非空，保留旧值
+		// 这确保了即使 LoadCodeAssist 失败，project_id 也不会丢失
+		if newProjectID, _ := newCredentials["project_id"].(string); newProjectID == "" {
+			if oldProjectID := strings.TrimSpace(account.GetCredential("project_id")); oldProjectID != "" {
+				newCredentials["project_id"] = oldProjectID
+			}
+		}
+
+		// 如果 project_id 获取失败，更新凭证但不标记为 error
+		// LoadCodeAssist 失败可能是临时网络问题，给它机会在下次自动刷新时重试
+		if tokenInfo.ProjectIDMissing {
+			// 先更新凭证（token 本身刷新成功了）
+			_, updateErr := h.adminService.UpdateAccount(c.Request.Context(), accountID, &service.UpdateAccountInput{
+				Credentials: newCredentials,
+			})
+			if updateErr != nil {
+				response.InternalError(c, "Failed to update credentials: "+updateErr.Error())
+				return
+			}
+			// 不标记为 error，只返回警告信息
+			response.Success(c, gin.H{
+				"message": "Token refreshed successfully, but project_id could not be retrieved (will retry automatically)",
+				"warning": "missing_project_id_temporary",
+			})
+			return
+		}
+
+		// 成功获取到 project_id，如果之前是 missing_project_id 错误则清除
+		if account.Status == service.StatusError && strings.Contains(account.ErrorMessage, "missing_project_id:") {
+			if _, clearErr := h.adminService.ClearAccountError(c.Request.Context(), accountID); clearErr != nil {
+				response.InternalError(c, "Failed to clear account error: "+clearErr.Error())
+				return
+			}
+		}
 	} else {
 		// Use Anthropic/Claude OAuth service to refresh token
 		tokenInfo, err := h.oauthService.RefreshAccountToken(c.Request.Context(), account)
@@ -483,6 +650,14 @@ func (h *AccountHandler) Refresh(c *gin.Context) {
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+
+	// 刷新成功后，清除 token 缓存，确保下次请求使用新 token
+	if h.tokenCacheInvalidator != nil {
+		if invalidateErr := h.tokenCacheInvalidator.InvalidateToken(c.Request.Context(), updatedAccount); invalidateErr != nil {
+			// 缓存失效失败只记录日志，不影响主流程
+			_ = c.Error(invalidateErr)
+		}
 	}
 
 	response.Success(c, dto.AccountFromService(updatedAccount))
@@ -534,6 +709,15 @@ func (h *AccountHandler) ClearError(c *gin.Context) {
 		return
 	}
 
+	// 清除错误后，同时清除 token 缓存，确保下次请求会获取最新的 token（触发刷新或从 DB 读取）
+	// 这解决了管理员重置账号状态后，旧的失效 token 仍在缓存中导致立即再次 401 的问题
+	if h.tokenCacheInvalidator != nil && account.IsOAuth() {
+		if invalidateErr := h.tokenCacheInvalidator.InvalidateToken(c.Request.Context(), account); invalidateErr != nil {
+			// 缓存失效失败只记录日志，不影响主流程
+			_ = c.Error(invalidateErr)
+		}
+	}
+
 	response.Success(c, dto.AccountFromService(account))
 }
 
@@ -548,11 +732,61 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 		return
 	}
 
-	// Return mock data for now
+	ctx := c.Request.Context()
+	success := 0
+	failed := 0
+	results := make([]gin.H, 0, len(req.Accounts))
+
+	for _, item := range req.Accounts {
+		if item.RateMultiplier != nil && *item.RateMultiplier < 0 {
+			failed++
+			results = append(results, gin.H{
+				"name":    item.Name,
+				"success": false,
+				"error":   "rate_multiplier must be >= 0",
+			})
+			continue
+		}
+
+		skipCheck := item.ConfirmMixedChannelRisk != nil && *item.ConfirmMixedChannelRisk
+
+		account, err := h.adminService.CreateAccount(ctx, &service.CreateAccountInput{
+			Name:                  item.Name,
+			Notes:                 item.Notes,
+			Platform:              item.Platform,
+			Type:                  item.Type,
+			Credentials:           item.Credentials,
+			Extra:                 item.Extra,
+			ProxyID:               item.ProxyID,
+			Concurrency:           item.Concurrency,
+			Priority:              item.Priority,
+			RateMultiplier:        item.RateMultiplier,
+			GroupIDs:              item.GroupIDs,
+			ExpiresAt:             item.ExpiresAt,
+			AutoPauseOnExpired:    item.AutoPauseOnExpired,
+			SkipMixedChannelCheck: skipCheck,
+		})
+		if err != nil {
+			failed++
+			results = append(results, gin.H{
+				"name":    item.Name,
+				"success": false,
+				"error":   err.Error(),
+			})
+			continue
+		}
+		success++
+		results = append(results, gin.H{
+			"name":    item.Name,
+			"id":      account.ID,
+			"success": true,
+		})
+	}
+
 	response.Success(c, gin.H{
-		"success": len(req.Accounts),
-		"failed":  0,
-		"results": []gin.H{},
+		"success": success,
+		"failed":  failed,
+		"results": results,
 	})
 }
 
@@ -652,6 +886,10 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	if req.RateMultiplier != nil && *req.RateMultiplier < 0 {
+		response.BadRequest(c, "rate_multiplier must be >= 0")
+		return
+	}
 
 	// 确定是否跳过混合渠道检查
 	skipCheck := req.ConfirmMixedChannelRisk != nil && *req.ConfirmMixedChannelRisk
@@ -660,6 +898,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		req.ProxyID != nil ||
 		req.Concurrency != nil ||
 		req.Priority != nil ||
+		req.RateMultiplier != nil ||
 		req.Status != "" ||
 		req.Schedulable != nil ||
 		req.GroupIDs != nil ||
@@ -677,6 +916,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		ProxyID:               req.ProxyID,
 		Concurrency:           req.Concurrency,
 		Priority:              req.Priority,
+		RateMultiplier:        req.RateMultiplier,
 		Status:                req.Status,
 		Schedulable:           req.Schedulable,
 		GroupIDs:              req.GroupIDs,
@@ -1194,7 +1434,7 @@ func (h *AccountHandler) BatchRefreshTier(c *gin.Context) {
 	accounts := make([]*service.Account, 0)
 
 	if len(req.AccountIDs) == 0 {
-		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "")
+		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
@@ -1285,4 +1525,10 @@ func (h *AccountHandler) BatchRefreshTier(c *gin.Context) {
 	}
 
 	response.Success(c, results)
+}
+
+// GetAntigravityDefaultModelMapping 获取 Antigravity 平台的默认模型映射
+// GET /api/v1/admin/accounts/antigravity/default-model-mapping
+func (h *AccountHandler) GetAntigravityDefaultModelMapping(c *gin.Context) {
+	response.Success(c, domain.DefaultAntigravityModelMapping)
 }

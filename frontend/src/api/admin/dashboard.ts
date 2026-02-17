@@ -46,6 +46,11 @@ export interface TrendParams {
   granularity?: 'day' | 'hour'
   user_id?: number
   api_key_id?: number
+  model?: string
+  account_id?: number
+  group_id?: number
+  stream?: boolean
+  billing_type?: number | null
 }
 
 export interface TrendResponse {
@@ -70,6 +75,11 @@ export interface ModelStatsParams {
   end_date?: string
   user_id?: number
   api_key_id?: number
+  model?: string
+  account_id?: number
+  group_id?: number
+  stream?: boolean
+  billing_type?: number | null
 }
 
 export interface ModelStatsResponse {

@@ -1,18 +1,32 @@
 <template>
   <div class="flex items-center gap-2">
-    <!-- Main Status Badge -->
-    <button
-      v-if="isTempUnschedulable"
-      type="button"
-      :class="['badge text-xs', statusClass, 'cursor-pointer']"
-      :title="t('admin.accounts.status.viewTempUnschedDetails')"
-      @click="handleTempUnschedClick"
-    >
-      {{ statusText }}
-    </button>
-    <span v-else :class="['badge text-xs', statusClass]">
-      {{ statusText }}
-    </span>
+    <!-- Rate Limit Display (429) - Two-line layout -->
+    <div v-if="isRateLimited" class="flex flex-col items-center gap-1">
+      <span class="badge text-xs badge-warning">{{ t('admin.accounts.status.rateLimited') }}</span>
+      <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ rateLimitCountdown }}</span>
+    </div>
+
+    <!-- Overload Display (529) - Two-line layout -->
+    <div v-else-if="isOverloaded" class="flex flex-col items-center gap-1">
+      <span class="badge text-xs badge-danger">{{ t('admin.accounts.status.overloaded') }}</span>
+      <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ overloadCountdown }}</span>
+    </div>
+
+    <!-- Main Status Badge (shown when not rate limited/overloaded) -->
+    <template v-else>
+      <button
+        v-if="isTempUnschedulable"
+        type="button"
+        :class="['badge text-xs', statusClass, 'cursor-pointer']"
+        :title="t('admin.accounts.status.viewTempUnschedDetails')"
+        @click="handleTempUnschedClick"
+      >
+        {{ statusText }}
+      </button>
+      <span v-else :class="['badge text-xs', statusClass]">
+        {{ statusText }}
+      </span>
+    </template>
 
     <!-- Error Info Indicator -->
     <div v-if="hasError && account.error_message" class="group/error relative">
@@ -62,6 +76,27 @@
       </div>
     </div>
 
+    <!-- Model Rate Limit Indicators (Antigravity OAuth Smart Retry) -->
+    <template v-if="activeModelRateLimits.length > 0">
+      <div v-for="item in activeModelRateLimits" :key="item.model" class="group relative">
+        <span
+          class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+        >
+          <Icon name="exclamationTriangle" size="xs" :stroke-width="2" />
+          {{ formatScopeName(item.model) }}
+        </span>
+        <!-- Tooltip -->
+        <div
+          class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+        >
+          {{ t('admin.accounts.status.modelRateLimitedUntil', { model: formatScopeName(item.model), time: formatTime(item.reset_at) }) }}
+          <div
+            class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"
+          ></div>
+        </div>
+      </div>
+    </template>
+
     <!-- Overload Indicator (529) -->
     <div v-if="isOverloaded" class="group relative">
       <span
@@ -87,8 +122,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/types'
-import { formatTime } from '@/utils/format'
-import Icon from '@/components/icons/Icon.vue'
+import { formatCountdownWithSuffix, formatTime } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -105,6 +139,33 @@ const isRateLimited = computed(() => {
   if (!props.account.rate_limit_reset_at) return false
   return new Date(props.account.rate_limit_reset_at) > new Date()
 })
+
+
+// Computed: active model rate limits (Antigravity OAuth Smart Retry)
+const activeModelRateLimits = computed(() => {
+  const modelLimits = (props.account.extra as Record<string, unknown> | undefined)?.model_rate_limits as
+    | Record<string, { rate_limited_at: string; rate_limit_reset_at: string }>
+    | undefined
+  if (!modelLimits) return []
+  const now = new Date()
+  return Object.entries(modelLimits)
+    .filter(([, info]) => new Date(info.rate_limit_reset_at) > now)
+    .map(([model, info]) => ({ model, reset_at: info.rate_limit_reset_at }))
+})
+
+const formatScopeName = (scope: string): string => {
+  const names: Record<string, string> = {
+    claude: 'Claude',
+    claude_sonnet: 'Claude Sonnet',
+    claude_opus: 'Claude Opus',
+    claude_haiku: 'Claude Haiku',
+    gemini_text: 'Gemini',
+    gemini_image: 'Image',
+    gemini_flash: 'Gemini Flash',
+    gemini_pro: 'Gemini Pro'
+  }
+  return names[scope] || scope
+}
 
 // Computed: is overloaded (529)
 const isOverloaded = computed(() => {
@@ -123,6 +184,16 @@ const hasError = computed(() => {
   return props.account.status === 'error'
 })
 
+// Computed: countdown text for rate limit (429)
+const rateLimitCountdown = computed(() => {
+  return formatCountdownWithSuffix(props.account.rate_limit_reset_at)
+})
+
+// Computed: countdown text for overload (529)
+const overloadCountdown = computed(() => {
+  return formatCountdownWithSuffix(props.account.overload_until)
+})
+
 // Computed: status badge class
 const statusClass = computed(() => {
   if (hasError.value) {
@@ -131,7 +202,7 @@ const statusClass = computed(() => {
   if (isTempUnschedulable.value) {
     return 'badge-warning'
   }
-  if (!props.account.schedulable || isRateLimited.value || isOverloaded.value) {
+  if (!props.account.schedulable) {
     return 'badge-gray'
   }
   switch (props.account.status) {
@@ -157,9 +228,6 @@ const statusText = computed(() => {
   if (!props.account.schedulable) {
     return t('admin.accounts.status.paused')
   }
-  if (isRateLimited.value || isOverloaded.value) {
-    return t('admin.accounts.status.limited')
-  }
   return t(`admin.accounts.status.${props.account.status}`)
 })
 
@@ -167,5 +235,4 @@ const handleTempUnschedClick = () => {
   if (!isTempUnschedulable.value) return
   emit('show-temp-unsched', props.account)
 }
-
 </script>

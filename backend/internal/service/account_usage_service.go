@@ -32,8 +32,8 @@ type UsageLogRepository interface {
 
 	// Admin dashboard stats
 	GetDashboardStats(ctx context.Context) (*usagestats.DashboardStats, error)
-	GetUsageTrendWithFilters(ctx context.Context, startTime, endTime time.Time, granularity string, userID, apiKeyID int64) ([]usagestats.TrendDataPoint, error)
-	GetModelStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID int64) ([]usagestats.ModelStat, error)
+	GetUsageTrendWithFilters(ctx context.Context, startTime, endTime time.Time, granularity string, userID, apiKeyID, accountID, groupID int64, model string, stream *bool, billingType *int8) ([]usagestats.TrendDataPoint, error)
+	GetModelStatsWithFilters(ctx context.Context, startTime, endTime time.Time, userID, apiKeyID, accountID, groupID int64, stream *bool, billingType *int8) ([]usagestats.ModelStat, error)
 	GetAPIKeyUsageTrend(ctx context.Context, startTime, endTime time.Time, granularity string, limit int) ([]usagestats.APIKeyUsageTrendPoint, error)
 	GetUserUsageTrend(ctx context.Context, startTime, endTime time.Time, granularity string, limit int) ([]usagestats.UserUsageTrendPoint, error)
 	GetBatchUserUsageStats(ctx context.Context, userIDs []int64) (map[int64]*usagestats.BatchUserUsageStats, error)
@@ -41,6 +41,7 @@ type UsageLogRepository interface {
 
 	// User dashboard stats
 	GetUserDashboardStats(ctx context.Context, userID int64) (*usagestats.UserDashboardStats, error)
+	GetAPIKeyDashboardStats(ctx context.Context, apiKeyID int64) (*usagestats.UserDashboardStats, error)
 	GetUserUsageTrendByUserID(ctx context.Context, userID int64, startTime, endTime time.Time, granularity string) ([]usagestats.TrendDataPoint, error)
 	GetUserModelStats(ctx context.Context, userID int64, startTime, endTime time.Time) ([]usagestats.ModelStat, error)
 
@@ -96,10 +97,16 @@ func NewUsageCache() *UsageCache {
 }
 
 // WindowStats 窗口期统计
+//
+// cost: 账号口径费用（total_cost * account_rate_multiplier）
+// standard_cost: 标准费用（total_cost，不含倍率）
+// user_cost: 用户/API Key 口径费用（actual_cost，受分组倍率影响）
 type WindowStats struct {
-	Requests int64   `json:"requests"`
-	Tokens   int64   `json:"tokens"`
-	Cost     float64 `json:"cost"`
+	Requests     int64   `json:"requests"`
+	Tokens       int64   `json:"tokens"`
+	Cost         float64 `json:"cost"`
+	StandardCost float64 `json:"standard_cost"`
+	UserCost     float64 `json:"user_cost"`
 }
 
 // UsageProgress 使用量进度
@@ -151,9 +158,19 @@ type ClaudeUsageResponse struct {
 	} `json:"seven_day_sonnet"`
 }
 
+// ClaudeUsageFetchOptions 包含获取 Claude 用量数据所需的所有选项
+type ClaudeUsageFetchOptions struct {
+	AccessToken          string // OAuth access token
+	ProxyURL             string // 代理 URL（可选）
+	AccountID            int64  // 账号 ID（用于 TLS 指纹选择）
+	EnableTLSFingerprint bool   // 是否启用 TLS 指纹伪装
+}
+
 // ClaudeUsageFetcher fetches usage data from Anthropic OAuth API
 type ClaudeUsageFetcher interface {
 	FetchUsage(ctx context.Context, accessToken, proxyURL string) (*ClaudeUsageResponse, error)
+	// FetchUsageWithOptions 使用完整选项获取用量数据，支持 TLS 指纹和自定义 User-Agent
+	FetchUsageWithOptions(ctx context.Context, opts *ClaudeUsageFetchOptions) (*ClaudeUsageResponse, error)
 }
 
 // AccountUsageService 账号使用量查询服务
@@ -266,7 +283,7 @@ func (s *AccountUsageService) getGeminiUsage(ctx context.Context, account *Accou
 	}
 
 	dayStart := geminiDailyWindowStart(now)
-	stats, err := s.usageLogRepo.GetModelStatsWithFilters(ctx, dayStart, now, 0, 0, account.ID)
+	stats, err := s.usageLogRepo.GetModelStatsWithFilters(ctx, dayStart, now, 0, 0, account.ID, 0, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("get gemini usage stats failed: %w", err)
 	}
@@ -288,7 +305,7 @@ func (s *AccountUsageService) getGeminiUsage(ctx context.Context, account *Accou
 	// Minute window (RPM) - fixed-window approximation: current minute [truncate(now), truncate(now)+1m)
 	minuteStart := now.Truncate(time.Minute)
 	minuteResetAt := minuteStart.Add(time.Minute)
-	minuteStats, err := s.usageLogRepo.GetModelStatsWithFilters(ctx, minuteStart, now, 0, 0, account.ID)
+	minuteStats, err := s.usageLogRepo.GetModelStatsWithFilters(ctx, minuteStart, now, 0, 0, account.ID, 0, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("get gemini minute usage stats failed: %w", err)
 	}
@@ -363,12 +380,8 @@ func (s *AccountUsageService) addWindowStats(ctx context.Context, account *Accou
 
 	// 如果没有缓存，从数据库查询
 	if windowStats == nil {
-		var startTime time.Time
-		if account.SessionWindowStart != nil {
-			startTime = *account.SessionWindowStart
-		} else {
-			startTime = time.Now().Add(-5 * time.Hour)
-		}
+		// 使用统一的窗口开始时间计算逻辑（考虑窗口过期情况）
+		startTime := account.GetCurrentWindowStartTime()
 
 		stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, startTime)
 		if err != nil {
@@ -377,9 +390,11 @@ func (s *AccountUsageService) addWindowStats(ctx context.Context, account *Accou
 		}
 
 		windowStats = &WindowStats{
-			Requests: stats.Requests,
-			Tokens:   stats.Tokens,
-			Cost:     stats.Cost,
+			Requests:     stats.Requests,
+			Tokens:       stats.Tokens,
+			Cost:         stats.Cost,
+			StandardCost: stats.StandardCost,
+			UserCost:     stats.UserCost,
 		}
 
 		// 缓存窗口统计（1 分钟）
@@ -403,9 +418,11 @@ func (s *AccountUsageService) GetTodayStats(ctx context.Context, accountID int64
 	}
 
 	return &WindowStats{
-		Requests: stats.Requests,
-		Tokens:   stats.Tokens,
-		Cost:     stats.Cost,
+		Requests:     stats.Requests,
+		Tokens:       stats.Tokens,
+		Cost:         stats.Cost,
+		StandardCost: stats.StandardCost,
+		UserCost:     stats.UserCost,
 	}, nil
 }
 
@@ -418,6 +435,7 @@ func (s *AccountUsageService) GetAccountUsageStats(ctx context.Context, accountI
 }
 
 // fetchOAuthUsageRaw 从 Anthropic API 获取原始响应（不构建 UsageInfo）
+// 如果账号开启了 TLS 指纹，则使用 TLS 指纹伪装
 func (s *AccountUsageService) fetchOAuthUsageRaw(ctx context.Context, account *Account) (*ClaudeUsageResponse, error) {
 	accessToken := account.GetCredential("access_token")
 	if accessToken == "" {
@@ -429,7 +447,15 @@ func (s *AccountUsageService) fetchOAuthUsageRaw(ctx context.Context, account *A
 		proxyURL = account.Proxy.URL()
 	}
 
-	return s.usageFetcher.FetchUsage(ctx, accessToken, proxyURL)
+	// 构建完整的选项
+	opts := &ClaudeUsageFetchOptions{
+		AccessToken:          accessToken,
+		ProxyURL:             proxyURL,
+		AccountID:            account.ID,
+		EnableTLSFingerprint: account.IsTLSFingerprintEnabled(),
+	}
+
+	return s.usageFetcher.FetchUsageWithOptions(ctx, opts)
 }
 
 // parseTime 尝试多种格式解析时间
@@ -564,4 +590,10 @@ func buildGeminiUsageProgress(used, limit int64, resetAt time.Time, tokens int64
 			Cost:     cost,
 		},
 	}
+}
+
+// GetAccountWindowStats 获取账号在指定时间窗口内的使用统计
+// 用于账号列表页面显示当前窗口费用
+func (s *AccountUsageService) GetAccountWindowStats(ctx context.Context, accountID int64, startTime time.Time) (*usagestats.AccountStats, error) {
+	return s.usageLogRepo.GetAccountWindowStats(ctx, accountID, startTime)
 }

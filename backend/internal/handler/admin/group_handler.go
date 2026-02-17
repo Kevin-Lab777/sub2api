@@ -35,11 +35,20 @@ type CreateGroupRequest struct {
 	WeeklyLimitUSD   *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD  *float64 `json:"monthly_limit_usd"`
 	// 图片生成计费配置（antigravity 和 gemini 平台使用，负数表示清除配置）
-	ImagePrice1K    *float64 `json:"image_price_1k"`
-	ImagePrice2K    *float64 `json:"image_price_2k"`
-	ImagePrice4K    *float64 `json:"image_price_4k"`
-	ClaudeCodeOnly  bool     `json:"claude_code_only"`
-	FallbackGroupID *int64   `json:"fallback_group_id"`
+	ImagePrice1K                    *float64 `json:"image_price_1k"`
+	ImagePrice2K                    *float64 `json:"image_price_2k"`
+	ImagePrice4K                    *float64 `json:"image_price_4k"`
+	ClaudeCodeOnly                  bool     `json:"claude_code_only"`
+	FallbackGroupID                 *int64   `json:"fallback_group_id"`
+	FallbackGroupIDOnInvalidRequest *int64   `json:"fallback_group_id_on_invalid_request"`
+	// 模型路由配置（仅 anthropic 平台使用）
+	ModelRouting        map[string][]int64 `json:"model_routing"`
+	ModelRoutingEnabled bool               `json:"model_routing_enabled"`
+	MCPXMLInject        *bool              `json:"mcp_xml_inject"`
+	// 支持的模型系列（仅 antigravity 平台使用）
+	SupportedModelScopes []string `json:"supported_model_scopes"`
+	// 从指定分组复制账号（创建后自动绑定）
+	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
 }
 
 // UpdateGroupRequest represents update group request
@@ -55,11 +64,20 @@ type UpdateGroupRequest struct {
 	WeeklyLimitUSD   *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD  *float64 `json:"monthly_limit_usd"`
 	// 图片生成计费配置（antigravity 和 gemini 平台使用，负数表示清除配置）
-	ImagePrice1K    *float64 `json:"image_price_1k"`
-	ImagePrice2K    *float64 `json:"image_price_2k"`
-	ImagePrice4K    *float64 `json:"image_price_4k"`
-	ClaudeCodeOnly  *bool    `json:"claude_code_only"`
-	FallbackGroupID *int64   `json:"fallback_group_id"`
+	ImagePrice1K                    *float64 `json:"image_price_1k"`
+	ImagePrice2K                    *float64 `json:"image_price_2k"`
+	ImagePrice4K                    *float64 `json:"image_price_4k"`
+	ClaudeCodeOnly                  *bool    `json:"claude_code_only"`
+	FallbackGroupID                 *int64   `json:"fallback_group_id"`
+	FallbackGroupIDOnInvalidRequest *int64   `json:"fallback_group_id_on_invalid_request"`
+	// 模型路由配置（仅 anthropic 平台使用）
+	ModelRouting        map[string][]int64 `json:"model_routing"`
+	ModelRoutingEnabled *bool              `json:"model_routing_enabled"`
+	MCPXMLInject        *bool              `json:"mcp_xml_inject"`
+	// 支持的模型系列（仅 antigravity 平台使用）
+	SupportedModelScopes *[]string `json:"supported_model_scopes"`
+	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
+	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
 }
 
 // List handles listing all groups with pagination
@@ -88,9 +106,9 @@ func (h *GroupHandler) List(c *gin.Context) {
 		return
 	}
 
-	outGroups := make([]dto.Group, 0, len(groups))
+	outGroups := make([]dto.AdminGroup, 0, len(groups))
 	for i := range groups {
-		outGroups = append(outGroups, *dto.GroupFromService(&groups[i]))
+		outGroups = append(outGroups, *dto.GroupFromServiceAdmin(&groups[i]))
 	}
 	response.Paginated(c, outGroups, total, page, pageSize)
 }
@@ -114,9 +132,9 @@ func (h *GroupHandler) GetAll(c *gin.Context) {
 		return
 	}
 
-	outGroups := make([]dto.Group, 0, len(groups))
+	outGroups := make([]dto.AdminGroup, 0, len(groups))
 	for i := range groups {
-		outGroups = append(outGroups, *dto.GroupFromService(&groups[i]))
+		outGroups = append(outGroups, *dto.GroupFromServiceAdmin(&groups[i]))
 	}
 	response.Success(c, outGroups)
 }
@@ -136,7 +154,7 @@ func (h *GroupHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, dto.GroupFromService(group))
+	response.Success(c, dto.GroupFromServiceAdmin(group))
 }
 
 // Create handles creating a new group
@@ -149,27 +167,33 @@ func (h *GroupHandler) Create(c *gin.Context) {
 	}
 
 	group, err := h.adminService.CreateGroup(c.Request.Context(), &service.CreateGroupInput{
-		Name:             req.Name,
-		Description:      req.Description,
-		Platform:         req.Platform,
-		RateMultiplier:   req.RateMultiplier,
-		IsExclusive:      req.IsExclusive,
-		SubscriptionType: req.SubscriptionType,
-		DailyLimitUSD:    req.DailyLimitUSD,
-		WeeklyLimitUSD:   req.WeeklyLimitUSD,
-		MonthlyLimitUSD:  req.MonthlyLimitUSD,
-		ImagePrice1K:     req.ImagePrice1K,
-		ImagePrice2K:     req.ImagePrice2K,
-		ImagePrice4K:     req.ImagePrice4K,
-		ClaudeCodeOnly:   req.ClaudeCodeOnly,
-		FallbackGroupID:  req.FallbackGroupID,
+		Name:                            req.Name,
+		Description:                     req.Description,
+		Platform:                        req.Platform,
+		RateMultiplier:                  req.RateMultiplier,
+		IsExclusive:                     req.IsExclusive,
+		SubscriptionType:                req.SubscriptionType,
+		DailyLimitUSD:                   req.DailyLimitUSD,
+		WeeklyLimitUSD:                  req.WeeklyLimitUSD,
+		MonthlyLimitUSD:                 req.MonthlyLimitUSD,
+		ImagePrice1K:                    req.ImagePrice1K,
+		ImagePrice2K:                    req.ImagePrice2K,
+		ImagePrice4K:                    req.ImagePrice4K,
+		ClaudeCodeOnly:                  req.ClaudeCodeOnly,
+		FallbackGroupID:                 req.FallbackGroupID,
+		FallbackGroupIDOnInvalidRequest: req.FallbackGroupIDOnInvalidRequest,
+		ModelRouting:                    req.ModelRouting,
+		ModelRoutingEnabled:             req.ModelRoutingEnabled,
+		MCPXMLInject:                    req.MCPXMLInject,
+		SupportedModelScopes:            req.SupportedModelScopes,
+		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 
-	response.Success(c, dto.GroupFromService(group))
+	response.Success(c, dto.GroupFromServiceAdmin(group))
 }
 
 // Update handles updating a group
@@ -188,28 +212,34 @@ func (h *GroupHandler) Update(c *gin.Context) {
 	}
 
 	group, err := h.adminService.UpdateGroup(c.Request.Context(), groupID, &service.UpdateGroupInput{
-		Name:             req.Name,
-		Description:      req.Description,
-		Platform:         req.Platform,
-		RateMultiplier:   req.RateMultiplier,
-		IsExclusive:      req.IsExclusive,
-		Status:           req.Status,
-		SubscriptionType: req.SubscriptionType,
-		DailyLimitUSD:    req.DailyLimitUSD,
-		WeeklyLimitUSD:   req.WeeklyLimitUSD,
-		MonthlyLimitUSD:  req.MonthlyLimitUSD,
-		ImagePrice1K:     req.ImagePrice1K,
-		ImagePrice2K:     req.ImagePrice2K,
-		ImagePrice4K:     req.ImagePrice4K,
-		ClaudeCodeOnly:   req.ClaudeCodeOnly,
-		FallbackGroupID:  req.FallbackGroupID,
+		Name:                            req.Name,
+		Description:                     req.Description,
+		Platform:                        req.Platform,
+		RateMultiplier:                  req.RateMultiplier,
+		IsExclusive:                     req.IsExclusive,
+		Status:                          req.Status,
+		SubscriptionType:                req.SubscriptionType,
+		DailyLimitUSD:                   req.DailyLimitUSD,
+		WeeklyLimitUSD:                  req.WeeklyLimitUSD,
+		MonthlyLimitUSD:                 req.MonthlyLimitUSD,
+		ImagePrice1K:                    req.ImagePrice1K,
+		ImagePrice2K:                    req.ImagePrice2K,
+		ImagePrice4K:                    req.ImagePrice4K,
+		ClaudeCodeOnly:                  req.ClaudeCodeOnly,
+		FallbackGroupID:                 req.FallbackGroupID,
+		FallbackGroupIDOnInvalidRequest: req.FallbackGroupIDOnInvalidRequest,
+		ModelRouting:                    req.ModelRouting,
+		ModelRoutingEnabled:             req.ModelRoutingEnabled,
+		MCPXMLInject:                    req.MCPXMLInject,
+		SupportedModelScopes:            req.SupportedModelScopes,
+		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 
-	response.Success(c, dto.GroupFromService(group))
+	response.Success(c, dto.GroupFromServiceAdmin(group))
 }
 
 // Delete handles deleting a group
@@ -271,4 +301,37 @@ func (h *GroupHandler) GetGroupAPIKeys(c *gin.Context) {
 		outKeys = append(outKeys, *dto.APIKeyFromService(&keys[i]))
 	}
 	response.Paginated(c, outKeys, total, page, pageSize)
+}
+
+// UpdateSortOrderRequest represents the request to update group sort orders
+type UpdateSortOrderRequest struct {
+	Updates []struct {
+		ID        int64 `json:"id" binding:"required"`
+		SortOrder int   `json:"sort_order"`
+	} `json:"updates" binding:"required,min=1"`
+}
+
+// UpdateSortOrder handles updating group sort orders
+// PUT /api/v1/admin/groups/sort-order
+func (h *GroupHandler) UpdateSortOrder(c *gin.Context) {
+	var req UpdateSortOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	updates := make([]service.GroupSortOrderUpdate, 0, len(req.Updates))
+	for _, u := range req.Updates {
+		updates = append(updates, service.GroupSortOrderUpdate{
+			ID:        u.ID,
+			SortOrder: u.SortOrder,
+		})
+	}
+
+	if err := h.adminService.UpdateGroupSortOrders(c.Request.Context(), updates); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{"message": "Sort order updated successfully"})
 }

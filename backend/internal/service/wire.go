@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -30,6 +31,13 @@ func ProvideUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, b
 	return NewUpdateService(cache, githubClient, buildInfo.Version, buildInfo.BuildType)
 }
 
+// ProvideUsageCleanupService 创建并启动使用记录清理任务服务
+func ProvideUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
+	svc := NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideAccountExpiryService creates and starts AccountExpiryService.
 func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpiryService {
 	svc := NewAccountExpiryService(accountRepo, time.Minute)
@@ -37,11 +45,21 @@ func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpirySe
 	return svc
 }
 
-// ProvideTimingWheelService creates and starts TimingWheelService
-func ProvideTimingWheelService() *TimingWheelService {
-	svc := NewTimingWheelService()
+// ProvideSubscriptionExpiryService creates and starts SubscriptionExpiryService.
+func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository) *SubscriptionExpiryService {
+	svc := NewSubscriptionExpiryService(userSubRepo, time.Minute)
 	svc.Start()
 	return svc
+}
+
+// ProvideTimingWheelService creates and starts TimingWheelService
+func ProvideTimingWheelService() (*TimingWheelService, error) {
+	svc, err := NewTimingWheelService()
+	if err != nil {
+		return nil, err
+	}
+	svc.Start()
+	return svc, nil
 }
 
 // ProvideDeferredService creates and starts DeferredService
@@ -82,10 +100,12 @@ func ProvideRateLimitService(
 	tempUnschedCache TempUnschedCache,
 	timeoutCounterCache TimeoutCounterCache,
 	settingService *SettingService,
+	tokenCacheInvalidator TokenCacheInvalidator,
 ) *RateLimitService {
 	svc := NewRateLimitService(accountRepo, usageRepo, cfg, geminiQuotaService, tempUnschedCache)
 	svc.SetTimeoutCounterCache(timeoutCounterCache)
 	svc.SetSettingService(settingService)
+	svc.SetTokenCacheInvalidator(tokenCacheInvalidator)
 	return svc
 }
 
@@ -140,9 +160,11 @@ func ProvideTokenRefreshService(
 	openaiOAuthService *OpenAIOAuthService,
 	geminiOAuthService *GeminiOAuthService,
 	antigravityOAuthService *AntigravityOAuthService,
+	cacheInvalidator TokenCacheInvalidator,
+	schedulerCache SchedulerCache,
 	cfg *config.Config,
 ) *TokenRefreshService {
-	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cfg)
+	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cacheInvalidator, schedulerCache, cfg)
 	svc.Start()
 	return svc
 }
@@ -156,6 +178,8 @@ func ProvideDashboardAggregationService(repo DashboardAggregationRepository, tim
 
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
 func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
+	// Start Pub/Sub subscriber for L1 cache invalidation across instances
+	apiKeyService.StartAuthCacheInvalidationSubscriber(context.Background())
 	return apiKeyService
 }
 
@@ -177,6 +201,7 @@ var ProviderSet = wire.NewSet(
 	ProvidePricingService,
 	NewBillingService,
 	NewBillingCacheService,
+	NewAnnouncementService,
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
@@ -184,10 +209,14 @@ var ProviderSet = wire.NewSet(
 	NewOpenAIOAuthService,
 	NewGeminiOAuthService,
 	NewGeminiQuotaService,
+	NewCompositeTokenCacheInvalidator,
+	wire.Bind(new(TokenCacheInvalidator), new(*CompositeTokenCacheInvalidator)),
 	NewAntigravityOAuthService,
 	NewGeminiTokenProvider,
 	NewGeminiMessagesCompatService,
 	NewAntigravityTokenProvider,
+	NewOpenAITokenProvider,
+	NewClaudeTokenProvider,
 	NewAntigravityGatewayService,
 	ProvideRateLimitService,
 	NewAccountUsageService,
@@ -211,10 +240,15 @@ var ProviderSet = wire.NewSet(
 	ProvideUpdateService,
 	ProvideTokenRefreshService,
 	ProvideAccountExpiryService,
+	ProvideSubscriptionExpiryService,
 	ProvideTimingWheelService,
 	ProvideDashboardAggregationService,
+	ProvideUsageCleanupService,
 	ProvideDeferredService,
 	NewAntigravityQuotaFetcher,
 	// [LITE:DELETED] NewUserAttributeService,
 	NewUsageCache,
+	NewTotpService,
+	NewErrorPassthroughService,
+	NewDigestSessionStore,
 )

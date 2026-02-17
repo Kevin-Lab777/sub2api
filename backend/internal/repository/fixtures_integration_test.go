@@ -55,16 +55,6 @@ func mustCreateUser(t *testing.T, client *dbent.Client, u *service.User) *servic
 	u.CreatedAt = created.CreatedAt
 	u.UpdatedAt = created.UpdatedAt
 
-	if len(u.AllowedGroups) > 0 {
-		for _, groupID := range u.AllowedGroups {
-			_, err := client.UserAllowedGroup.Create().
-				SetUserID(u.ID).
-				SetGroupID(groupID).
-				Save(ctx)
-			require.NoError(t, err, "create user_allowed_groups row")
-		}
-	}
-
 	return u
 }
 

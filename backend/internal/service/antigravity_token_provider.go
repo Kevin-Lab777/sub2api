@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
 	antigravityTokenRefreshSkew = 3 * time.Minute
 	antigravityTokenCacheSkew   = 5 * time.Minute
+	antigravityBackfillCooldown = 5 * time.Minute
 )
 
 // AntigravityTokenCache Token 缓存接口（复用 GeminiTokenCache 接口定义）
@@ -22,6 +25,7 @@ type AntigravityTokenProvider struct {
 	accountRepo             AccountRepository
 	tokenCache              AntigravityTokenCache
 	antigravityOAuthService *AntigravityOAuthService
+	backfillCooldown        sync.Map // key: int64 (account.ID) → value: time.Time
 }
 
 func NewAntigravityTokenProvider(
@@ -41,11 +45,22 @@ func (p *AntigravityTokenProvider) GetAccessToken(ctx context.Context, account *
 	if account == nil {
 		return "", errors.New("account is nil")
 	}
-	if account.Platform != PlatformAntigravity || account.Type != AccountTypeOAuth {
+	if account.Platform != PlatformAntigravity {
+		return "", errors.New("not an antigravity account")
+	}
+	// upstream 类型：直接从 credentials 读取 api_key，不走 OAuth 刷新流程
+	if account.Type == AccountTypeUpstream {
+		apiKey := account.GetCredential("api_key")
+		if apiKey == "" {
+			return "", errors.New("upstream account missing api_key in credentials")
+		}
+		return apiKey, nil
+	}
+	if account.Type != AccountTypeOAuth {
 		return "", errors.New("not an antigravity oauth account")
 	}
 
-	cacheKey := antigravityTokenCacheKey(account)
+	cacheKey := AntigravityTokenCacheKey(account)
 
 	// 1. 先尝试缓存
 	if p.tokenCache != nil {
@@ -81,13 +96,7 @@ func (p *AntigravityTokenProvider) GetAccessToken(ctx context.Context, account *
 				if err != nil {
 					return "", err
 				}
-				newCredentials := p.antigravityOAuthService.BuildAccountCredentials(tokenInfo)
-				for k, v := range account.Credentials {
-					if _, exists := newCredentials[k]; !exists {
-						newCredentials[k] = v
-					}
-				}
-				account.Credentials = newCredentials
+				p.mergeCredentials(account, tokenInfo)
 				if updateErr := p.accountRepo.Update(ctx, account); updateErr != nil {
 					log.Printf("[AntigravityTokenProvider] Failed to update account credentials: %v", updateErr)
 				}
@@ -101,27 +110,78 @@ func (p *AntigravityTokenProvider) GetAccessToken(ctx context.Context, account *
 		return "", errors.New("access_token not found in credentials")
 	}
 
-	// 3. 存入缓存
-	if p.tokenCache != nil {
-		ttl := 30 * time.Minute
-		if expiresAt != nil {
-			until := time.Until(*expiresAt)
-			switch {
-			case until > antigravityTokenCacheSkew:
-				ttl = until - antigravityTokenCacheSkew
-			case until > 0:
-				ttl = until
-			default:
-				ttl = time.Minute
+	// 如果账号还没有 project_id，尝试在线补齐，避免请求 daily/sandbox 时出现
+	// "Invalid project resource name projects/"。
+	// 仅调用 loadProjectIDWithRetry，不刷新 OAuth token；带冷却机制防止频繁重试。
+	if strings.TrimSpace(account.GetCredential("project_id")) == "" && p.antigravityOAuthService != nil {
+		if p.shouldAttemptBackfill(account.ID) {
+			p.markBackfillAttempted(account.ID)
+			if projectID, err := p.antigravityOAuthService.FillProjectID(ctx, account, accessToken); err == nil && projectID != "" {
+				account.Credentials["project_id"] = projectID
+				if updateErr := p.accountRepo.Update(ctx, account); updateErr != nil {
+					log.Printf("[AntigravityTokenProvider] project_id 补齐持久化失败: %v", updateErr)
+				}
 			}
 		}
-		_ = p.tokenCache.SetAccessToken(ctx, cacheKey, accessToken, ttl)
+	}
+
+	// 3. 存入缓存（验证版本后再写入，避免异步刷新任务与请求线程的竞态条件）
+	if p.tokenCache != nil {
+		latestAccount, isStale := CheckTokenVersion(ctx, account, p.accountRepo)
+		if isStale && latestAccount != nil {
+			// 版本过时，使用 DB 中的最新 token
+			slog.Debug("antigravity_token_version_stale_use_latest", "account_id", account.ID)
+			accessToken = latestAccount.GetCredential("access_token")
+			if strings.TrimSpace(accessToken) == "" {
+				return "", errors.New("access_token not found after version check")
+			}
+			// 不写入缓存，让下次请求重新处理
+		} else {
+			ttl := 30 * time.Minute
+			if expiresAt != nil {
+				until := time.Until(*expiresAt)
+				switch {
+				case until > antigravityTokenCacheSkew:
+					ttl = until - antigravityTokenCacheSkew
+				case until > 0:
+					ttl = until
+				default:
+					ttl = time.Minute
+				}
+			}
+			_ = p.tokenCache.SetAccessToken(ctx, cacheKey, accessToken, ttl)
+		}
 	}
 
 	return accessToken, nil
 }
 
-func antigravityTokenCacheKey(account *Account) string {
+// mergeCredentials 将 tokenInfo 构建的凭证合并到 account 中，保留原有未覆盖的字段
+func (p *AntigravityTokenProvider) mergeCredentials(account *Account, tokenInfo *AntigravityTokenInfo) {
+	newCredentials := p.antigravityOAuthService.BuildAccountCredentials(tokenInfo)
+	for k, v := range account.Credentials {
+		if _, exists := newCredentials[k]; !exists {
+			newCredentials[k] = v
+		}
+	}
+	account.Credentials = newCredentials
+}
+
+// shouldAttemptBackfill 检查是否应该尝试补齐 project_id（冷却期内不重复尝试）
+func (p *AntigravityTokenProvider) shouldAttemptBackfill(accountID int64) bool {
+	if v, ok := p.backfillCooldown.Load(accountID); ok {
+		if lastAttempt, ok := v.(time.Time); ok {
+			return time.Since(lastAttempt) > antigravityBackfillCooldown
+		}
+	}
+	return true
+}
+
+func (p *AntigravityTokenProvider) markBackfillAttempted(accountID int64) {
+	p.backfillCooldown.Store(accountID, time.Now())
+}
+
+func AntigravityTokenCacheKey(account *Account) string {
 	projectID := strings.TrimSpace(account.GetCredential("project_id"))
 	if projectID != "" {
 		return "ag:" + projectID

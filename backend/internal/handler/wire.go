@@ -13,6 +13,7 @@ func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
+	announcementHandler *admin.AnnouncementHandler,
 	oauthHandler *admin.OAuthHandler,
 	openaiOAuthHandler *admin.OpenAIOAuthHandler,
 	geminiOAuthHandler *admin.GeminiOAuthHandler,
@@ -23,11 +24,13 @@ func ProvideAdminHandlers(
 	systemHandler *admin.SystemHandler,
 	subscriptionHandler *admin.SubscriptionHandler,
 	usageHandler *admin.UsageHandler,
+	errorPassthroughHandler *admin.ErrorPassthroughHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:        dashboardHandler,
 		Group:            groupHandler,
 		Account:          accountHandler,
+		Announcement:     announcementHandler,
 		OAuth:            oauthHandler,
 		OpenAIOAuth:      openaiOAuthHandler,
 		GeminiOAuth:      geminiOAuthHandler,
@@ -38,6 +41,7 @@ func ProvideAdminHandlers(
 		System:           systemHandler,
 		Subscription:     subscriptionHandler,
 		Usage:            usageHandler,
+		ErrorPassthrough: errorPassthroughHandler,
 	}
 }
 
@@ -63,46 +67,52 @@ func ProvidePublicHandler(
 // ProvideHandlers creates the Handlers struct
 // [LITE] 保留 User, APIKey, Usage 给 Admin 管理 API Key
 func ProvideHandlers(
+	authHandler *AuthHandler,
+	userHandler *UserHandler,
+	apiKeyHandler *APIKeyHandler,
+	usageHandler *UsageHandler,
+	announcementHandler *AnnouncementHandler,
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
 	openaiGatewayHandler *OpenAIGatewayHandler,
 	settingHandler *SettingHandler,
 	publicHandler *PublicHandler,
-	authHandler *AuthHandler,
-	userHandler *UserHandler,
-	apiKeyHandler *APIKeyHandler,
-	usageHandler *UsageHandler,
+	totpHandler *TotpHandler,
 ) *Handlers {
 	return &Handlers{
+		Auth:          authHandler,
+		User:          userHandler,
+		APIKey:        apiKeyHandler,
+		Usage:         usageHandler,
+		Announcement:  announcementHandler,
 		Admin:         adminHandlers,
 		Gateway:       gatewayHandler,
 		OpenAIGateway: openaiGatewayHandler,
 		Setting:       settingHandler,
 		Public:        publicHandler,
-		Auth:          authHandler,
-		User:          userHandler,
-		APIKey:        apiKeyHandler,
-		Usage:         usageHandler,
+		Totp:          totpHandler,
 	}
 }
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
 	// Top-level handlers
-	NewGatewayHandler,
-	NewOpenAIGatewayHandler,
-	ProvideSettingHandler,
-	ProvidePublicHandler,
 	NewAuthHandler,
-	// [LITE] User handlers for API Key management
 	NewUserHandler,
 	NewAPIKeyHandler,
 	NewUsageHandler,
+	NewAnnouncementHandler,
+	NewGatewayHandler,
+	NewOpenAIGatewayHandler,
+	NewTotpHandler,
+	ProvideSettingHandler,
+	ProvidePublicHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
 	admin.NewGroupHandler,
 	admin.NewAccountHandler,
+	admin.NewAnnouncementHandler,
 	admin.NewOAuthHandler,
 	admin.NewOpenAIOAuthHandler,
 	admin.NewGeminiOAuthHandler,
@@ -113,6 +123,7 @@ var ProviderSet = wire.NewSet(
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
 	admin.NewUsageHandler,
+	admin.NewErrorPassthroughHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

@@ -16,15 +16,6 @@ import (
 	"time"
 )
 
-// resolveHost 从 URL 解析 host
-func resolveHost(urlStr string) string {
-	parsed, err := url.Parse(urlStr)
-	if err != nil {
-		return ""
-	}
-	return parsed.Host
-}
-
 // NewAPIRequestWithURL 使用指定的 base URL 创建 Antigravity API 请求（v1internal 端点）
 func NewAPIRequestWithURL(ctx context.Context, baseURL, action, accessToken string, body []byte) (*http.Request, error) {
 	// 构建 URL，流式请求添加 ?alt=sse 参数
@@ -39,22 +30,10 @@ func NewAPIRequestWithURL(ctx context.Context, baseURL, action, accessToken stri
 		return nil, err
 	}
 
-	// 基础 Headers
+	// 基础 Headers（与 Antigravity-Manager 保持一致，只设置这 3 个）
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("User-Agent", UserAgent)
-
-	// Accept Header 根据请求类型设置
-	if isStream {
-		req.Header.Set("Accept", "text/event-stream")
-	} else {
-		req.Header.Set("Accept", "application/json")
-	}
-
-	// 显式设置 Host Header
-	if host := resolveHost(apiURL); host != "" {
-		req.Host = host
-	}
 
 	return req, nil
 }
@@ -136,6 +115,23 @@ type LoadCodeAssistResponse struct {
 	IneligibleTiers         []*IneligibleTier `json:"ineligibleTiers,omitempty"`
 }
 
+// OnboardUserRequest onboardUser 请求
+type OnboardUserRequest struct {
+	TierID   string `json:"tierId"`
+	Metadata struct {
+		IDEType    string `json:"ideType"`
+		Platform   string `json:"platform,omitempty"`
+		PluginType string `json:"pluginType,omitempty"`
+	} `json:"metadata"`
+}
+
+// OnboardUserResponse onboardUser 响应
+type OnboardUserResponse struct {
+	Name     string         `json:"name,omitempty"`
+	Done     bool           `json:"done"`
+	Response map[string]any `json:"response,omitempty"`
+}
+
 // GetTier 获取账户类型
 // 优先返回 paidTier（付费订阅级别），否则返回 currentTier
 func (r *LoadCodeAssistResponse) GetTier() string {
@@ -195,12 +191,15 @@ func isConnectionError(err error) bool {
 }
 
 // shouldFallbackToNextURL 判断是否应切换到下一个 URL
-// 仅连接错误和 HTTP 429 触发 URL 降级
+// 与 Antigravity-Manager 保持一致：连接错误、429、408、404、5xx 触发 URL 降级
 func shouldFallbackToNextURL(err error, statusCode int) bool {
 	if isConnectionError(err) {
 		return true
 	}
-	return statusCode == http.StatusTooManyRequests
+	return statusCode == http.StatusTooManyRequests ||
+		statusCode == http.StatusRequestTimeout ||
+		statusCode == http.StatusNotFound ||
+		statusCode >= 500
 }
 
 // ExchangeCode 用 authorization code 交换 token
@@ -321,11 +320,8 @@ func (c *Client) LoadCodeAssist(ctx context.Context, accessToken string) (*LoadC
 		return nil, nil, fmt.Errorf("序列化请求失败: %w", err)
 	}
 
-	// 获取可用的 URL 列表
-	availableURLs := DefaultURLAvailability.GetAvailableURLs()
-	if len(availableURLs) == 0 {
-		availableURLs = BaseURLs // 所有 URL 都不可用时，重试所有
-	}
+	// 固定顺序：prod -> daily
+	availableURLs := BaseURLs
 
 	var lastErr error
 	for urlIdx, baseURL := range availableURLs {
@@ -343,7 +339,6 @@ func (c *Client) LoadCodeAssist(ctx context.Context, accessToken string) (*LoadC
 		if err != nil {
 			lastErr = fmt.Errorf("loadCodeAssist 请求失败: %w", err)
 			if shouldFallbackToNextURL(err, 0) && urlIdx < len(availableURLs)-1 {
-				DefaultURLAvailability.MarkUnavailable(baseURL)
 				log.Printf("[antigravity] loadCodeAssist URL fallback: %s -> %s", baseURL, availableURLs[urlIdx+1])
 				continue
 			}
@@ -358,7 +353,6 @@ func (c *Client) LoadCodeAssist(ctx context.Context, accessToken string) (*LoadC
 
 		// 检查是否需要 URL 降级
 		if shouldFallbackToNextURL(nil, resp.StatusCode) && urlIdx < len(availableURLs)-1 {
-			DefaultURLAvailability.MarkUnavailable(baseURL)
 			log.Printf("[antigravity] loadCodeAssist URL fallback (HTTP %d): %s -> %s", resp.StatusCode, baseURL, availableURLs[urlIdx+1])
 			continue
 		}
@@ -376,10 +370,123 @@ func (c *Client) LoadCodeAssist(ctx context.Context, accessToken string) (*LoadC
 		var rawResp map[string]any
 		_ = json.Unmarshal(respBodyBytes, &rawResp)
 
+		// 标记成功的 URL，下次优先使用
+		DefaultURLAvailability.MarkSuccess(baseURL)
 		return &loadResp, rawResp, nil
 	}
 
 	return nil, nil, lastErr
+}
+
+// OnboardUser 触发账号 onboarding，并返回 project_id
+// 说明：
+// 1) 部分账号 loadCodeAssist 不会立即返回 cloudaicompanionProject；
+// 2) 这时需要调用 onboardUser 完成初始化，之后才能拿到 project_id。
+func (c *Client) OnboardUser(ctx context.Context, accessToken, tierID string) (string, error) {
+	tierID = strings.TrimSpace(tierID)
+	if tierID == "" {
+		return "", fmt.Errorf("tier_id 为空")
+	}
+
+	reqBody := OnboardUserRequest{TierID: tierID}
+	reqBody.Metadata.IDEType = "ANTIGRAVITY"
+	reqBody.Metadata.Platform = "PLATFORM_UNSPECIFIED"
+	reqBody.Metadata.PluginType = "GEMINI"
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("序列化请求失败: %w", err)
+	}
+
+	availableURLs := BaseURLs
+	var lastErr error
+
+	for urlIdx, baseURL := range availableURLs {
+		apiURL := baseURL + "/v1internal:onboardUser"
+
+		for attempt := 1; attempt <= 5; attempt++ {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+			if err != nil {
+				lastErr = fmt.Errorf("创建请求失败: %w", err)
+				break
+			}
+			req.Header.Set("Authorization", "Bearer "+accessToken)
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", UserAgent)
+
+			resp, err := c.httpClient.Do(req)
+			if err != nil {
+				lastErr = fmt.Errorf("onboardUser 请求失败: %w", err)
+				if shouldFallbackToNextURL(err, 0) && urlIdx < len(availableURLs)-1 {
+					log.Printf("[antigravity] onboardUser URL fallback: %s -> %s", baseURL, availableURLs[urlIdx+1])
+					break
+				}
+				return "", lastErr
+			}
+
+			respBodyBytes, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if err != nil {
+				return "", fmt.Errorf("读取响应失败: %w", err)
+			}
+
+			if shouldFallbackToNextURL(nil, resp.StatusCode) && urlIdx < len(availableURLs)-1 {
+				log.Printf("[antigravity] onboardUser URL fallback (HTTP %d): %s -> %s", resp.StatusCode, baseURL, availableURLs[urlIdx+1])
+				break
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				lastErr = fmt.Errorf("onboardUser 失败 (HTTP %d): %s", resp.StatusCode, string(respBodyBytes))
+				return "", lastErr
+			}
+
+			var onboardResp OnboardUserResponse
+			if err := json.Unmarshal(respBodyBytes, &onboardResp); err != nil {
+				lastErr = fmt.Errorf("onboardUser 响应解析失败: %w", err)
+				return "", lastErr
+			}
+
+			if onboardResp.Done {
+				if projectID := extractProjectIDFromOnboardResponse(onboardResp.Response); projectID != "" {
+					DefaultURLAvailability.MarkSuccess(baseURL)
+					return projectID, nil
+				}
+				lastErr = fmt.Errorf("onboardUser 完成但未返回 project_id")
+				return "", lastErr
+			}
+
+			// done=false 时等待后重试（与 CLIProxyAPI 行为一致）
+			select {
+			case <-time.After(2 * time.Second):
+			case <-ctx.Done():
+				return "", ctx.Err()
+			}
+		}
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", fmt.Errorf("onboardUser 未返回 project_id")
+}
+
+func extractProjectIDFromOnboardResponse(resp map[string]any) string {
+	if len(resp) == 0 {
+		return ""
+	}
+
+	if v, ok := resp["cloudaicompanionProject"]; ok {
+		switch project := v.(type) {
+		case string:
+			return strings.TrimSpace(project)
+		case map[string]any:
+			if id, ok := project["id"].(string); ok {
+				return strings.TrimSpace(id)
+			}
+		}
+	}
+
+	return ""
 }
 
 // ModelQuotaInfo 模型配额信息
@@ -412,11 +519,8 @@ func (c *Client) FetchAvailableModels(ctx context.Context, accessToken, projectI
 		return nil, nil, fmt.Errorf("序列化请求失败: %w", err)
 	}
 
-	// 获取可用的 URL 列表
-	availableURLs := DefaultURLAvailability.GetAvailableURLs()
-	if len(availableURLs) == 0 {
-		availableURLs = BaseURLs // 所有 URL 都不可用时，重试所有
-	}
+	// 固定顺序：prod -> daily
+	availableURLs := BaseURLs
 
 	var lastErr error
 	for urlIdx, baseURL := range availableURLs {
@@ -434,7 +538,6 @@ func (c *Client) FetchAvailableModels(ctx context.Context, accessToken, projectI
 		if err != nil {
 			lastErr = fmt.Errorf("fetchAvailableModels 请求失败: %w", err)
 			if shouldFallbackToNextURL(err, 0) && urlIdx < len(availableURLs)-1 {
-				DefaultURLAvailability.MarkUnavailable(baseURL)
 				log.Printf("[antigravity] fetchAvailableModels URL fallback: %s -> %s", baseURL, availableURLs[urlIdx+1])
 				continue
 			}
@@ -449,7 +552,6 @@ func (c *Client) FetchAvailableModels(ctx context.Context, accessToken, projectI
 
 		// 检查是否需要 URL 降级
 		if shouldFallbackToNextURL(nil, resp.StatusCode) && urlIdx < len(availableURLs)-1 {
-			DefaultURLAvailability.MarkUnavailable(baseURL)
 			log.Printf("[antigravity] fetchAvailableModels URL fallback (HTTP %d): %s -> %s", resp.StatusCode, baseURL, availableURLs[urlIdx+1])
 			continue
 		}
@@ -467,6 +569,8 @@ func (c *Client) FetchAvailableModels(ctx context.Context, accessToken, projectI
 		var rawResp map[string]any
 		_ = json.Unmarshal(respBodyBytes, &rawResp)
 
+		// 标记成功的 URL，下次优先使用
+		DefaultURLAvailability.MarkSuccess(baseURL)
 		return &modelsResp, rawResp, nil
 	}
 

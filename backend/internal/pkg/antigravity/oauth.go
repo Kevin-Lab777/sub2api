@@ -32,32 +32,62 @@ const (
 		"https://www.googleapis.com/auth/cclog " +
 		"https://www.googleapis.com/auth/experimentsandconfigs"
 
-	// User-Agent（模拟官方客户端）
-	UserAgent = "antigravity/1.104.0 darwin/arm64"
+	// User-Agent（与 Antigravity-Manager 保持一致）
+	UserAgent = "antigravity/1.15.8 windows/amd64"
 
 	// Session 过期时间
 	SessionTTL = 30 * time.Minute
 
 	// URL 可用性 TTL（不可用 URL 的恢复时间）
 	URLAvailabilityTTL = 5 * time.Minute
+
+	// Antigravity API 端点
+	antigravityProdBaseURL  = "https://cloudcode-pa.googleapis.com"
+	antigravityDailyBaseURL = "https://daily-cloudcode-pa.sandbox.googleapis.com"
 )
 
-// BaseURLs 定义 Antigravity API 端点，按优先级排序
-// fallback 顺序: sandbox → daily → prod
+// BaseURLs 定义 Antigravity API 端点（与 Antigravity-Manager 保持一致）
 var BaseURLs = []string{
-	"https://daily-cloudcode-pa.sandbox.googleapis.com", // sandbox
-	"https://daily-cloudcode-pa.googleapis.com",         // daily
-	"https://cloudcode-pa.googleapis.com",               // prod
+	antigravityProdBaseURL,  // prod (优先)
+	antigravityDailyBaseURL, // daily sandbox (备用)
 }
 
 // BaseURL 默认 URL（保持向后兼容）
 var BaseURL = BaseURLs[0]
 
-// URLAvailability 管理 URL 可用性状态（带 TTL 自动恢复）
+// ForwardBaseURLs 返回 API 转发用的 URL 顺序（daily 优先）
+func ForwardBaseURLs() []string {
+	if len(BaseURLs) == 0 {
+		return nil
+	}
+	urls := append([]string(nil), BaseURLs...)
+	dailyIndex := -1
+	for i, url := range urls {
+		if url == antigravityDailyBaseURL {
+			dailyIndex = i
+			break
+		}
+	}
+	if dailyIndex <= 0 {
+		return urls
+	}
+	reordered := make([]string, 0, len(urls))
+	reordered = append(reordered, urls[dailyIndex])
+	for i, url := range urls {
+		if i == dailyIndex {
+			continue
+		}
+		reordered = append(reordered, url)
+	}
+	return reordered
+}
+
+// URLAvailability 管理 URL 可用性状态（带 TTL 自动恢复和动态优先级）
 type URLAvailability struct {
 	mu          sync.RWMutex
 	unavailable map[string]time.Time // URL -> 恢复时间
 	ttl         time.Duration
+	lastSuccess string // 最近成功请求的 URL，优先使用
 }
 
 // DefaultURLAvailability 全局 URL 可用性管理器
@@ -78,6 +108,15 @@ func (u *URLAvailability) MarkUnavailable(url string) {
 	u.unavailable[url] = time.Now().Add(u.ttl)
 }
 
+// MarkSuccess 标记 URL 请求成功，将其设为优先使用
+func (u *URLAvailability) MarkSuccess(url string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.lastSuccess = url
+	// 成功后清除该 URL 的不可用标记
+	delete(u.unavailable, url)
+}
+
 // IsAvailable 检查 URL 是否可用
 func (u *URLAvailability) IsAvailable(url string) bool {
 	u.mu.RLock()
@@ -89,14 +128,44 @@ func (u *URLAvailability) IsAvailable(url string) bool {
 	return time.Now().After(expiry)
 }
 
-// GetAvailableURLs 返回可用的 URL 列表（保持优先级顺序）
+// GetAvailableURLs 返回可用的 URL 列表
+// 最近成功的 URL 优先，其他按默认顺序
 func (u *URLAvailability) GetAvailableURLs() []string {
+	return u.GetAvailableURLsWithBase(BaseURLs)
+}
+
+// GetAvailableURLsWithBase 返回可用的 URL 列表（使用自定义顺序）
+// 最近成功的 URL 优先，其他按传入顺序
+func (u *URLAvailability) GetAvailableURLsWithBase(baseURLs []string) []string {
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
 	now := time.Now()
-	result := make([]string, 0, len(BaseURLs))
-	for _, url := range BaseURLs {
+	result := make([]string, 0, len(baseURLs))
+
+	// 如果有最近成功的 URL 且可用，放在最前面
+	if u.lastSuccess != "" {
+		found := false
+		for _, url := range baseURLs {
+			if url == u.lastSuccess {
+				found = true
+				break
+			}
+		}
+		if found {
+			expiry, exists := u.unavailable[u.lastSuccess]
+			if !exists || now.After(expiry) {
+				result = append(result, u.lastSuccess)
+			}
+		}
+	}
+
+	// 添加其他可用的 URL（按传入顺序）
+	for _, url := range baseURLs {
+		// 跳过已添加的 lastSuccess
+		if url == u.lastSuccess {
+			continue
+		}
 		expiry, exists := u.unavailable[url]
 		if !exists || now.After(expiry) {
 			result = append(result, url)
@@ -239,25 +308,4 @@ func BuildAuthorizationURL(state, codeChallenge string) string {
 	params.Set("include_granted_scopes", "true")
 
 	return fmt.Sprintf("%s?%s", AuthorizeURL, params.Encode())
-}
-
-// GenerateMockProjectID 生成随机 project_id（当 API 不返回时使用）
-// 格式：{形容词}-{名词}-{5位随机字符}
-func GenerateMockProjectID() string {
-	adjectives := []string{"useful", "bright", "swift", "calm", "bold"}
-	nouns := []string{"fuze", "wave", "spark", "flow", "core"}
-
-	randBytes, _ := GenerateRandomBytes(7)
-
-	adj := adjectives[int(randBytes[0])%len(adjectives)]
-	noun := nouns[int(randBytes[1])%len(nouns)]
-
-	// 生成 5 位随机字符（a-z0-9）
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	suffix := make([]byte, 5)
-	for i := 0; i < 5; i++ {
-		suffix[i] = charset[int(randBytes[i+2])%len(charset)]
-	}
-
-	return fmt.Sprintf("%s-%s-%s", adj, noun, string(suffix))
 }

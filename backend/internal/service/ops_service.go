@@ -27,6 +27,7 @@ type OpsService struct {
 	cfg         *config.Config
 
 	accountRepo AccountRepository
+	userRepo    UserRepository
 
 	// getAccountAvailability is a unit-test hook for overriding account availability lookup.
 	getAccountAvailability func(ctx context.Context, platformFilter string, groupIDFilter *int64) (*OpsAccountAvailability, error)
@@ -43,6 +44,7 @@ func NewOpsService(
 	settingRepo SettingRepository,
 	cfg *config.Config,
 	accountRepo AccountRepository,
+	userRepo UserRepository,
 	concurrencyService *ConcurrencyService,
 	gatewayService *GatewayService,
 	openAIGatewayService *OpenAIGatewayService,
@@ -55,6 +57,7 @@ func NewOpsService(
 		cfg:         cfg,
 
 		accountRepo: accountRepo,
+		userRepo:    userRepo,
 
 		concurrencyService:        concurrencyService,
 		gatewayService:            gatewayService,
@@ -208,6 +211,25 @@ func (s *OpsService) RecordError(ctx context.Context, entry *OpsInsertErrorLogIn
 				out.Detail = ""
 			}
 
+			out.UpstreamRequestBody = strings.TrimSpace(out.UpstreamRequestBody)
+			if out.UpstreamRequestBody != "" {
+				// Reuse the same sanitization/trimming strategy as request body storage.
+				// Keep it small so it is safe to persist in ops_error_logs JSON.
+				sanitized, truncated, _ := sanitizeAndTrimRequestBody([]byte(out.UpstreamRequestBody), 10*1024)
+				if sanitized != "" {
+					out.UpstreamRequestBody = sanitized
+					if truncated {
+						out.Kind = strings.TrimSpace(out.Kind)
+						if out.Kind == "" {
+							out.Kind = "upstream"
+						}
+						out.Kind = out.Kind + ":request_body_truncated"
+					}
+				} else {
+					out.UpstreamRequestBody = ""
+				}
+			}
+
 			// Drop fully-empty events (can happen if only status code was known).
 			if out.UpstreamStatusCode == 0 && out.Message == "" && out.Detail == "" {
 				continue
@@ -236,7 +258,13 @@ func (s *OpsService) GetErrorLogs(ctx context.Context, filter *OpsErrorLogFilter
 	if s.opsRepo == nil {
 		return &OpsErrorLogList{Errors: []*OpsErrorLog{}, Total: 0, Page: 1, PageSize: 20}, nil
 	}
-	return s.opsRepo.ListErrorLogs(ctx, filter)
+	result, err := s.opsRepo.ListErrorLogs(ctx, filter)
+	if err != nil {
+		log.Printf("[Ops] GetErrorLogs failed: %v", err)
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (s *OpsService) GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLogDetail, error) {
@@ -254,6 +282,46 @@ func (s *OpsService) GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLo
 		return nil, infraerrors.InternalServer("OPS_ERROR_LOAD_FAILED", "Failed to load ops error log").WithCause(err)
 	}
 	return detail, nil
+}
+
+func (s *OpsService) ListRetryAttemptsByErrorID(ctx context.Context, errorID int64, limit int) ([]*OpsRetryAttempt, error) {
+	if err := s.RequireMonitoringEnabled(ctx); err != nil {
+		return nil, err
+	}
+	if s.opsRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
+	}
+	if errorID <= 0 {
+		return nil, infraerrors.BadRequest("OPS_ERROR_INVALID_ID", "invalid error id")
+	}
+	items, err := s.opsRepo.ListRetryAttemptsByErrorID(ctx, errorID, limit)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return []*OpsRetryAttempt{}, nil
+		}
+		return nil, infraerrors.InternalServer("OPS_RETRY_LIST_FAILED", "Failed to list retry attempts").WithCause(err)
+	}
+	return items, nil
+}
+
+func (s *OpsService) UpdateErrorResolution(ctx context.Context, errorID int64, resolved bool, resolvedByUserID *int64, resolvedRetryID *int64) error {
+	if err := s.RequireMonitoringEnabled(ctx); err != nil {
+		return err
+	}
+	if s.opsRepo == nil {
+		return infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
+	}
+	if errorID <= 0 {
+		return infraerrors.BadRequest("OPS_ERROR_INVALID_ID", "invalid error id")
+	}
+	// Best-effort ensure the error exists
+	if _, err := s.opsRepo.GetErrorLogByID(ctx, errorID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return infraerrors.NotFound("OPS_ERROR_NOT_FOUND", "ops error log not found")
+		}
+		return infraerrors.InternalServer("OPS_ERROR_LOAD_FAILED", "Failed to load ops error log").WithCause(err)
+	}
+	return s.opsRepo.UpdateErrorResolution(ctx, errorID, resolved, resolvedByUserID, resolvedRetryID, nil)
 }
 
 func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (jsonString string, truncated bool, bytesLen int) {
@@ -296,14 +364,34 @@ func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (jsonString string, tr
 		}
 	}
 
-	// Last resort: store a minimal placeholder (still valid JSON).
-	placeholder := map[string]any{
-		"request_body_truncated": true,
+	// Last resort: keep JSON shape but drop big fields.
+	// This avoids downstream code that expects certain top-level keys from crashing.
+	if root, ok := decoded.(map[string]any); ok {
+		placeholder := shallowCopyMap(root)
+		placeholder["request_body_truncated"] = true
+
+		// Replace potentially huge arrays/strings, but keep the keys present.
+		for _, k := range []string{"messages", "contents", "input", "prompt"} {
+			if _, exists := placeholder[k]; exists {
+				placeholder[k] = []any{}
+			}
+		}
+		for _, k := range []string{"text"} {
+			if _, exists := placeholder[k]; exists {
+				placeholder[k] = ""
+			}
+		}
+
+		encoded4, err4 := json.Marshal(placeholder)
+		if err4 == nil {
+			if len(encoded4) <= maxBytes {
+				return string(encoded4), true, bytesLen
+			}
+		}
 	}
-	if model := extractString(decoded, "model"); model != "" {
-		placeholder["model"] = model
-	}
-	encoded4, err4 := json.Marshal(placeholder)
+
+	// Final fallback: minimal valid JSON.
+	encoded4, err4 := json.Marshal(map[string]any{"request_body_truncated": true})
 	if err4 != nil {
 		return "", true, bytesLen
 	}
@@ -336,6 +424,26 @@ func redactSensitiveJSON(v any) any {
 func isSensitiveKey(key string) bool {
 	k := strings.ToLower(strings.TrimSpace(key))
 	if k == "" {
+		return false
+	}
+
+	// Token 计数 / 预算字段不是凭据，应保留用于排错。
+	// 白名单保持尽量窄，避免误把真实敏感信息"反脱敏"。
+	switch k {
+	case "max_tokens",
+		"max_output_tokens",
+		"max_input_tokens",
+		"max_completion_tokens",
+		"max_tokens_to_sample",
+		"budget_tokens",
+		"prompt_tokens",
+		"completion_tokens",
+		"input_tokens",
+		"output_tokens",
+		"total_tokens",
+		"token_count",
+		"cache_creation_input_tokens",
+		"cache_read_input_tokens":
 		return false
 	}
 
@@ -481,7 +589,18 @@ func trimArrayField(root map[string]any, field string, maxBytes int) (map[string
 
 func shrinkToEssentials(root map[string]any) map[string]any {
 	out := make(map[string]any)
-	for _, key := range []string{"model", "stream", "max_tokens", "temperature", "top_p", "top_k"} {
+	for _, key := range []string{
+		"model",
+		"stream",
+		"max_tokens",
+		"max_output_tokens",
+		"max_input_tokens",
+		"max_completion_tokens",
+		"thinking",
+		"temperature",
+		"top_p",
+		"top_k",
+	} {
 		if v, ok := root[key]; ok {
 			out[key] = v
 		}
@@ -525,13 +644,4 @@ func sanitizeErrorBodyForStorage(raw string, maxBytes int) (sanitized string, tr
 		return truncateString(raw, maxBytes), true
 	}
 	return raw, false
-}
-
-func extractString(v any, key string) string {
-	root, ok := v.(map[string]any)
-	if !ok {
-		return ""
-	}
-	s, _ := root[key].(string)
-	return strings.TrimSpace(s)
 }

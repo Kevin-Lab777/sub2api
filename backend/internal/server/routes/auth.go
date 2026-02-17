@@ -36,5 +36,12 @@ func RegisterAuthRoutes(
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
 	{
 		authenticated.GET("/auth/me", h.Auth.GetCurrentUser)
+
+		// [LITE] 用户端公告路由（上游新增）
+		announcements := authenticated.Group("/announcements")
+		{
+			announcements.GET("", h.Announcement.List)
+			announcements.POST("/:id/read", h.Announcement.MarkRead)
+		}
 	}
 }

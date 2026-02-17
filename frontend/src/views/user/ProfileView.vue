@@ -35,6 +35,7 @@
 
       <ProfileEditForm :initial-username="user?.username || ''" />
       <ProfilePasswordForm />
+      <ProfileTotpCard />
     </div>
   </AppLayout>
 </template>
@@ -50,6 +51,7 @@ import StatCard from '@/components/common/StatCard.vue'
 import ProfileInfoCard from '@/components/user/profile/ProfileInfoCard.vue'
 import ProfileEditForm from '@/components/user/profile/ProfileEditForm.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
+import ProfileTotpCard from '@/components/user/profile/ProfileTotpCard.vue'
 import { Icon } from '@/components/icons'
 
 const { t } = useI18n()

@@ -31,8 +31,8 @@ type ModelPricing struct {
 	OutputPricePerToken        float64 // 每token输出价格 (USD)
 	CacheCreationPricePerToken float64 // 缓存创建每token价格 (USD)
 	CacheReadPricePerToken     float64 // 缓存读取每token价格 (USD)
-	CacheCreation5mPrice       float64 // 5分钟缓存创建价格（每百万token）- 仅用于硬编码回退
-	CacheCreation1hPrice       float64 // 1小时缓存创建价格（每百万token）- 仅用于硬编码回退
+	CacheCreation5mPrice       float64 // 5分钟缓存创建每token价格 (USD)
+	CacheCreation1hPrice       float64 // 1小时缓存创建每token价格 (USD)
 	SupportsCacheBreakdown     bool    // 是否支持详细的缓存分类
 }
 
@@ -172,12 +172,20 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	if s.pricingService != nil {
 		litellmPricing := s.pricingService.GetModelPricing(model)
 		if litellmPricing != nil {
+			// 启用 5m/1h 分类计费的条件：
+			// 1. 存在 1h 价格
+			// 2. 1h 价格 > 5m 价格（防止 LiteLLM 数据错误导致少收费）
+			price5m := litellmPricing.CacheCreationInputTokenCost
+			price1h := litellmPricing.CacheCreationInputTokenCostAbove1hr
+			enableBreakdown := price1h > 0 && price1h > price5m
 			return &ModelPricing{
 				InputPricePerToken:         litellmPricing.InputCostPerToken,
 				OutputPricePerToken:        litellmPricing.OutputCostPerToken,
 				CacheCreationPricePerToken: litellmPricing.CacheCreationInputTokenCost,
 				CacheReadPricePerToken:     litellmPricing.CacheReadInputTokenCost,
-				SupportsCacheBreakdown:     false,
+				CacheCreation5mPrice:       price5m,
+				CacheCreation1hPrice:       price1h,
+				SupportsCacheBreakdown:     enableBreakdown,
 			}, nil
 		}
 	}
@@ -209,9 +217,14 @@ func (s *BillingService) CalculateCost(model string, tokens UsageTokens, rateMul
 
 	// 计算缓存费用
 	if pricing.SupportsCacheBreakdown && (pricing.CacheCreation5mPrice > 0 || pricing.CacheCreation1hPrice > 0) {
-		// 支持详细缓存分类的模型（5分钟/1小时缓存）
-		breakdown.CacheCreationCost = float64(tokens.CacheCreation5mTokens)/1_000_000*pricing.CacheCreation5mPrice +
-			float64(tokens.CacheCreation1hTokens)/1_000_000*pricing.CacheCreation1hPrice
+		// 支持详细缓存分类的模型（5分钟/1小时缓存，价格为 per-token）
+		if tokens.CacheCreation5mTokens == 0 && tokens.CacheCreation1hTokens == 0 && tokens.CacheCreationTokens > 0 {
+			// API 未返回 ephemeral 明细，回退到全部按 5m 单价计费
+			breakdown.CacheCreationCost = float64(tokens.CacheCreationTokens) * pricing.CacheCreation5mPrice
+		} else {
+			breakdown.CacheCreationCost = float64(tokens.CacheCreation5mTokens)*pricing.CacheCreation5mPrice +
+				float64(tokens.CacheCreation1hTokens)*pricing.CacheCreation1hPrice
+		}
 	} else {
 		// 标准缓存创建价格（per-token）
 		breakdown.CacheCreationCost = float64(tokens.CacheCreationTokens) * pricing.CacheCreationPricePerToken
@@ -239,6 +252,78 @@ func (s *BillingService) CalculateCostWithConfig(model string, tokens UsageToken
 		multiplier = 1.0
 	}
 	return s.CalculateCost(model, tokens, multiplier)
+}
+
+// CalculateCostWithLongContext 计算费用，支持长上下文双倍计费
+// threshold: 阈值（如 200000），超过此值的部分按 extraMultiplier 倍计费
+// extraMultiplier: 超出部分的倍率（如 2.0 表示双倍）
+//
+// 示例：缓存 210k + 输入 10k = 220k，阈值 200k，倍率 2.0
+// 拆分为：范围内 (200k, 0) + 范围外 (10k, 10k)
+// 范围内正常计费，范围外 × 2 计费
+func (s *BillingService) CalculateCostWithLongContext(model string, tokens UsageTokens, rateMultiplier float64, threshold int, extraMultiplier float64) (*CostBreakdown, error) {
+	// 未启用长上下文计费，直接走正常计费
+	if threshold <= 0 || extraMultiplier <= 1 {
+		return s.CalculateCost(model, tokens, rateMultiplier)
+	}
+
+	// 计算总输入 token（缓存读取 + 新输入）
+	total := tokens.CacheReadTokens + tokens.InputTokens
+	if total <= threshold {
+		return s.CalculateCost(model, tokens, rateMultiplier)
+	}
+
+	// 拆分成范围内和范围外
+	var inRangeCacheTokens, inRangeInputTokens int
+	var outRangeCacheTokens, outRangeInputTokens int
+
+	if tokens.CacheReadTokens >= threshold {
+		// 缓存已超过阈值：范围内只有缓存，范围外是超出的缓存+全部输入
+		inRangeCacheTokens = threshold
+		inRangeInputTokens = 0
+		outRangeCacheTokens = tokens.CacheReadTokens - threshold
+		outRangeInputTokens = tokens.InputTokens
+	} else {
+		// 缓存未超过阈值：范围内是全部缓存+部分输入，范围外是剩余输入
+		inRangeCacheTokens = tokens.CacheReadTokens
+		inRangeInputTokens = threshold - tokens.CacheReadTokens
+		outRangeCacheTokens = 0
+		outRangeInputTokens = tokens.InputTokens - inRangeInputTokens
+	}
+
+	// 范围内部分：正常计费
+	inRangeTokens := UsageTokens{
+		InputTokens:           inRangeInputTokens,
+		OutputTokens:          tokens.OutputTokens, // 输出只算一次
+		CacheCreationTokens:   tokens.CacheCreationTokens,
+		CacheReadTokens:       inRangeCacheTokens,
+		CacheCreation5mTokens: tokens.CacheCreation5mTokens,
+		CacheCreation1hTokens: tokens.CacheCreation1hTokens,
+	}
+	inRangeCost, err := s.CalculateCost(model, inRangeTokens, rateMultiplier)
+	if err != nil {
+		return nil, err
+	}
+
+	// 范围外部分：× extraMultiplier 计费
+	outRangeTokens := UsageTokens{
+		InputTokens:     outRangeInputTokens,
+		CacheReadTokens: outRangeCacheTokens,
+	}
+	outRangeCost, err := s.CalculateCost(model, outRangeTokens, rateMultiplier*extraMultiplier)
+	if err != nil {
+		return inRangeCost, nil // 出错时返回范围内成本
+	}
+
+	// 合并成本
+	return &CostBreakdown{
+		InputCost:         inRangeCost.InputCost + outRangeCost.InputCost,
+		OutputCost:        inRangeCost.OutputCost,
+		CacheCreationCost: inRangeCost.CacheCreationCost,
+		CacheReadCost:     inRangeCost.CacheReadCost + outRangeCost.CacheReadCost,
+		TotalCost:         inRangeCost.TotalCost + outRangeCost.TotalCost,
+		ActualCost:        inRangeCost.ActualCost + outRangeCost.ActualCost,
+	}, nil
 }
 
 // ListSupportedModels 列出所有支持的模型（现在总是返回true，因为有模糊匹配）

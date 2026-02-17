@@ -23,6 +23,32 @@ server:
   # Trusted proxies for X-Forwarded-For parsing (CIDR/IP). Empty disables trusted proxies.
   # 信任的代理地址（CIDR/IP 格式），用于解析 X-Forwarded-For 头。留空则禁用代理信任。
   trusted_proxies: []
+  # Global max request body size in bytes (default: 100MB)
+  # 全局最大请求体大小（字节，默认 100MB）
+  # Applies to all requests, especially important for h2c first request memory protection
+  # 适用于所有请求，对 h2c 第一请求的内存保护尤为重要
+  max_request_body_size: 104857600
+  # HTTP/2 Cleartext (h2c) configuration
+  # HTTP/2 Cleartext (h2c) 配置
+  h2c:
+    # Enable HTTP/2 Cleartext for client connections
+    # 启用 HTTP/2 Cleartext 客户端连接
+    enabled: true
+    # Max concurrent streams per connection
+    # 每个连接的最大并发流数量
+    max_concurrent_streams: 50
+    # Idle timeout for connections (seconds)
+    # 连接空闲超时时间（秒）
+    idle_timeout: 75
+    # Max frame size in bytes (default: 1MB)
+    # 最大帧大小（字节，默认 1MB）
+    max_read_frame_size: 1048576
+    # Max upload buffer per connection in bytes (default: 2MB)
+    # 每个连接的最大上传缓冲区（字节，默认 2MB）
+    max_upload_buffer_per_connection: 2097152
+    # Max upload buffer per stream in bytes (default: 512KB)
+    # 每个流的最大上传缓冲区（字节，默认 512KB）
+    max_upload_buffer_per_stream: 524288
 
 # =============================================================================
 # CORS Configuration
@@ -85,7 +111,9 @@ security:
     enabled: true
     # Default CSP policy (override if you host assets on other domains)
     # 默认 CSP 策略（如果静态资源托管在其他域名，请自行覆盖）
-    policy: "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    # Note: __CSP_NONCE__ will be replaced with 'nonce-xxx' at request time for inline script security
+    # 注意：__CSP_NONCE__ 会在请求时被替换为 'nonce-xxx'，用于内联脚本安全
+    policy: "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   proxy_probe:
     # Allow skipping TLS verification for proxy probe (debug only)
     # 允许代理探测时跳过 TLS 证书验证（仅用于调试）
@@ -196,6 +224,19 @@ gateway:
     outbox_backlog_rebuild_rows: 10000
     # 全量重建周期（秒），0 表示禁用
     full_rebuild_interval_seconds: 300
+  # TLS fingerprint simulation / TLS 指纹伪装
+  # Default profile "claude_cli_v2" simulates Node.js 20.x
+  # 默认模板 "claude_cli_v2" 模拟 Node.js 20.x 指纹
+  tls_fingerprint:
+    enabled: true
+    # profiles:
+    #   profile_1:
+    #     name: "Custom Profile 1"
+    #   profile_2:
+    #     name: "Custom Profile 2"
+    #     cipher_suites: [4866, 4867, 4865, 49199, 49195, 49200, 49196]
+    #     curves: [29, 23, 24]
+    #     point_formats: [0]
 
 # =============================================================================
 # API Key Auth Cache Configuration
@@ -279,6 +320,27 @@ dashboard_aggregation:
     daily_days: 730
 
 # =============================================================================
+# Usage Cleanup Task Configuration
+# 使用记录清理任务配置（重启生效）
+# =============================================================================
+usage_cleanup:
+  # Enable cleanup task worker
+  # 启用清理任务执行器
+  enabled: true
+  # Max date range (days) per task
+  # 单次任务最大时间跨度（天）
+  max_range_days: 31
+  # Batch delete size
+  # 单批删除数量
+  batch_size: 5000
+  # Worker interval (seconds)
+  # 执行器轮询间隔（秒）
+  worker_interval_seconds: 10
+  # Task execution timeout (seconds)
+  # 单次任务最大执行时长（秒）
+  task_timeout_seconds: 1800
+
+# =============================================================================
 # Concurrency Wait Configuration
 # 并发等待配置
 # =============================================================================
@@ -328,6 +390,9 @@ redis:
   # Database number (0-15)
   # 数据库编号（0-15）
   db: 0
+  # Enable TLS/SSL connection
+  # 是否启用 TLS/SSL 连接
+  enable_tls: false
 
 # =============================================================================
 # Ops Monitoring (Optional)
@@ -354,6 +419,21 @@ jwt:
   # Token expiration time in hours (max 24)
   # 令牌过期时间（小时，最大 24）
   expire_hour: 24
+
+# =============================================================================
+# TOTP (2FA) Configuration
+# TOTP 双因素认证配置
+# =============================================================================
+totp:
+  # IMPORTANT: Set a fixed encryption key for TOTP secrets.
+  # 重要：设置固定的 TOTP 加密密钥。
+  # If left empty, a random key will be generated on each startup, causing all
+  # existing TOTP configurations to become invalid (users won't be able to
+  # login with 2FA).
+  # 如果留空，每次启动将生成随机密钥，导致现有的 TOTP 配置失效（用户无法使用
+  # 双因素认证登录）。
+  # Generate with / 生成命令: openssl rand -hex 32
+  encryption_key: ""
 
 # =============================================================================
 # LinuxDo Connect OAuth Login (SSO)

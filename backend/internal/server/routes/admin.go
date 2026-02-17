@@ -32,6 +32,9 @@ func RegisterAdminRoutes(
 		// 账号管理
 		registerAccountRoutes(admin, h)
 
+		// 公告管理
+		registerAnnouncementRoutes(admin, h)
+
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
 
@@ -63,6 +66,9 @@ func RegisterAdminRoutes(
 		registerUsageRoutes(admin, h)
 
 		// [LITE:DELETED] registerUserAttributeRoutes - 用户属性管理
+
+		// 错误透传规则管理
+		registerErrorPassthroughRoutes(admin, h)
 	}
 }
 
@@ -71,6 +77,7 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		// Realtime ops signals
 		ops.GET("/concurrency", h.Admin.Ops.GetConcurrencyStats)
+		ops.GET("/user-concurrency", h.Admin.Ops.GetUserConcurrencyStats)
 		ops.GET("/account-availability", h.Admin.Ops.GetAccountAvailability)
 		ops.GET("/realtime-traffic", h.Admin.Ops.GetRealtimeTrafficSummary)
 
@@ -80,6 +87,9 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.PUT("/alert-rules/:id", h.Admin.Ops.UpdateAlertRule)
 		ops.DELETE("/alert-rules/:id", h.Admin.Ops.DeleteAlertRule)
 		ops.GET("/alert-events", h.Admin.Ops.ListAlertEvents)
+		ops.GET("/alert-events/:id", h.Admin.Ops.GetAlertEvent)
+		ops.PUT("/alert-events/:id/status", h.Admin.Ops.UpdateAlertEventStatus)
+		ops.POST("/alert-silences", h.Admin.Ops.CreateAlertSilence)
 
 		// Email notification config (DB-backed)
 		ops.GET("/email-notification/config", h.Admin.Ops.GetEmailNotificationConfig)
@@ -109,10 +119,26 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 			ws.GET("/qps", h.Admin.Ops.QPSWSHandler)
 		}
 
-		// Error logs (MVP-1)
+		// Error logs (legacy)
 		ops.GET("/errors", h.Admin.Ops.GetErrorLogs)
 		ops.GET("/errors/:id", h.Admin.Ops.GetErrorLogByID)
+		ops.GET("/errors/:id/retries", h.Admin.Ops.ListRetryAttempts)
 		ops.POST("/errors/:id/retry", h.Admin.Ops.RetryErrorRequest)
+		ops.PUT("/errors/:id/resolve", h.Admin.Ops.UpdateErrorResolution)
+
+		// Request errors (client-visible failures)
+		ops.GET("/request-errors", h.Admin.Ops.ListRequestErrors)
+		ops.GET("/request-errors/:id", h.Admin.Ops.GetRequestError)
+		ops.GET("/request-errors/:id/upstream-errors", h.Admin.Ops.ListRequestErrorUpstreamErrors)
+		ops.POST("/request-errors/:id/retry-client", h.Admin.Ops.RetryRequestErrorClient)
+		ops.POST("/request-errors/:id/upstream-errors/:idx/retry", h.Admin.Ops.RetryRequestErrorUpstreamEvent)
+		ops.PUT("/request-errors/:id/resolve", h.Admin.Ops.ResolveRequestError)
+
+		// Upstream errors (independent upstream failures)
+		ops.GET("/upstream-errors", h.Admin.Ops.ListUpstreamErrors)
+		ops.GET("/upstream-errors/:id", h.Admin.Ops.GetUpstreamError)
+		ops.POST("/upstream-errors/:id/retry", h.Admin.Ops.RetryUpstreamError)
+		ops.PUT("/upstream-errors/:id/resolve", h.Admin.Ops.ResolveUpstreamError)
 
 		// Request drilldown (success + error)
 		ops.GET("/requests", h.Admin.Ops.ListRequestDetails)
@@ -148,6 +174,7 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		groups.GET("", h.Admin.Group.List)
 		groups.GET("/all", h.Admin.Group.GetAll)
+		groups.PUT("/sort-order", h.Admin.Group.UpdateSortOrder)
 		groups.GET("/:id", h.Admin.Group.GetByID)
 		groups.POST("", h.Admin.Group.Create)
 		groups.PUT("/:id", h.Admin.Group.Update)
@@ -164,6 +191,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.GET("/:id", h.Admin.Account.GetByID)
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/sync/crs", h.Admin.Account.SyncFromCRS)
+		accounts.POST("/sync/crs/preview", h.Admin.Account.PreviewFromCRS)
 		accounts.PUT("/:id", h.Admin.Account.Update)
 		accounts.DELETE("/:id", h.Admin.Account.Delete)
 		accounts.POST("/:id/test", h.Admin.Account.Test)
@@ -179,9 +207,14 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.POST("/:id/schedulable", h.Admin.Account.SetSchedulable)
 		accounts.GET("/:id/models", h.Admin.Account.GetAvailableModels)
 		accounts.POST("/batch", h.Admin.Account.BatchCreate)
+		accounts.GET("/data", h.Admin.Account.ExportData)
+		accounts.POST("/data", h.Admin.Account.ImportData)
 		accounts.POST("/batch-update-credentials", h.Admin.Account.BatchUpdateCredentials)
 		accounts.POST("/batch-refresh-tier", h.Admin.Account.BatchRefreshTier)
 		accounts.POST("/bulk-update", h.Admin.Account.BulkUpdate)
+
+		// Antigravity 默认模型映射
+		accounts.GET("/antigravity/default-model-mapping", h.Admin.Account.GetAntigravityDefaultModelMapping)
 
 		// Claude OAuth routes
 		accounts.POST("/generate-auth-url", h.Admin.OAuth.GenerateAuthURL)
@@ -190,6 +223,18 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.POST("/exchange-setup-token-code", h.Admin.OAuth.ExchangeSetupTokenCode)
 		accounts.POST("/cookie-auth", h.Admin.OAuth.CookieAuth)
 		accounts.POST("/setup-token-cookie-auth", h.Admin.OAuth.SetupTokenCookieAuth)
+	}
+}
+
+func registerAnnouncementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	announcements := admin.Group("/announcements")
+	{
+		announcements.GET("", h.Admin.Announcement.List)
+		announcements.POST("", h.Admin.Announcement.Create)
+		announcements.GET("/:id", h.Admin.Announcement.GetByID)
+		announcements.PUT("/:id", h.Admin.Announcement.Update)
+		announcements.DELETE("/:id", h.Admin.Announcement.Delete)
+		announcements.GET("/:id/read-status", h.Admin.Announcement.ListReadStatus)
 	}
 }
 
@@ -218,6 +263,7 @@ func registerAntigravityOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers)
 	{
 		antigravity.POST("/oauth/auth-url", h.Admin.AntigravityOAuth.GenerateAuthURL)
 		antigravity.POST("/oauth/exchange-code", h.Admin.AntigravityOAuth.ExchangeCode)
+		antigravity.POST("/oauth/refresh-token", h.Admin.AntigravityOAuth.RefreshToken)
 	}
 }
 
@@ -226,6 +272,8 @@ func registerProxyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		proxies.GET("", h.Admin.Proxy.List)
 		proxies.GET("/all", h.Admin.Proxy.GetAll)
+		proxies.GET("/data", h.Admin.Proxy.ExportData)
+		proxies.POST("/data", h.Admin.Proxy.ImportData)
 		proxies.GET("/:id", h.Admin.Proxy.GetByID)
 		proxies.POST("", h.Admin.Proxy.Create)
 		proxies.PUT("/:id", h.Admin.Proxy.Update)
@@ -233,6 +281,7 @@ func registerProxyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		proxies.POST("/:id/test", h.Admin.Proxy.Test)
 		proxies.GET("/:id/stats", h.Admin.Proxy.GetStats)
 		proxies.GET("/:id/accounts", h.Admin.Proxy.GetProxyAccounts)
+		proxies.POST("/batch-delete", h.Admin.Proxy.BatchDelete)
 		proxies.POST("/batch", h.Admin.Proxy.BatchCreate)
 	}
 }
@@ -294,6 +343,9 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		usage.GET("/stats", h.Admin.Usage.Stats)
 		usage.GET("/search-users", h.Admin.Usage.SearchUsers)
 		usage.GET("/search-api-keys", h.Admin.Usage.SearchAPIKeys)
+		usage.GET("/cleanup-tasks", h.Admin.Usage.ListCleanupTasks)
+		usage.POST("/cleanup-tasks", h.Admin.Usage.CreateCleanupTask)
+		usage.POST("/cleanup-tasks/:id/cancel", h.Admin.Usage.CancelCleanupTask)
 	}
 
 	// [LITE] API Key 用量重置
@@ -301,3 +353,14 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 }
 
 // [LITE:DELETED] registerUserAttributeRoutes - 用户属性管理路由已移除
+
+func registerErrorPassthroughRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	rules := admin.Group("/error-passthrough-rules")
+	{
+		rules.GET("", h.Admin.ErrorPassthrough.List)
+		rules.GET("/:id", h.Admin.ErrorPassthrough.GetByID)
+		rules.POST("", h.Admin.ErrorPassthrough.Create)
+		rules.PUT("/:id", h.Admin.ErrorPassthrough.Update)
+		rules.DELETE("/:id", h.Admin.ErrorPassthrough.Delete)
+	}
+}

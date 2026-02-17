@@ -62,6 +62,16 @@ func ProvideSQLDB(entAndDB EntAndDB) *sql.DB {
 	return entAndDB.DB
 }
 
+// ProvideSessionLimitCache 创建会话限制缓存
+// 用于 Anthropic OAuth/SetupToken 账号的并发会话数量控制
+func ProvideSessionLimitCache(rdb *redis.Client, cfg *config.Config) service.SessionLimitCache {
+	defaultIdleTimeoutMinutes := 5 // 默认 5 分钟空闲超时
+	if cfg != nil && cfg.Gateway.SessionIdleTimeoutMinutes > 0 {
+		defaultIdleTimeoutMinutes = cfg.Gateway.SessionIdleTimeoutMinutes
+	}
+	return NewSessionLimitCache(rdb, defaultIdleTimeoutMinutes)
+}
+
 // ProviderSet is the Wire provider set for all repositories
 // [LITE] 移除了: NewRedeemCodeRepository, NewPromoCodeRepository,
 //
@@ -77,13 +87,18 @@ var ProviderSet = wire.NewSet(
 	NewProxyRepository,
 	// [LITE:DELETED] NewRedeemCodeRepository
 	// [LITE:DELETED] NewPromoCodeRepository
+	NewAnnouncementRepository,
+	NewAnnouncementReadRepository,
 	NewUsageLogRepository,
+	NewUsageCleanupRepository,
 	NewDashboardAggregationRepository,
 	NewSettingRepository,
 	NewOpsRepository,
 	NewUserSubscriptionRepository,
 	// [LITE:DELETED] NewUserAttributeDefinitionRepository
 	// [LITE:DELETED] NewUserAttributeValueRepository
+	NewUserGroupRateRepository,
+	NewErrorPassthroughRepository,
 
 	// Cache implementations
 	NewGatewayCache,
@@ -92,6 +107,7 @@ var ProviderSet = wire.NewSet(
 	NewTempUnschedCache,
 	NewTimeoutCounterCache,
 	ProvideConcurrencyCache,
+	ProvideSessionLimitCache,
 	NewDashboardCache,
 	// [LITE:DELETED] NewEmailCache
 	// [LITE:DELETED] NewIdentityCache
@@ -100,6 +116,13 @@ var ProviderSet = wire.NewSet(
 	NewGeminiTokenCache,
 	NewSchedulerCache,
 	NewSchedulerOutboxRepository,
+	NewProxyLatencyCache,
+	NewTotpCache,
+	NewRefreshTokenCache,
+	NewErrorPassthroughCache,
+
+	// Encryptors
+	NewAESEncryptor,
 
 	// HTTP service ports (DI Strategy A: return interface directly)
 	// [LITE:DELETED] NewTurnstileVerifier

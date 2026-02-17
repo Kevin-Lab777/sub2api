@@ -1,14 +1,14 @@
-# Sub2API Lite
+# Sub2API
 
 <div align="center">
 
-[![Go](https://img.shields.io/badge/Go-1.25.5-00ADD8.svg)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.25.7-00ADD8.svg)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 
-**AI API Gateway Platform - Lite Version (Personal/Small Team)**
+**AI API Gateway Platform for Subscription Quota Distribution**
 
 English | [中文](README_CN.md)
 
@@ -16,53 +16,25 @@ English | [中文](README_CN.md)
 
 ---
 
-## About Lite Version
+## Demo
 
-Sub2API Lite is a lightweight version based on [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api), designed for **individual developers and small teams**.
+Try Sub2API online: **https://demo.sub2api.org/**
 
-### Differences from Original
+Demo credentials (shared demo environment; **not** created automatically for self-hosted installs):
 
-| Feature | Original Standard | Lite Version |
-|---------|------------------|--------------|
-| User Registration/Login | ✅ Multi-user system | ❌ Admin only |
-| Redeem Code System | ✅ | ❌ Removed |
-| Promo Code System | ✅ | ❌ Removed |
-| User Attributes | ✅ | ❌ Removed |
-| LinuxDO OAuth | ✅ | ❌ Removed |
-| Email Verification | ✅ | ❌ Removed |
-| **Billing Mode** | Deduct user balance | **Quota control (no balance)** |
-| Subscription System | ✅ | ✅ Kept |
-| Account/Proxy/Group Management | ✅ | ✅ Kept |
-| API Key Management | ✅ | ✅ Enhanced (with quotas) |
-
-### Lite Quota Control
-
-Lite version uses **quota control** instead of balance deduction:
-
-```
-Request → API Key has quota? → Check quota
-               ↓ No
-         Group has quota? → Check quota
-               ↓ No
-         Unlimited access ✅
-```
-
-API Key supports:
-- Daily quota (`daily_limit_usd`)
-- Weekly quota (`weekly_limit_usd`)
-- Monthly quota (`monthly_limit_usd`)
-
----
+| Email | Password |
+|-------|----------|
+| admin@sub2api.com | admin123 |
 
 ## Overview
 
-Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions (like Claude Code $200/month). Admins generate API Keys for users through the platform, while the platform handles authentication, quota control, load balancing, and request forwarding.
+Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions (like Claude Code $200/month). Users can access upstream AI services through platform-generated API Keys, while the platform handles authentication, billing, load balancing, and request forwarding.
 
 ## Features
 
 - **Multi-Account Management** - Support multiple upstream account types (OAuth, API Key)
-- **API Key Distribution** - Generate and manage API Keys with quota control
-- **Quota Control** - API Key/Group level daily/weekly/monthly usage limits
+- **API Key Distribution** - Generate and manage API Keys for users
+- **Precise Billing** - Token-level usage tracking and cost calculation
 - **Smart Scheduling** - Intelligent account selection with sticky sessions
 - **Concurrency Control** - Per-user and per-account concurrency limits
 - **Rate Limiting** - Configurable request and token rate limits
@@ -72,7 +44,7 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 
 | Component | Technology |
 |-----------|------------|
-| Backend | Go 1.25.5, Gin, Ent |
+| Backend | Go 1.25.7, Gin, Ent |
 | Frontend | Vue 3.4+, Vite 5+, TailwindCSS |
 | Database | PostgreSQL 15+ |
 | Cache/Queue | Redis 7+ |
@@ -101,7 +73,7 @@ One-click installation script that downloads pre-built binaries from GitHub Rele
 #### Installation Steps
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | sudo bash
 ```
 
 The script will:
@@ -151,12 +123,12 @@ sudo journalctl -u sub2api -f
 sudo systemctl restart sub2api
 
 # Uninstall
-curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/install.sh | sudo bash -s -- uninstall -y
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
 ```
 
 ---
 
-### Method 2: Docker Compose
+### Method 2: Docker Compose (Recommended)
 
 Deploy with Docker Compose, including PostgreSQL and Redis containers.
 
@@ -165,71 +137,157 @@ Deploy with Docker Compose, including PostgreSQL and Redis containers.
 - Docker 20.10+
 - Docker Compose v2+
 
-#### Installation Steps
+#### Quick Start (One-Click Deployment)
+
+Use the automated deployment script for easy setup:
 
 ```bash
-# 1. Create a directory and download files
-mkdir sub2api && cd sub2api
-curl -O https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/docker-compose.yml
-curl -O https://raw.githubusercontent.com/Kevin-Lab777/sub2api/Light/deploy/.env.example
+# Create deployment directory
+mkdir -p sub2api-deploy && cd sub2api-deploy
 
-# 2. Create .env from example
-mv .env.example .env
+# Download and run deployment preparation script
+curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/docker-deploy.sh | bash
 
-# 3. Edit configuration
+# Start services
+docker-compose -f docker-compose.local.yml up -d
+
+# View logs
+docker-compose -f docker-compose.local.yml logs -f sub2api
+```
+
+**What the script does:**
+- Downloads `docker-compose.local.yml` and `.env.example`
+- Generates secure credentials (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
+- Creates `.env` file with auto-generated secrets
+- Creates data directories (uses local directories for easy backup/migration)
+- Displays generated credentials for your reference
+
+#### Manual Deployment
+
+If you prefer manual setup:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/Kevin-Lab777/sub2api.git
+cd sub2api/deploy
+
+# 2. Copy environment configuration
+cp .env.example .env
+
+# 3. Edit configuration (generate secure passwords)
 nano .env
 ```
 
 **Required configuration in `.env`:**
 
 ```bash
-# System architecture (REQUIRED!)
-# amd64: Intel/AMD processors (most servers, Intel Macs)
-# arm64: ARM processors (Apple Silicon M1/M2/M3, AWS Graviton)
-ARCH=amd64
-
-# PostgreSQL password (REQUIRED!)
+# PostgreSQL password (REQUIRED)
 POSTGRES_PASSWORD=your_secure_password_here
+
+# JWT Secret (RECOMMENDED - keeps users logged in after restart)
+JWT_SECRET=your_jwt_secret_here
+
+# TOTP Encryption Key (RECOMMENDED - preserves 2FA after restart)
+TOTP_ENCRYPTION_KEY=your_totp_key_here
 
 # Optional: Admin account
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=your_admin_password
+
+# Optional: Custom port
+SERVER_PORT=8080
+```
+
+**Generate secure secrets:**
+```bash
+# Generate JWT_SECRET
+openssl rand -hex 32
+
+# Generate TOTP_ENCRYPTION_KEY
+openssl rand -hex 32
+
+# Generate POSTGRES_PASSWORD
+openssl rand -hex 32
 ```
 
 ```bash
-# 4. Start all services
+# 4. Create data directories (for local version)
+mkdir -p data postgres_data redis_data
+
+# 5. Start all services
+# Option A: Local directory version (recommended - easy migration)
+docker-compose -f docker-compose.local.yml up -d
+
+# Option B: Named volumes version (simple setup)
 docker-compose up -d
 
-# 5. Check status
-docker-compose ps
+# 6. Check status
+docker-compose -f docker-compose.local.yml ps
 
-# 6. View logs
-docker-compose logs -f sub2api
+# 7. View logs
+docker-compose -f docker-compose.local.yml logs -f sub2api
 ```
+
+#### Deployment Versions
+
+| Version | Data Storage | Migration | Best For |
+|---------|-------------|-----------|----------|
+| **docker-compose.local.yml** | Local directories | ✅ Easy (tar entire directory) | Production, frequent backups |
+| **docker-compose.yml** | Named volumes | ⚠️ Requires docker commands | Simple setup |
+
+**Recommendation:** Use `docker-compose.local.yml` (deployed by script) for easier data management.
 
 #### Access
 
 Open `http://YOUR_SERVER_IP:8080` in your browser.
 
+If admin password was auto-generated, find it in logs:
+```bash
+docker-compose -f docker-compose.local.yml logs sub2api | grep "admin password"
+```
+
 #### Upgrade
 
 ```bash
 # Pull latest image and recreate container
-docker-compose pull
-docker-compose up -d
+docker-compose -f docker-compose.local.yml pull
+docker-compose -f docker-compose.local.yml up -d
+```
+
+#### Easy Migration (Local Directory Version)
+
+When using `docker-compose.local.yml`, migrate to a new server easily:
+
+```bash
+# On source server
+docker-compose -f docker-compose.local.yml down
+cd ..
+tar czf sub2api-complete.tar.gz sub2api-deploy/
+
+# Transfer to new server
+scp sub2api-complete.tar.gz user@new-server:/path/
+
+# On new server
+tar xzf sub2api-complete.tar.gz
+cd sub2api-deploy/
+docker-compose -f docker-compose.local.yml up -d
 ```
 
 #### Useful Commands
 
 ```bash
 # Stop all services
-docker-compose down
+docker-compose -f docker-compose.local.yml down
 
 # Restart
-docker-compose restart
+docker-compose -f docker-compose.local.yml restart
 
 # View all logs
-docker-compose logs -f
+docker-compose -f docker-compose.local.yml logs -f
+
+# Remove all data (caution!)
+docker-compose -f docker-compose.local.yml down
+rm -rf data/ postgres_data/ redis_data/
 ```
 
 ---
@@ -384,6 +442,16 @@ cd backend
 go generate ./ent
 go generate ./cmd/server
 ```
+
+---
+
+## Simple Mode
+
+Simple Mode is designed for individual developers or internal teams who want quick access without full SaaS features.
+
+- Enable: Set environment variable `RUN_MODE=simple`
+- Difference: Hides SaaS-related features and skips billing process
+- Security note: In production, you must also set `SIMPLE_MODE_CONFIRM=true` to allow startup
 
 ---
 

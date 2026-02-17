@@ -2,6 +2,14 @@ package service
 
 import "time"
 
+// API Key status constants
+const (
+	StatusAPIKeyActive         = "active"
+	StatusAPIKeyDisabled       = "disabled"
+	StatusAPIKeyQuotaExhausted = "quota_exhausted"
+	StatusAPIKeyExpired        = "expired"
+)
+
 type APIKey struct {
 	ID          int64
 	UserID      int64
@@ -16,82 +24,106 @@ type APIKey struct {
 	User        *User
 	Group       *Group
 
-	// [LITE] 限额字段
-	DailyLimitUSD   *float64
-	WeeklyLimitUSD  *float64
-	MonthlyLimitUSD *float64
-	TotalLimitUSD   *float64
+	// Quota fields
+	Quota     float64    // Quota limit in USD (0 = unlimited)
+	QuotaUsed float64    // Used quota amount
+	ExpiresAt *time.Time // Expiration time (nil = never expires)
 
-	// [LITE] 用量追踪字段
-	DailyUsageUSD   float64
-	WeeklyUsageUSD  float64
-	MonthlyUsageUSD float64
-	TotalUsageUSD   float64
+	// Per-period limit fields (Lite)
+	DailyLimitUSD   *float64   // Daily spending limit in USD (nil = unlimited)
+	WeeklyLimitUSD  *float64   // Weekly spending limit in USD (nil = unlimited)
+	MonthlyLimitUSD *float64   // Monthly spending limit in USD (nil = unlimited)
+	TotalLimitUSD   *float64   // Total spending limit in USD (nil = unlimited)
+	DailyUsageUSD   float64    // Current daily usage in USD
+	WeeklyUsageUSD  float64    // Current weekly usage in USD
+	MonthlyUsageUSD float64    // Current monthly usage in USD
+	TotalUsageUSD   float64    // Total cumulative usage in USD
 
-	// [LITE] 用量重置时间字段
-	UsageResetDaily   *time.Time
-	UsageResetWeekly  *time.Time
-	UsageResetMonthly *time.Time
+	// Usage reset timestamps (Lite)
+	UsageResetDaily   *time.Time // Next daily usage reset time
+	UsageResetWeekly  *time.Time // Next weekly usage reset time
+	UsageResetMonthly *time.Time // Next monthly usage reset time
 }
 
 func (k *APIKey) IsActive() bool {
 	return k.Status == StatusActive
 }
 
-// [LITE] 限额检查辅助方法
-
-// HasDailyLimit 检查是否设置了日限额
-func (k *APIKey) HasDailyLimit() bool {
-	return k.DailyLimitUSD != nil && *k.DailyLimitUSD > 0
+// IsExpired checks if the API key has expired
+func (k *APIKey) IsExpired() bool {
+	if k.ExpiresAt == nil {
+		return false
+	}
+	return time.Now().After(*k.ExpiresAt)
 }
 
-// HasWeeklyLimit 检查是否设置了周限额
-func (k *APIKey) HasWeeklyLimit() bool {
-	return k.WeeklyLimitUSD != nil && *k.WeeklyLimitUSD > 0
+// IsQuotaExhausted checks if the API key quota is exhausted
+func (k *APIKey) IsQuotaExhausted() bool {
+	if k.Quota <= 0 {
+		return false // unlimited
+	}
+	return k.QuotaUsed >= k.Quota
 }
 
-// HasMonthlyLimit 检查是否设置了月限额
-func (k *APIKey) HasMonthlyLimit() bool {
-	return k.MonthlyLimitUSD != nil && *k.MonthlyLimitUSD > 0
+// GetQuotaRemaining returns remaining quota (-1 for unlimited)
+func (k *APIKey) GetQuotaRemaining() float64 {
+	if k.Quota <= 0 {
+		return -1 // unlimited
+	}
+	remaining := k.Quota - k.QuotaUsed
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
 }
 
-// HasTotalLimit 检查是否设置了总限额
-func (k *APIKey) HasTotalLimit() bool {
-	return k.TotalLimitUSD != nil && *k.TotalLimitUSD > 0
+// GetDaysUntilExpiry returns days until expiry (-1 for never expires)
+func (k *APIKey) GetDaysUntilExpiry() int {
+	if k.ExpiresAt == nil {
+		return -1 // never expires
+	}
+	duration := time.Until(*k.ExpiresAt)
+	if duration < 0 {
+		return 0
+	}
+	return int(duration.Hours() / 24)
 }
 
-// HasAnyLimit 检查是否设置了任何限额
+// HasAnyLimit returns true if the API key has any per-period spending limit configured.
 func (k *APIKey) HasAnyLimit() bool {
-	return k.HasDailyLimit() || k.HasWeeklyLimit() || k.HasMonthlyLimit() || k.HasTotalLimit()
+	return (k.DailyLimitUSD != nil && *k.DailyLimitUSD > 0) ||
+		(k.WeeklyLimitUSD != nil && *k.WeeklyLimitUSD > 0) ||
+		(k.MonthlyLimitUSD != nil && *k.MonthlyLimitUSD > 0) ||
+		(k.TotalLimitUSD != nil && *k.TotalLimitUSD > 0)
 }
 
-// IsDailyLimitExceeded 检查日限额是否超限
+// IsDailyLimitExceeded returns true if daily usage has reached or exceeded the daily limit.
 func (k *APIKey) IsDailyLimitExceeded() bool {
-	if !k.HasDailyLimit() {
+	if k.DailyLimitUSD == nil || *k.DailyLimitUSD <= 0 {
 		return false
 	}
 	return k.DailyUsageUSD >= *k.DailyLimitUSD
 }
 
-// IsWeeklyLimitExceeded 检查周限额是否超限
+// IsWeeklyLimitExceeded returns true if weekly usage has reached or exceeded the weekly limit.
 func (k *APIKey) IsWeeklyLimitExceeded() bool {
-	if !k.HasWeeklyLimit() {
+	if k.WeeklyLimitUSD == nil || *k.WeeklyLimitUSD <= 0 {
 		return false
 	}
 	return k.WeeklyUsageUSD >= *k.WeeklyLimitUSD
 }
 
-// IsMonthlyLimitExceeded 检查月限额是否超限
+// IsMonthlyLimitExceeded returns true if monthly usage has reached or exceeded the monthly limit.
 func (k *APIKey) IsMonthlyLimitExceeded() bool {
-	if !k.HasMonthlyLimit() {
+	if k.MonthlyLimitUSD == nil || *k.MonthlyLimitUSD <= 0 {
 		return false
 	}
 	return k.MonthlyUsageUSD >= *k.MonthlyLimitUSD
 }
 
-// IsTotalLimitExceeded 检查总限额是否超限
+// IsTotalLimitExceeded returns true if total cumulative usage has reached or exceeded the total limit.
 func (k *APIKey) IsTotalLimitExceeded() bool {
-	if !k.HasTotalLimit() {
+	if k.TotalLimitUSD == nil || *k.TotalLimitUSD <= 0 {
 		return false
 	}
 	return k.TotalUsageUSD >= *k.TotalLimitUSD
