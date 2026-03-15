@@ -19,8 +19,8 @@ FROM ${NODE_IMAGE} AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm (fixed version for stability)
+RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
 
 # Install dependencies first (better caching)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
@@ -78,9 +78,9 @@ RUN VERSION_VALUE="${VERSION}" && \
 FROM ${ALPINE_IMAGE}
 
 # Labels
-LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
-LABEL description="Sub2API - AI API Gateway Platform"
-LABEL org.opencontainers.image.source="https://github.com/Wei-Shaw/sub2api"
+LABEL maintainer="Kevin-Lab777 <github.com/Kevin-Lab777>"
+LABEL description="Sub2API Lite - AI API Gateway Platform"
+LABEL org.opencontainers.image.source="https://github.com/Kevin-Lab777/sub2api"
 
 # Install runtime dependencies
 RUN apk add --no-cache \
