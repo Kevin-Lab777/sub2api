@@ -518,9 +518,9 @@
 
         </div><!-- /Tab: Gateway -->
 
-        <!-- Tab: Security — Registration, Turnstile, LinuxDo -->
+        <!-- Tab: Security — [LITE] Simplified -->
         <div v-show="activeTab === 'security'" class="space-y-6">
-        <!-- Registration Settings -->
+        <!-- Security Settings -->
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
@@ -531,23 +531,8 @@
             </p>
           </div>
           <div class="space-y-5 p-6">
-            <!-- Enable Registration -->
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="font-medium text-gray-900 dark:text-white">{{
-                  t('admin.settings.registration.enableRegistration')
-                }}</label>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.registration.enableRegistrationHint') }}
-                </p>
-              </div>
-              <Toggle v-model="form.registration_enabled" />
-            </div>
-
             <!-- Email Verification -->
-            <div
-              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
-            >
+            <div class="flex items-center justify-between">
               <div>
                 <label class="font-medium text-gray-900 dark:text-white">{{
                   t('admin.settings.registration.emailVerification')
@@ -559,85 +544,6 @@
               <Toggle v-model="form.email_verify_enabled" />
             </div>
 
-            <!-- Email Suffix Whitelist -->
-            <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
-              <label class="font-medium text-gray-900 dark:text-white">{{
-                t('admin.settings.registration.emailSuffixWhitelist')
-              }}</label>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('admin.settings.registration.emailSuffixWhitelistHint') }}
-              </p>
-              <div
-                class="mt-3 rounded-lg border border-gray-300 bg-white p-2 dark:border-dark-500 dark:bg-dark-700"
-              >
-                <div class="flex flex-wrap items-center gap-2">
-                  <span
-                    v-for="suffix in registrationEmailSuffixWhitelistTags"
-                    :key="suffix"
-                    class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-mono text-gray-700 dark:bg-dark-600 dark:text-gray-200"
-                  >
-                    <span class="text-gray-400 dark:text-gray-500">@</span>
-                    <span>{{ suffix }}</span>
-                    <button
-                      type="button"
-                      class="rounded-full text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:text-gray-300 dark:hover:bg-dark-500 dark:hover:text-white"
-                      @click="removeRegistrationEmailSuffixWhitelistTag(suffix)"
-                    >
-                      <Icon name="x" size="xs" class="h-3.5 w-3.5" :stroke-width="2" />
-                    </button>
-                  </span>
-
-                  <div
-                    class="flex min-w-[220px] flex-1 items-center gap-1 rounded border border-transparent px-2 py-1 focus-within:border-primary-300 dark:focus-within:border-primary-700"
-                  >
-                    <span class="font-mono text-sm text-gray-400 dark:text-gray-500">@</span>
-                    <input
-                      v-model="registrationEmailSuffixWhitelistDraft"
-                      type="text"
-                      class="w-full bg-transparent text-sm font-mono text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500"
-                      :placeholder="t('admin.settings.registration.emailSuffixWhitelistPlaceholder')"
-                      @input="handleRegistrationEmailSuffixWhitelistDraftInput"
-                      @keydown="handleRegistrationEmailSuffixWhitelistDraftKeydown"
-                      @blur="commitRegistrationEmailSuffixWhitelistDraft"
-                      @paste="handleRegistrationEmailSuffixWhitelistPaste"
-                    />
-                  </div>
-                </div>
-              </div>
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.settings.registration.emailSuffixWhitelistInputHint') }}
-              </p>
-            </div>
-
-            <!-- Promo Code -->
-            <div
-              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
-            >
-              <div>
-                <label class="font-medium text-gray-900 dark:text-white">{{
-                  t('admin.settings.registration.promoCode')
-                }}</label>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.registration.promoCodeHint') }}
-                </p>
-              </div>
-              <Toggle v-model="form.promo_code_enabled" />
-            </div>
-
-            <!-- Invitation Code -->
-            <div
-              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
-            >
-              <div>
-                <label class="font-medium text-gray-900 dark:text-white">{{
-                  t('admin.settings.registration.invitationCode')
-                }}</label>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.registration.invitationCodeHint') }}
-                </p>
-              </div>
-              <Toggle v-model="form.invitation_code_enabled" />
-            </div>
             <!-- Password Reset - Only show when email verification is enabled -->
             <div
               v-if="form.email_verify_enabled"
@@ -665,7 +571,6 @@
                 <p class="text-sm text-gray-500 dark:text-gray-400">
                   {{ t('admin.settings.registration.totpHint') }}
                 </p>
-                <!-- Warning when encryption key not configured -->
                 <p
                   v-if="!form.totp_encryption_key_configured"
                   class="mt-2 text-sm text-amber-600 dark:text-amber-400"
@@ -680,180 +585,9 @@
             </div>
           </div>
         </div>
-
-        <!-- Cloudflare Turnstile Settings -->
-        <div class="card">
-          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.settings.turnstile.title') }}
-            </h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {{ t('admin.settings.turnstile.description') }}
-            </p>
-          </div>
-          <div class="space-y-5 p-6">
-            <!-- Enable Turnstile -->
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="font-medium text-gray-900 dark:text-white">{{
-                  t('admin.settings.turnstile.enableTurnstile')
-                }}</label>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.turnstile.enableTurnstileHint') }}
-                </p>
-              </div>
-              <Toggle v-model="form.turnstile_enabled" />
-            </div>
-
-            <!-- Turnstile Keys - Only show when enabled -->
-            <div
-              v-if="form.turnstile_enabled"
-              class="border-t border-gray-100 pt-4 dark:border-dark-700"
-            >
-              <div class="grid grid-cols-1 gap-6">
-                <div>
-                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t('admin.settings.turnstile.siteKey') }}
-                  </label>
-                  <input
-                    v-model="form.turnstile_site_key"
-                    type="text"
-                    class="input font-mono text-sm"
-                    placeholder="0x4AAAAAAA..."
-                  />
-                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('admin.settings.turnstile.siteKeyHint') }}
-                    <a
-                      href="https://dash.cloudflare.com/"
-                      target="_blank"
-                      class="text-primary-600 hover:text-primary-500"
-                      >{{ t('admin.settings.turnstile.cloudflareDashboard') }}</a
-                    >
-                  </p>
-                </div>
-                <div>
-                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t('admin.settings.turnstile.secretKey') }}
-                  </label>
-                  <input
-                    v-model="form.turnstile_secret_key"
-                    type="password"
-                    class="input font-mono text-sm"
-                    placeholder="0x4AAAAAAA..."
-                  />
-                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{
-                      form.turnstile_secret_key_configured
-                        ? t('admin.settings.turnstile.secretKeyConfiguredHint')
-                        : t('admin.settings.turnstile.secretKeyHint')
-                    }}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- LinuxDo Connect OAuth 登录 -->
-        <div class="card">
-          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.settings.linuxdo.title') }}
-            </h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {{ t('admin.settings.linuxdo.description') }}
-            </p>
-          </div>
-          <div class="space-y-5 p-6">
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="font-medium text-gray-900 dark:text-white">{{
-                  t('admin.settings.linuxdo.enable')
-                }}</label>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.linuxdo.enableHint') }}
-                </p>
-              </div>
-              <Toggle v-model="form.linuxdo_connect_enabled" />
-            </div>
-
-            <div
-              v-if="form.linuxdo_connect_enabled"
-              class="border-t border-gray-100 pt-4 dark:border-dark-700"
-            >
-              <div class="grid grid-cols-1 gap-6">
-                <div>
-                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t('admin.settings.linuxdo.clientId') }}
-                  </label>
-                  <input
-                    v-model="form.linuxdo_connect_client_id"
-                    type="text"
-                    class="input font-mono text-sm"
-                    :placeholder="t('admin.settings.linuxdo.clientIdPlaceholder')"
-                  />
-                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('admin.settings.linuxdo.clientIdHint') }}
-                  </p>
-                </div>
-
-                <div>
-                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t('admin.settings.linuxdo.clientSecret') }}
-                  </label>
-                  <input
-                    v-model="form.linuxdo_connect_client_secret"
-                    type="password"
-                    class="input font-mono text-sm"
-                    :placeholder="
-                      form.linuxdo_connect_client_secret_configured
-                        ? t('admin.settings.linuxdo.clientSecretConfiguredPlaceholder')
-                        : t('admin.settings.linuxdo.clientSecretPlaceholder')
-                    "
-                  />
-                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{
-                      form.linuxdo_connect_client_secret_configured
-                        ? t('admin.settings.linuxdo.clientSecretConfiguredHint')
-                        : t('admin.settings.linuxdo.clientSecretHint')
-                    }}
-                  </p>
-                </div>
-
-                <div>
-                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t('admin.settings.linuxdo.redirectUrl') }}
-                  </label>
-                  <input
-                    v-model="form.linuxdo_connect_redirect_url"
-                    type="url"
-                    class="input font-mono text-sm"
-                    :placeholder="t('admin.settings.linuxdo.redirectUrlPlaceholder')"
-                  />
-                  <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                    <button
-                      type="button"
-                      class="btn btn-secondary btn-sm w-fit"
-                      @click="setAndCopyLinuxdoRedirectUrl"
-                    >
-                      {{ t('admin.settings.linuxdo.quickSetCopy') }}
-                    </button>
-                    <code
-                      v-if="linuxdoRedirectUrlSuggestion"
-                      class="select-all break-all rounded bg-gray-50 px-2 py-1 font-mono text-xs text-gray-600 dark:bg-dark-800 dark:text-gray-300"
-                    >
-                      {{ linuxdoRedirectUrlSuggestion }}
-                    </code>
-                  </div>
-                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('admin.settings.linuxdo.redirectUrlHint') }}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        </div><!-- /Tab: Security — Registration, Turnstile, LinuxDo -->
+        <!-- [LITE:DELETED] Cloudflare Turnstile Settings -->
+        <!-- [LITE:DELETED] LinuxDo Connect OAuth -->
+        </div><!-- /Tab: Security -->
 
         <!-- Tab: Users -->
         <div v-show="activeTab === 'users'" class="space-y-6">
@@ -1677,14 +1411,11 @@ import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import ImageUpload from '@/components/common/ImageUpload.vue'
-import { useClipboard } from '@/composables/useClipboard'
+// [LITE:DELETED] import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
 import {
-  isRegistrationEmailSuffixDomainValid,
-  normalizeRegistrationEmailSuffixDomain,
   normalizeRegistrationEmailSuffixDomains,
-  parseRegistrationEmailSuffixWhitelistInput
 } from '@/utils/registrationEmailPolicy'
 
 const { t } = useI18n()
@@ -1700,7 +1431,7 @@ const settingsTabs = [
   { key: 'gateway'  as SettingsTab, icon: 'server' as const },
   { key: 'email'    as SettingsTab, icon: 'mail'   as const },
 ]
-const { copyToClipboard } = useClipboard()
+// [LITE:DELETED] const { copyToClipboard } = useClipboard()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -1840,89 +1571,8 @@ const defaultSubscriptionGroupOptions = computed<DefaultSubscriptionGroupOption[
   }))
 )
 
-const registrationEmailSuffixWhitelistSeparatorKeys = new Set([' ', ',', '，', 'Enter', 'Tab'])
-
-function removeRegistrationEmailSuffixWhitelistTag(suffix: string) {
-  registrationEmailSuffixWhitelistTags.value = registrationEmailSuffixWhitelistTags.value.filter(
-    (item) => item !== suffix
-  )
-}
-
-function addRegistrationEmailSuffixWhitelistTag(raw: string) {
-  const suffix = normalizeRegistrationEmailSuffixDomain(raw)
-  if (
-    !isRegistrationEmailSuffixDomainValid(suffix) ||
-    registrationEmailSuffixWhitelistTags.value.includes(suffix)
-  ) {
-    return
-  }
-  registrationEmailSuffixWhitelistTags.value = [
-    ...registrationEmailSuffixWhitelistTags.value,
-    suffix
-  ]
-}
-
-function commitRegistrationEmailSuffixWhitelistDraft() {
-  if (!registrationEmailSuffixWhitelistDraft.value) {
-    return
-  }
-  addRegistrationEmailSuffixWhitelistTag(registrationEmailSuffixWhitelistDraft.value)
-  registrationEmailSuffixWhitelistDraft.value = ''
-}
-
-function handleRegistrationEmailSuffixWhitelistDraftInput() {
-  registrationEmailSuffixWhitelistDraft.value = normalizeRegistrationEmailSuffixDomain(
-    registrationEmailSuffixWhitelistDraft.value
-  )
-}
-
-function handleRegistrationEmailSuffixWhitelistDraftKeydown(event: KeyboardEvent) {
-  if (event.isComposing) {
-    return
-  }
-
-  if (registrationEmailSuffixWhitelistSeparatorKeys.has(event.key)) {
-    event.preventDefault()
-    commitRegistrationEmailSuffixWhitelistDraft()
-    return
-  }
-
-  if (
-    event.key === 'Backspace' &&
-    !registrationEmailSuffixWhitelistDraft.value &&
-    registrationEmailSuffixWhitelistTags.value.length > 0
-  ) {
-    registrationEmailSuffixWhitelistTags.value.pop()
-  }
-}
-
-function handleRegistrationEmailSuffixWhitelistPaste(event: ClipboardEvent) {
-  const text = event.clipboardData?.getData('text') || ''
-  if (!text.trim()) {
-    return
-  }
-  event.preventDefault()
-  const tokens = parseRegistrationEmailSuffixWhitelistInput(text)
-  for (const token of tokens) {
-    addRegistrationEmailSuffixWhitelistTag(token)
-  }
-}
-
-// LinuxDo OAuth redirect URL suggestion
-const linuxdoRedirectUrlSuggestion = computed(() => {
-  if (typeof window === 'undefined') return ''
-  const origin =
-    window.location.origin || `${window.location.protocol}//${window.location.host}`
-  return `${origin}/api/v1/auth/oauth/linuxdo/callback`
-})
-
-async function setAndCopyLinuxdoRedirectUrl() {
-  const url = linuxdoRedirectUrlSuggestion.value
-  if (!url) return
-
-  form.linuxdo_connect_redirect_url = url
-  await copyToClipboard(url, t('admin.settings.linuxdo.redirectUrlSetAndCopied'))
-}
+// [LITE:DELETED] Email suffix whitelist tag management functions
+// [LITE:DELETED] LinuxDo OAuth redirect URL functions
 
 // Custom menu item management
 function addMenuItem() {

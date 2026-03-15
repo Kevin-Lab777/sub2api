@@ -1461,12 +1461,12 @@ export default {
       deleteConfirmSubscription:
         "Are you sure you want to delete subscription group '{name}'? This will invalidate all API keys bound to this subscription and delete all related subscription records. This action cannot be undone.",
       subscription: {
-        title: 'Subscription Settings',
+        title: 'Billing Settings',
         type: 'Billing Type',
         typeHint:
-          'Standard mode uses API Key/Group quota limits. Subscription mode uses quota limits.',
+          'Quota mode controls usage via API Key/Group limits without deducting balance. Subscription mode requires assigned subscription quota.',
         typeNotEditable: 'Billing type cannot be changed after group creation.',
-        standard: 'Standard (Quota)',
+        standard: 'Lite Mode (No Balance Limit)',
         subscription: 'Subscription (Quota)',
         dailyLimit: 'Daily Limit (USD)',
         weeklyLimit: 'Weekly Limit (USD)',

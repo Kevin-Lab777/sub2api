@@ -113,9 +113,9 @@
                     : t('admin.groups.subscription.standard')
                 }}
               </span>
-              <!-- Subscription Limits - compact single line -->
+              <!-- Limits - compact single line -->
               <div
-                v-if="row.subscription_type === 'subscription'"
+                v-if="row.daily_limit_usd || row.weekly_limit_usd || row.monthly_limit_usd"
                 class="text-xs text-gray-500 dark:text-gray-400"
               >
                 <template
@@ -397,9 +397,8 @@
             <p class="input-hint">{{ t('admin.groups.subscription.typeHint') }}</p>
           </div>
 
-          <!-- Subscription limits (only show when subscription type is selected) -->
+          <!-- Limits (show for all billing types) -->
           <div
-            v-if="createForm.subscription_type === 'subscription'"
             class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
           >
             <div>
@@ -1132,9 +1131,8 @@
             <p class="input-hint">{{ t('admin.groups.subscription.typeNotEditable') }}</p>
           </div>
 
-          <!-- Subscription limits (only show when subscription type is selected) -->
+          <!-- Limits (show for all billing types) -->
           <div
-            v-if="editForm.subscription_type === 'subscription'"
             class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
           >
             <div>

@@ -23,6 +23,17 @@ func RegisterUserRoutes(
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
+
+			// TOTP 2FA
+			totp := user.Group("/totp")
+			{
+				totp.GET("/status", h.Totp.GetStatus)
+				totp.GET("/verification-method", h.Totp.GetVerificationMethod)
+				totp.POST("/send-code", h.Totp.SendVerifyCode)
+				totp.POST("/setup", h.Totp.InitiateSetup)
+				totp.POST("/enable", h.Totp.Enable)
+				totp.POST("/disable", h.Totp.Disable)
+			}
 		}
 
 		// API Key管理
