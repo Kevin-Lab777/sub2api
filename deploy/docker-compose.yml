@@ -11,6 +11,13 @@
 #   4. Check logs: docker-compose logs -f sub2api
 #   5. Access: http://localhost:8080
 #
+# Data Storage:
+#   Default: Docker named volumes (managed by Docker)
+#   Optional: Set local directory paths in .env for easy migration:
+#     DATA_PATH=./data/sub2api
+#     POSTGRES_DATA_PATH=./data/postgres_data
+#     REDIS_DATA_PATH=./data/redis_data
+#
 # All configuration is done via environment variables.
 # No Setup Wizard needed - the system auto-initializes on first run.
 # =============================================================================
@@ -31,7 +38,8 @@ services:
       - "${BIND_HOST:-0.0.0.0}:${SERVER_PORT:-8080}:8080"
     volumes:
       # Data persistence (config.yaml will be auto-generated here)
-      - sub2api_data:/app/data
+      # Default: Docker named volume | Set DATA_PATH=./data in .env for local directory
+      - ${DATA_PATH:-sub2api_data}:/app/data
       # Optional: Mount custom config.yaml (uncomment and create the file first)
       # Copy config.example.yaml to config.yaml, modify it, then uncomment:
       # - ./config.yaml:/app/data/config.yaml:ro
@@ -167,7 +175,8 @@ services:
         soft: 100000
         hard: 100000
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Default: Docker named volume | Set POSTGRES_DATA_PATH=./postgres_data in .env for local directory
+      - ${POSTGRES_DATA_PATH:-postgres_data}:/var/lib/postgresql/data
     environment:
       # postgres:18-alpine 默认 PGDATA=/var/lib/postgresql/18/docker（位于镜像声明的匿名卷 /var/lib/postgresql 内）。
       # 若不显式设置 PGDATA，则即使挂载了 postgres_data 到 /var/lib/postgresql/data，数据也不会落盘到该命名卷，
@@ -200,7 +209,8 @@ services:
         soft: 100000
         hard: 100000
     volumes:
-      - redis_data:/data
+      # Default: Docker named volume | Set REDIS_DATA_PATH=./redis_data in .env for local directory
+      - ${REDIS_DATA_PATH:-redis_data}:/data
     command: >
         sh -c '
           redis-server
@@ -222,7 +232,7 @@ services:
       start_period: 5s
 
 # =============================================================================
-# Volumes
+# Volumes (only used when *_DATA_PATH is not set in .env)
 # =============================================================================
 volumes:
   sub2api_data:
