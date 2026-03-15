@@ -45,6 +45,9 @@ export interface AdminUser extends User {
   group_rates?: Record<number, number>
   // 当前并发数（仅管理员列表接口返回）
   current_concurrency?: number
+  // Sora 存储配额（字节）
+  sora_storage_quota_bytes: number
+  sora_storage_used_bytes: number
 }
 
 export interface LoginRequest {
@@ -72,9 +75,19 @@ export interface SendVerifyCodeResponse {
   countdown: number
 }
 
+export interface CustomMenuItem {
+  id: string
+  label: string
+  icon_svg: string
+  url: string
+  visibility: 'user' | 'admin'
+  sort_order: number
+}
+
 export interface PublicSettings {
   registration_enabled: boolean
   email_verify_enabled: boolean
+  registration_email_suffix_whitelist: string[]
   promo_code_enabled: boolean
   password_reset_enabled: boolean
   invitation_code_enabled: boolean
@@ -90,7 +103,9 @@ export interface PublicSettings {
   hide_ccs_import_button: boolean
   purchase_subscription_enabled: boolean
   purchase_subscription_url: string
+  custom_menu_items: CustomMenuItem[]
   linuxdo_oauth_enabled: boolean
+  sora_client_enabled: boolean
   version: string
 }
 
@@ -140,6 +155,7 @@ export interface UpdateSubscriptionRequest {
 // ==================== Announcement Types ====================
 
 export type AnnouncementStatus = 'draft' | 'active' | 'archived'
+export type AnnouncementNotifyMode = 'silent' | 'popup'
 
 export type AnnouncementConditionType = 'subscription' | 'balance'
 
@@ -165,6 +181,7 @@ export interface Announcement {
   title: string
   content: string
   status: AnnouncementStatus
+  notify_mode: AnnouncementNotifyMode
   targeting: AnnouncementTargeting
   starts_at?: string
   ends_at?: string
@@ -178,6 +195,7 @@ export interface UserAnnouncement {
   id: number
   title: string
   content: string
+  notify_mode: AnnouncementNotifyMode
   starts_at?: string
   ends_at?: string
   read_at?: string
@@ -189,6 +207,7 @@ export interface CreateAnnouncementRequest {
   title: string
   content: string
   status?: AnnouncementStatus
+  notify_mode?: AnnouncementNotifyMode
   targeting: AnnouncementTargeting
   starts_at?: number
   ends_at?: number
@@ -198,6 +217,7 @@ export interface UpdateAnnouncementRequest {
   title?: string
   content?: string
   status?: AnnouncementStatus
+  notify_mode?: AnnouncementNotifyMode
   targeting?: AnnouncementTargeting
   starts_at?: number
   ends_at?: number
@@ -338,7 +358,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'sora'
 
 export type SubscriptionType = 'standard' | 'subscription'
 
@@ -358,10 +378,19 @@ export interface Group {
   image_price_1k: number | null
   image_price_2k: number | null
   image_price_4k: number | null
+  // Sora 按次计费配置
+  sora_image_price_360: number | null
+  sora_image_price_540: number | null
+  sora_video_price_per_request: number | null
+  sora_video_price_per_request_hd: number | null
+  // Sora 存储配额（字节）
+  sora_storage_quota_bytes: number
   // Claude Code 客户端限制
   claude_code_only: boolean
   fallback_group_id: number | null
   fallback_group_id_on_invalid_request: number | null
+  // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
+  allow_messages_dispatch?: boolean
   created_at: string
   updated_at: string
 }
@@ -380,6 +409,9 @@ export interface AdminGroup extends Group {
   // 分组下账号数量（仅管理员可见）
   account_count?: number
 
+  // OpenAI Messages 调度配置（仅 openai 平台使用）
+  default_mapped_model?: string
+
   // 分组排序
   sort_order: number
 }
@@ -393,12 +425,25 @@ export interface ApiKey {
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
+  last_used_at: string | null
   quota: number // Quota limit in USD (0 = unlimited)
   quota_used: number // Used quota amount in USD
   expires_at: string | null // Expiration time (null = never expires)
   created_at: string
   updated_at: string
   group?: Group
+  rate_limit_5h: number
+  rate_limit_1d: number
+  rate_limit_7d: number
+  usage_5h: number
+  usage_1d: number
+  usage_7d: number
+  window_5h_start: string | null
+  window_1d_start: string | null
+  window_7d_start: string | null
+  reset_5h_at: string | null
+  reset_1d_at: string | null
+  reset_7d_at: string | null
 }
 
 export interface CreateApiKeyRequest {
@@ -409,6 +454,9 @@ export interface CreateApiKeyRequest {
   ip_blacklist?: string[]
   quota?: number // Quota limit in USD (0 = unlimited)
   expires_in_days?: number // Days until expiry (null = never expires)
+  rate_limit_5h?: number
+  rate_limit_1d?: number
+  rate_limit_7d?: number
 }
 
 export interface UpdateApiKeyRequest {
@@ -420,6 +468,10 @@ export interface UpdateApiKeyRequest {
   quota?: number // Quota limit in USD (null = no change, 0 = unlimited)
   expires_at?: string | null // Expiration time (null = no change)
   reset_quota?: boolean // Reset quota_used to 0
+  rate_limit_5h?: number
+  rate_limit_1d?: number
+  rate_limit_7d?: number
+  reset_rate_limit_usage?: boolean
 }
 
 export interface CreateGroupRequest {
@@ -435,6 +487,11 @@ export interface CreateGroupRequest {
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
+  sora_image_price_360?: number | null
+  sora_image_price_540?: number | null
+  sora_video_price_per_request?: number | null
+  sora_video_price_per_request_hd?: number | null
+  sora_storage_quota_bytes?: number
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
@@ -458,6 +515,11 @@ export interface UpdateGroupRequest {
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
+  sora_image_price_360?: number | null
+  sora_image_price_540?: number | null
+  sora_video_price_per_request?: number | null
+  sora_video_price_per_request_hd?: number | null
+  sora_storage_quota_bytes?: number
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
@@ -468,8 +530,8 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
-export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'sora'
+export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'bedrock-apikey'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'
 
@@ -499,6 +561,11 @@ export interface Proxy {
   country_code?: string
   region?: string
   city?: string
+  quality_status?: 'healthy' | 'warn' | 'challenge' | 'failed'
+  quality_score?: number
+  quality_grade?: string
+  quality_summary?: string
+  quality_checked?: number
   created_at: string
   updated_at: string
 }
@@ -509,6 +576,32 @@ export interface ProxyAccountSummary {
   platform: AccountPlatform
   type: AccountType
   notes?: string | null
+}
+
+export interface ProxyQualityCheckItem {
+  target: string
+  status: 'pass' | 'warn' | 'fail' | 'challenge'
+  http_status?: number
+  latency_ms?: number
+  message?: string
+  cf_ray?: string
+}
+
+export interface ProxyQualityCheckResult {
+  proxy_id: number
+  score: number
+  grade: string
+  summary: string
+  exit_ip?: string
+  country?: string
+  country_code?: string
+  base_latency_ms?: number
+  passed_count: number
+  warn_count: number
+  failed_count: number
+  challenge_count: number
+  checked_at: number
+  items: ProxyQualityCheckItem[]
 }
 
 // Gemini credentials structure for OAuth and API Key authentication
@@ -536,6 +629,7 @@ export interface GeminiCredentials {
   token_type?: string
   scope?: string
   expires_at?: string
+  model_mapping?: Record<string, string>
 }
 
 export interface TempUnschedulableRule {
@@ -559,6 +653,11 @@ export interface TempUnschedulableStatus {
   state?: TempUnschedulableState
 }
 
+export interface ActiveHourRule {
+  start: number  // 0-23
+  end: number    // 0-23
+}
+
 export interface Account {
   id: number
   name: string
@@ -572,6 +671,7 @@ export interface Account {
   } & Record<string, unknown>)
   proxy_id: number | null
   concurrency: number
+  load_factor?: number | null
   current_concurrency?: number // Real-time concurrency count from Redis
   priority: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
@@ -607,6 +707,12 @@ export interface Account {
   max_sessions?: number | null
   session_idle_timeout_minutes?: number | null
 
+  // RPM 限制（仅 Anthropic OAuth/SetupToken 账号有效）
+  base_rpm?: number | null
+  rpm_strategy?: string | null
+  rpm_sticky_buffer?: number | null
+  user_msg_queue_mode?: string | null  // "serialize" | "throttle" | null
+
   // TLS指纹伪装（仅 Anthropic OAuth/SetupToken 账号有效）
   enable_tls_fingerprint?: boolean | null
 
@@ -618,9 +724,21 @@ export interface Account {
   cache_ttl_override_enabled?: boolean | null
   cache_ttl_override_target?: string | null
 
+  // API Key 账号配额限制
+  quota_limit?: number | null
+  quota_used?: number | null
+  quota_daily_limit?: number | null
+  quota_daily_used?: number | null
+  quota_weekly_limit?: number | null
+  quota_weekly_used?: number | null
+
+  // 活跃时间段控制（所有账号类型有效）
+  active_hours?: ActiveHourRule[] | null
+
   // 运行时状态（仅当启用对应限制时返回）
   current_window_cost?: number | null // 当前窗口费用
   active_sessions?: number | null // 当前活跃会话数
+  current_rpm?: number | null // 当前分钟 RPM 计数
 }
 
 // Account Usage types
@@ -676,9 +794,11 @@ export interface CodexUsageSnapshot {
   // Canonical fields (normalized by backend, use these preferentially)
   codex_5h_used_percent?: number // 5-hour window usage percentage
   codex_5h_reset_after_seconds?: number // Seconds until 5h window reset
+  codex_5h_reset_at?: string // 5-hour window absolute reset time (RFC3339)
   codex_5h_window_minutes?: number // 5h window in minutes (should be ~300)
   codex_7d_used_percent?: number // 7-day window usage percentage
   codex_7d_reset_after_seconds?: number // Seconds until 7d window reset
+  codex_7d_reset_at?: string // 7-day window absolute reset time (RFC3339)
   codex_7d_window_minutes?: number // 7d window in minutes (should be ~10080)
 
   codex_usage_updated_at?: string // Last update timestamp
@@ -693,6 +813,7 @@ export interface CreateAccountRequest {
   extra?: Record<string, unknown>
   proxy_id?: number | null
   concurrency?: number
+  load_factor?: number | null
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   group_ids?: number[]
@@ -709,14 +830,35 @@ export interface UpdateAccountRequest {
   extra?: Record<string, unknown>
   proxy_id?: number | null
   concurrency?: number
+  load_factor?: number | null
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   schedulable?: boolean
-  status?: 'active' | 'inactive'
+  status?: 'active' | 'inactive' | 'error'
   group_ids?: number[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
   confirm_mixed_channel_risk?: boolean
+}
+
+export interface CheckMixedChannelRequest {
+  platform: AccountPlatform
+  group_ids: number[]
+  account_id?: number
+}
+
+export interface MixedChannelWarningDetails {
+  group_id: number
+  group_name: string
+  current_platform: string
+  other_platform: string
+}
+
+export interface CheckMixedChannelResponse {
+  has_risk: boolean
+  error?: string
+  message?: string
+  details?: MixedChannelWarningDetails
 }
 
 export interface CreateProxyRequest {
@@ -791,6 +933,7 @@ export interface AdminDataImportResult {
 // ==================== Usage & Redeem Types ====================
 
 export type RedeemCodeType = 'balance' | 'concurrency' | 'subscription' | 'invitation'
+export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2'
 
 export interface UsageLog {
   id: number
@@ -799,6 +942,7 @@ export interface UsageLog {
   account_id: number | null
   request_id: string
   model: string
+  service_tier?: string | null
   reasoning_effort?: string | null
 
   group_id: number | null
@@ -820,7 +964,9 @@ export interface UsageLog {
   rate_multiplier: number
   billing_type: number
 
+  request_type?: UsageRequestType
   stream: boolean
+  openai_ws_mode?: boolean
   duration_ms: number
   first_token_ms: number | null
 
@@ -866,6 +1012,7 @@ export interface UsageCleanupFilters {
   account_id?: number
   group_id?: number
   model?: string | null
+  request_type?: UsageRequestType | null
   stream?: boolean | null
   billing_type?: number | null
 }
@@ -984,7 +1131,8 @@ export interface TrendDataPoint {
   requests: number
   input_tokens: number
   output_tokens: number
-  cache_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
   total_tokens: number
   cost: number // 标准计费
   actual_cost: number // 实际扣除
@@ -995,6 +1143,17 @@ export interface ModelStat {
   requests: number
   input_tokens: number
   output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+  total_tokens: number
+  cost: number // 标准计费
+  actual_cost: number // 实际扣除
+}
+
+export interface GroupStat {
+  group_id: number
+  group_name: string
+  requests: number
   total_tokens: number
   cost: number // 标准计费
   actual_cost: number // 实际扣除
@@ -1004,10 +1163,26 @@ export interface UserUsageTrendPoint {
   date: string
   user_id: number
   email: string
+  username: string
   requests: number
   tokens: number
   cost: number // 标准计费
   actual_cost: number // 实际扣除
+}
+
+export interface UserSpendingRankingItem {
+  user_id: number
+  email: string
+  actual_cost: number
+  requests: number
+  tokens: number
+}
+
+export interface UserSpendingRankingResponse {
+  ranking: UserSpendingRankingItem[]
+  total_actual_cost: number
+  start_date: string
+  end_date: string
 }
 
 export interface ApiKeyUsageTrendPoint {
@@ -1110,6 +1285,7 @@ export interface UsageQueryParams {
   account_id?: number
   group_id?: number
   model?: string
+  request_type?: UsageRequestType
   stream?: boolean
   billing_type?: number | null
   start_date?: string
@@ -1332,4 +1508,49 @@ export interface TotpLoginResponse {
 export interface TotpLogin2FARequest {
   temp_token: string
   totp_code: string
+}
+
+// ==================== Scheduled Test Types ====================
+
+export interface ScheduledTestPlan {
+  id: number
+  account_id: number
+  model_id: string
+  cron_expression: string
+  enabled: boolean
+  max_results: number
+  auto_recover: boolean
+  last_run_at: string | null
+  next_run_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ScheduledTestResult {
+  id: number
+  plan_id: number
+  status: string
+  response_text: string
+  error_message: string
+  latency_ms: number
+  started_at: string
+  finished_at: string
+  created_at: string
+}
+
+export interface CreateScheduledTestPlanRequest {
+  account_id: number
+  model_id: string
+  cron_expression: string
+  enabled?: boolean
+  max_results?: number
+  auto_recover?: boolean
+}
+
+export interface UpdateScheduledTestPlanRequest {
+  model_id?: string
+  cron_expression?: string
+  enabled?: boolean
+  max_results?: number
+  auto_recover?: boolean
 }

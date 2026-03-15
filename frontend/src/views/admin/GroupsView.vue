@@ -182,6 +182,13 @@
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
               <button
+                @click="handleRateMultipliers(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-purple-600 dark:hover:bg-dark-700 dark:hover:text-purple-400"
+              >
+                <Icon name="dollar" size="sm" />
+                <span class="text-xs">{{ t('admin.groups.rateMultipliers') }}</span>
+              </button>
+              <button
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
@@ -459,7 +466,7 @@
                 step="0.001"
                 min="0"
                 class="input"
-                placeholder="0.134"
+                placeholder="0.201"
               />
             </div>
             <div>
@@ -473,6 +480,81 @@
                 placeholder="0.268"
               />
             </div>
+          </div>
+        </div>
+
+        <!-- Sora 按次计费配置 -->
+        <div v-if="createForm.platform === 'sora'" class="border-t pt-4">
+          <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">
+            {{ t('admin.groups.soraPricing.title') }}
+          </label>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            {{ t('admin.groups.soraPricing.description') }}
+          </p>
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label class="input-label">{{ t('admin.groups.soraPricing.image360') }}</label>
+              <input
+                v-model.number="createForm.sora_image_price_360"
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.05"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.groups.soraPricing.image540') }}</label>
+              <input
+                v-model.number="createForm.sora_image_price_540"
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.08"
+              />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="input-label">{{ t('admin.groups.soraPricing.video') }}</label>
+              <input
+                v-model.number="createForm.sora_video_price_per_request"
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.5"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.groups.soraPricing.videoHd') }}</label>
+              <input
+                v-model.number="createForm.sora_video_price_per_request_hd"
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.8"
+              />
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="input-label">{{ t('admin.groups.soraPricing.storageQuota') }}</label>
+            <div class="flex items-center gap-2">
+              <input
+                v-model.number="createForm.sora_storage_quota_gb"
+                type="number"
+                step="0.1"
+                min="0"
+                class="input"
+                placeholder="10"
+              />
+              <span class="shrink-0 text-sm text-gray-500">GB</span>
+            </div>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.groups.soraPricing.storageQuotaHint') }}
+            </p>
           </div>
         </div>
 
@@ -633,6 +715,44 @@
           </div>
         </div>
 
+        <!-- OpenAI Messages 调度配置（仅 openai 平台） -->
+        <div v-if="createForm.platform === 'openai'" class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4">
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{{ t('admin.groups.openaiMessages.title') }}</h4>
+
+          <!-- 允许 Messages 调度开关 -->
+          <div class="flex items-center justify-between">
+            <label class="text-sm text-gray-600 dark:text-gray-400">{{ t('admin.groups.openaiMessages.allowDispatch') }}</label>
+            <button
+              type="button"
+              @click="createForm.allow_messages_dispatch = !createForm.allow_messages_dispatch"
+              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+              :class="
+                createForm.allow_messages_dispatch ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-600'
+              "
+            >
+              <span
+                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                :class="
+                  createForm.allow_messages_dispatch ? 'translate-x-6' : 'translate-x-1'
+                "
+              />
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ t('admin.groups.openaiMessages.allowDispatchHint') }}</p>
+
+          <!-- 默认映射模型（仅当开关打开时显示） -->
+          <div v-if="createForm.allow_messages_dispatch" class="mt-3">
+            <label class="input-label">{{ t('admin.groups.openaiMessages.defaultModel') }}</label>
+            <input
+              v-model="createForm.default_mapped_model"
+              type="text"
+              :placeholder="t('admin.groups.openaiMessages.defaultModelPlaceholder')"
+              class="input"
+            />
+            <p class="input-hint">{{ t('admin.groups.openaiMessages.defaultModelHint') }}</p>
+          </div>
+        </div>
+
         <!-- 无效请求兜底（仅 anthropic/antigravity 平台，且非订阅分组） -->
         <div
           v-if="['anthropic', 'antigravity'].includes(createForm.platform) && createForm.subscription_type !== 'subscription'"
@@ -701,8 +821,8 @@
           <!-- 路由规则列表（仅在启用时显示） -->
           <div v-if="createForm.model_routing_enabled" class="space-y-3">
             <div
-              v-for="(rule, index) in createModelRoutingRules"
-              :key="index"
+              v-for="rule in createModelRoutingRules"
+              :key="getCreateRuleRenderKey(rule)"
               class="rounded-lg border border-gray-200 p-3 dark:border-dark-600"
             >
               <div class="flex items-start gap-3">
@@ -728,7 +848,7 @@
                         {{ account.name }}
                         <button
                           type="button"
-                          @click="removeSelectedAccount(index, account.id, false)"
+                          @click="removeSelectedAccount(rule, account.id)"
                           class="ml-0.5 text-primary-500 hover:text-primary-700 dark:hover:text-primary-200"
                         >
                           <Icon name="x" size="xs" />
@@ -738,23 +858,23 @@
                     <!-- 账号搜索输入框 -->
                     <div class="relative account-search-container">
                       <input
-                        v-model="accountSearchKeyword[`create-${index}`]"
+                        v-model="accountSearchKeyword[getCreateRuleSearchKey(rule)]"
                         type="text"
                         class="input text-sm"
                         :placeholder="t('admin.groups.modelRouting.searchAccountPlaceholder')"
-                        @input="searchAccounts(`create-${index}`)"
-                        @focus="onAccountSearchFocus(index, false)"
+                        @input="searchAccountsByRule(rule)"
+                        @focus="onAccountSearchFocus(rule)"
                       />
                       <!-- 搜索结果下拉框 -->
                       <div
-                        v-if="showAccountDropdown[`create-${index}`] && accountSearchResults[`create-${index}`]?.length > 0"
+                        v-if="showAccountDropdown[getCreateRuleSearchKey(rule)] && accountSearchResults[getCreateRuleSearchKey(rule)]?.length > 0"
                         class="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:border-dark-600 dark:bg-dark-800"
                       >
                         <button
-                          v-for="account in accountSearchResults[`create-${index}`]"
+                          v-for="account in accountSearchResults[getCreateRuleSearchKey(rule)]"
                           :key="account.id"
                           type="button"
-                          @click="selectAccount(index, account, false)"
+                          @click="selectAccount(rule, account)"
                           class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-700"
                           :class="{ 'opacity-50': rule.accounts.some(a => a.id === account.id) }"
                           :disabled="rule.accounts.some(a => a.id === account.id)"
@@ -769,7 +889,7 @@
                 </div>
                 <button
                   type="button"
-                  @click="removeCreateRoutingRule(index)"
+                  @click="removeCreateRoutingRule(rule)"
                   class="mt-5 p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                   :title="t('admin.groups.modelRouting.removeRule')"
                 >
@@ -1081,7 +1201,7 @@
                 step="0.001"
                 min="0"
                 class="input"
-                placeholder="0.134"
+                placeholder="0.201"
               />
             </div>
             <div>
@@ -1095,6 +1215,81 @@
                 placeholder="0.268"
               />
             </div>
+          </div>
+        </div>
+
+        <!-- Sora 按次计费配置 -->
+        <div v-if="editForm.platform === 'sora'" class="border-t pt-4">
+          <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">
+            {{ t('admin.groups.soraPricing.title') }}
+          </label>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            {{ t('admin.groups.soraPricing.description') }}
+          </p>
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label class="input-label">{{ t('admin.groups.soraPricing.image360') }}</label>
+              <input
+                v-model.number="editForm.sora_image_price_360"
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.05"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.groups.soraPricing.image540') }}</label>
+              <input
+                v-model.number="editForm.sora_image_price_540"
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.08"
+              />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="input-label">{{ t('admin.groups.soraPricing.video') }}</label>
+              <input
+                v-model.number="editForm.sora_video_price_per_request"
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.5"
+              />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.groups.soraPricing.videoHd') }}</label>
+              <input
+                v-model.number="editForm.sora_video_price_per_request_hd"
+                type="number"
+                step="0.001"
+                min="0"
+                class="input"
+                placeholder="0.8"
+              />
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="input-label">{{ t('admin.groups.soraPricing.storageQuota') }}</label>
+            <div class="flex items-center gap-2">
+              <input
+                v-model.number="editForm.sora_storage_quota_gb"
+                type="number"
+                step="0.1"
+                min="0"
+                class="input"
+                placeholder="10"
+              />
+              <span class="shrink-0 text-sm text-gray-500">GB</span>
+            </div>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.groups.soraPricing.storageQuotaHint') }}
+            </p>
           </div>
         </div>
 
@@ -1255,6 +1450,44 @@
           </div>
         </div>
 
+        <!-- OpenAI Messages 调度配置（仅 openai 平台） -->
+        <div v-if="editForm.platform === 'openai'" class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4">
+          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{{ t('admin.groups.openaiMessages.title') }}</h4>
+
+          <!-- 允许 Messages 调度开关 -->
+          <div class="flex items-center justify-between">
+            <label class="text-sm text-gray-600 dark:text-gray-400">{{ t('admin.groups.openaiMessages.allowDispatch') }}</label>
+            <button
+              type="button"
+              @click="editForm.allow_messages_dispatch = !editForm.allow_messages_dispatch"
+              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+              :class="
+                editForm.allow_messages_dispatch ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-600'
+              "
+            >
+              <span
+                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                :class="
+                  editForm.allow_messages_dispatch ? 'translate-x-6' : 'translate-x-1'
+                "
+              />
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ t('admin.groups.openaiMessages.allowDispatchHint') }}</p>
+
+          <!-- 默认映射模型（仅当开关打开时显示） -->
+          <div v-if="editForm.allow_messages_dispatch" class="mt-3">
+            <label class="input-label">{{ t('admin.groups.openaiMessages.defaultModel') }}</label>
+            <input
+              v-model="editForm.default_mapped_model"
+              type="text"
+              :placeholder="t('admin.groups.openaiMessages.defaultModelPlaceholder')"
+              class="input"
+            />
+            <p class="input-hint">{{ t('admin.groups.openaiMessages.defaultModelHint') }}</p>
+          </div>
+        </div>
+
         <!-- 无效请求兜底（仅 anthropic/antigravity 平台，且非订阅分组） -->
         <div
           v-if="['anthropic', 'antigravity'].includes(editForm.platform) && editForm.subscription_type !== 'subscription'"
@@ -1323,8 +1556,8 @@
           <!-- 路由规则列表（仅在启用时显示） -->
           <div v-if="editForm.model_routing_enabled" class="space-y-3">
             <div
-              v-for="(rule, index) in editModelRoutingRules"
-              :key="index"
+              v-for="rule in editModelRoutingRules"
+              :key="getEditRuleRenderKey(rule)"
               class="rounded-lg border border-gray-200 p-3 dark:border-dark-600"
             >
               <div class="flex items-start gap-3">
@@ -1350,7 +1583,7 @@
                         {{ account.name }}
                         <button
                           type="button"
-                          @click="removeSelectedAccount(index, account.id, true)"
+                          @click="removeSelectedAccount(rule, account.id, true)"
                           class="ml-0.5 text-primary-500 hover:text-primary-700 dark:hover:text-primary-200"
                         >
                           <Icon name="x" size="xs" />
@@ -1360,23 +1593,23 @@
                     <!-- 账号搜索输入框 -->
                     <div class="relative account-search-container">
                       <input
-                        v-model="accountSearchKeyword[`edit-${index}`]"
+                        v-model="accountSearchKeyword[getEditRuleSearchKey(rule)]"
                         type="text"
                         class="input text-sm"
                         :placeholder="t('admin.groups.modelRouting.searchAccountPlaceholder')"
-                        @input="searchAccounts(`edit-${index}`)"
-                        @focus="onAccountSearchFocus(index, true)"
+                        @input="searchAccountsByRule(rule, true)"
+                        @focus="onAccountSearchFocus(rule, true)"
                       />
                       <!-- 搜索结果下拉框 -->
                       <div
-                        v-if="showAccountDropdown[`edit-${index}`] && accountSearchResults[`edit-${index}`]?.length > 0"
+                        v-if="showAccountDropdown[getEditRuleSearchKey(rule)] && accountSearchResults[getEditRuleSearchKey(rule)]?.length > 0"
                         class="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border bg-white shadow-lg dark:border-dark-600 dark:bg-dark-800"
                       >
                         <button
-                          v-for="account in accountSearchResults[`edit-${index}`]"
+                          v-for="account in accountSearchResults[getEditRuleSearchKey(rule)]"
                           :key="account.id"
                           type="button"
-                          @click="selectAccount(index, account, true)"
+                          @click="selectAccount(rule, account, true)"
                           class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-700"
                           :class="{ 'opacity-50': rule.accounts.some(a => a.id === account.id) }"
                           :disabled="rule.accounts.some(a => a.id === account.id)"
@@ -1391,7 +1624,7 @@
                 </div>
                 <button
                   type="button"
-                  @click="removeEditRoutingRule(index)"
+                  @click="removeEditRoutingRule(rule)"
                   class="mt-5 p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                   :title="t('admin.groups.modelRouting.removeRule')"
                 >
@@ -1549,6 +1782,14 @@
         </div>
       </template>
     </BaseDialog>
+
+    <!-- Group Rate Multipliers Modal -->
+    <GroupRateMultipliersModal
+      :show="showRateMultipliersModal"
+      :group="rateMultipliersGroup"
+      @close="showRateMultipliersModal = false"
+      @success="loadGroups"
+    />
   </AppLayout>
 </template>
 
@@ -1570,7 +1811,10 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
+import GroupRateMultipliersModal from '@/components/admin/group/GroupRateMultipliersModal.vue'
 import { VueDraggable } from 'vue-draggable-plus'
+import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
+import { useKeyedDebouncedSearch } from '@/composables/useKeyedDebouncedSearch'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -1604,7 +1848,8 @@ const platformOptions = computed(() => [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' }
+  { value: 'antigravity', label: 'Antigravity' },
+  { value: 'sora', label: 'Sora' }
 ])
 
 const platformFilterOptions = computed(() => [
@@ -1612,7 +1857,8 @@ const platformFilterOptions = computed(() => [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
-  { value: 'antigravity', label: 'Antigravity' }
+  { value: 'antigravity', label: 'Antigravity' },
+  { value: 'sora', label: 'Sora' }
 ])
 
 const editStatusOptions = computed(() => [
@@ -1740,6 +1986,8 @@ const submitting = ref(false)
 const sortSubmitting = ref(false)
 const editingGroup = ref<AdminGroup | null>(null)
 const deletingGroup = ref<AdminGroup | null>(null)
+const showRateMultipliersModal = ref(false)
+const rateMultipliersGroup = ref<AdminGroup | null>(null)
 const sortableGroups = ref<AdminGroup[]>([])
 
 const createForm = reactive({
@@ -1756,10 +2004,19 @@ const createForm = reactive({
   image_price_1k: null as number | null,
   image_price_2k: null as number | null,
   image_price_4k: null as number | null,
+  // Sora 按次计费配置
+  sora_image_price_360: null as number | null,
+  sora_image_price_540: null as number | null,
+  sora_video_price_per_request: null as number | null,
+  sora_video_price_per_request_hd: null as number | null,
+  sora_storage_quota_gb: null as number | null,
   // Claude Code 客户端限制（仅 anthropic 平台使用）
   claude_code_only: false,
   fallback_group_id: null as number | null,
   fallback_group_id_on_invalid_request: null as number | null,
+  // OpenAI Messages 调度配置（仅 openai 平台使用）
+  allow_messages_dispatch: false,
+  default_mapped_model: 'gpt-5.4',
   // 模型路由开关
   model_routing_enabled: false,
   // 支持的模型系列（仅 antigravity 平台）
@@ -1788,33 +2045,70 @@ const createModelRoutingRules = ref<ModelRoutingRule[]>([])
 // 编辑表单的模型路由规则
 const editModelRoutingRules = ref<ModelRoutingRule[]>([])
 
-// 账号搜索相关状态
-const accountSearchKeyword = ref<Record<string, string>>({}) // 每个规则的搜索关键词 (key: "create-0" 或 "edit-0")
-const accountSearchResults = ref<Record<string, SimpleAccount[]>>({}) // 每个规则的搜索结果
-const showAccountDropdown = ref<Record<string, boolean>>({}) // 每个规则的下拉框显示状态
-let accountSearchTimeout: ReturnType<typeof setTimeout> | null = null
+// 规则对象稳定 key（避免使用 index 导致状态错位）
+const resolveCreateRuleKey = createStableObjectKeyResolver<ModelRoutingRule>('create-rule')
+const resolveEditRuleKey = createStableObjectKeyResolver<ModelRoutingRule>('edit-rule')
 
-// 搜索账号（仅限 anthropic 平台）
-const searchAccounts = async (key: string) => {
-  if (accountSearchTimeout) clearTimeout(accountSearchTimeout)
-  accountSearchTimeout = setTimeout(async () => {
-    const keyword = accountSearchKeyword.value[key] || ''
-    try {
-      const res = await adminAPI.accounts.list(1, 20, {
+const getCreateRuleRenderKey = (rule: ModelRoutingRule) => resolveCreateRuleKey(rule)
+const getEditRuleRenderKey = (rule: ModelRoutingRule) => resolveEditRuleKey(rule)
+
+const getCreateRuleSearchKey = (rule: ModelRoutingRule) => `create-${resolveCreateRuleKey(rule)}`
+const getEditRuleSearchKey = (rule: ModelRoutingRule) => `edit-${resolveEditRuleKey(rule)}`
+
+const getRuleSearchKey = (rule: ModelRoutingRule, isEdit: boolean = false) => {
+  return isEdit ? getEditRuleSearchKey(rule) : getCreateRuleSearchKey(rule)
+}
+
+// 账号搜索相关状态
+const accountSearchKeyword = ref<Record<string, string>>({})
+const accountSearchResults = ref<Record<string, SimpleAccount[]>>({})
+const showAccountDropdown = ref<Record<string, boolean>>({})
+
+const clearAccountSearchStateByKey = (key: string) => {
+  delete accountSearchKeyword.value[key]
+  delete accountSearchResults.value[key]
+  delete showAccountDropdown.value[key]
+}
+
+const clearAllAccountSearchState = () => {
+  accountSearchKeyword.value = {}
+  accountSearchResults.value = {}
+  showAccountDropdown.value = {}
+}
+
+const accountSearchRunner = useKeyedDebouncedSearch<SimpleAccount[]>({
+  delay: 300,
+  search: async (keyword, { signal }) => {
+    const res = await adminAPI.accounts.list(
+      1,
+      20,
+      {
         search: keyword,
         platform: 'anthropic'
-      })
-      accountSearchResults.value[key] = res.items.map((a) => ({ id: a.id, name: a.name }))
-    } catch {
-      accountSearchResults.value[key] = []
-    }
-  }, 300)
+      },
+      { signal }
+    )
+    return res.items.map((account) => ({ id: account.id, name: account.name }))
+  },
+  onSuccess: (key, result) => {
+    accountSearchResults.value[key] = result
+  },
+  onError: (key) => {
+    accountSearchResults.value[key] = []
+  }
+})
+
+// 搜索账号（仅限 anthropic 平台）
+const searchAccounts = (key: string) => {
+  accountSearchRunner.trigger(key, accountSearchKeyword.value[key] || '')
+}
+
+const searchAccountsByRule = (rule: ModelRoutingRule, isEdit: boolean = false) => {
+  searchAccounts(getRuleSearchKey(rule, isEdit))
 }
 
 // 选择账号
-const selectAccount = (ruleIndex: number, account: SimpleAccount, isEdit: boolean = false) => {
-  const rules = isEdit ? editModelRoutingRules.value : createModelRoutingRules.value
-  const rule = rules[ruleIndex]
+const selectAccount = (rule: ModelRoutingRule, account: SimpleAccount, isEdit: boolean = false) => {
   if (!rule) return
 
   // 检查是否已选择
@@ -1823,15 +2117,13 @@ const selectAccount = (ruleIndex: number, account: SimpleAccount, isEdit: boolea
   }
 
   // 清空搜索
-  const key = `${isEdit ? 'edit' : 'create'}-${ruleIndex}`
+  const key = getRuleSearchKey(rule, isEdit)
   accountSearchKeyword.value[key] = ''
   showAccountDropdown.value[key] = false
 }
 
 // 移除已选账号
-const removeSelectedAccount = (ruleIndex: number, accountId: number, isEdit: boolean = false) => {
-  const rules = isEdit ? editModelRoutingRules.value : createModelRoutingRules.value
-  const rule = rules[ruleIndex]
+const removeSelectedAccount = (rule: ModelRoutingRule, accountId: number, _isEdit: boolean = false) => {
   if (!rule) return
 
   rule.accounts = rule.accounts.filter(a => a.id !== accountId)
@@ -1858,8 +2150,8 @@ const toggleEditScope = (scope: string) => {
 }
 
 // 处理账号搜索输入框聚焦
-const onAccountSearchFocus = (ruleIndex: number, isEdit: boolean = false) => {
-  const key = `${isEdit ? 'edit' : 'create'}-${ruleIndex}`
+const onAccountSearchFocus = (rule: ModelRoutingRule, isEdit: boolean = false) => {
+  const key = getRuleSearchKey(rule, isEdit)
   showAccountDropdown.value[key] = true
   // 如果没有搜索结果，触发一次搜索
   if (!accountSearchResults.value[key]?.length) {
@@ -1873,13 +2165,14 @@ const addCreateRoutingRule = () => {
 }
 
 // 删除创建表单的路由规则
-const removeCreateRoutingRule = (index: number) => {
+const removeCreateRoutingRule = (rule: ModelRoutingRule) => {
+  const index = createModelRoutingRules.value.indexOf(rule)
+  if (index === -1) return
+
+  const key = getCreateRuleSearchKey(rule)
+  accountSearchRunner.clearKey(key)
+  clearAccountSearchStateByKey(key)
   createModelRoutingRules.value.splice(index, 1)
-  // 清理相关的搜索状态
-  const key = `create-${index}`
-  delete accountSearchKeyword.value[key]
-  delete accountSearchResults.value[key]
-  delete showAccountDropdown.value[key]
 }
 
 // 添加编辑表单的路由规则
@@ -1888,13 +2181,14 @@ const addEditRoutingRule = () => {
 }
 
 // 删除编辑表单的路由规则
-const removeEditRoutingRule = (index: number) => {
+const removeEditRoutingRule = (rule: ModelRoutingRule) => {
+  const index = editModelRoutingRules.value.indexOf(rule)
+  if (index === -1) return
+
+  const key = getEditRuleSearchKey(rule)
+  accountSearchRunner.clearKey(key)
+  clearAccountSearchStateByKey(key)
   editModelRoutingRules.value.splice(index, 1)
-  // 清理相关的搜索状态
-  const key = `edit-${index}`
-  delete accountSearchKeyword.value[key]
-  delete accountSearchResults.value[key]
-  delete showAccountDropdown.value[key]
 }
 
 // 将 UI 格式的路由规则转换为 API 格式
@@ -1954,10 +2248,19 @@ const editForm = reactive({
   image_price_1k: null as number | null,
   image_price_2k: null as number | null,
   image_price_4k: null as number | null,
+  // Sora 按次计费配置
+  sora_image_price_360: null as number | null,
+  sora_image_price_540: null as number | null,
+  sora_video_price_per_request: null as number | null,
+  sora_video_price_per_request_hd: null as number | null,
+  sora_storage_quota_gb: null as number | null,
   // Claude Code 客户端限制（仅 anthropic 平台使用）
   claude_code_only: false,
   fallback_group_id: null as number | null,
   fallback_group_id_on_invalid_request: null as number | null,
+  // OpenAI Messages 调度配置（仅 openai 平台使用）
+  allow_messages_dispatch: false,
+  default_mapped_model: '',
   // 模型路由开关
   model_routing_enabled: false,
   // 支持的模型系列（仅 antigravity 平台）
@@ -2033,6 +2336,10 @@ const handlePageSizeChange = (pageSize: number) => {
 
 const closeCreateModal = () => {
   showCreateModal.value = false
+  createModelRoutingRules.value.forEach((rule) => {
+    accountSearchRunner.clearKey(getCreateRuleSearchKey(rule))
+  })
+  clearAllAccountSearchState()
   createForm.name = ''
   createForm.description = ''
   createForm.platform = 'anthropic'
@@ -2045,9 +2352,16 @@ const closeCreateModal = () => {
   createForm.image_price_1k = null
   createForm.image_price_2k = null
   createForm.image_price_4k = null
+  createForm.sora_image_price_360 = null
+  createForm.sora_image_price_540 = null
+  createForm.sora_video_price_per_request = null
+  createForm.sora_video_price_per_request_hd = null
+  createForm.sora_storage_quota_gb = null
   createForm.claude_code_only = false
   createForm.fallback_group_id = null
   createForm.fallback_group_id_on_invalid_request = null
+  createForm.allow_messages_dispatch = false
+  createForm.default_mapped_model = 'gpt-5.4'
   createForm.supported_model_scopes = ['claude', 'gemini_text', 'gemini_image']
   createForm.mcp_xml_inject = true
   createForm.copy_accounts_from_group_ids = []
@@ -2062,8 +2376,10 @@ const handleCreateGroup = async () => {
   submitting.value = true
   try {
     // 构建请求数据，包含模型路由配置
+    const { sora_storage_quota_gb: createQuotaGb, ...createRest } = createForm
     const requestData = {
-      ...createForm,
+      ...createRest,
+      sora_storage_quota_bytes: createQuotaGb ? Math.round(createQuotaGb * 1024 * 1024 * 1024) : 0,
       model_routing: convertRoutingRulesToApiFormat(createModelRoutingRules.value)
     }
     await adminAPI.groups.create(requestData)
@@ -2098,9 +2414,16 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.image_price_1k = group.image_price_1k
   editForm.image_price_2k = group.image_price_2k
   editForm.image_price_4k = group.image_price_4k
+  editForm.sora_image_price_360 = group.sora_image_price_360
+  editForm.sora_image_price_540 = group.sora_image_price_540
+  editForm.sora_video_price_per_request = group.sora_video_price_per_request
+  editForm.sora_video_price_per_request_hd = group.sora_video_price_per_request_hd
+  editForm.sora_storage_quota_gb = group.sora_storage_quota_bytes ? Number((group.sora_storage_quota_bytes / (1024 * 1024 * 1024)).toFixed(2)) : null
   editForm.claude_code_only = group.claude_code_only || false
   editForm.fallback_group_id = group.fallback_group_id
   editForm.fallback_group_id_on_invalid_request = group.fallback_group_id_on_invalid_request
+  editForm.allow_messages_dispatch = group.allow_messages_dispatch || false
+  editForm.default_mapped_model = group.default_mapped_model || ''
   editForm.model_routing_enabled = group.model_routing_enabled || false
   editForm.supported_model_scopes = group.supported_model_scopes || ['claude', 'gemini_text', 'gemini_image']
   editForm.mcp_xml_inject = group.mcp_xml_inject ?? true
@@ -2111,6 +2434,10 @@ const handleEdit = async (group: AdminGroup) => {
 }
 
 const closeEditModal = () => {
+  editModelRoutingRules.value.forEach((rule) => {
+    accountSearchRunner.clearKey(getEditRuleSearchKey(rule))
+  })
+  clearAllAccountSearchState()
   showEditModal.value = false
   editingGroup.value = null
   editModelRoutingRules.value = []
@@ -2127,8 +2454,10 @@ const handleUpdateGroup = async () => {
   submitting.value = true
   try {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
+    const { sora_storage_quota_gb: editQuotaGb, ...editRest } = editForm
     const payload = {
-      ...editForm,
+      ...editRest,
+      sora_storage_quota_bytes: editQuotaGb ? Math.round(editQuotaGb * 1024 * 1024 * 1024) : 0,
       fallback_group_id: editForm.fallback_group_id === null ? 0 : editForm.fallback_group_id,
       fallback_group_id_on_invalid_request:
         editForm.fallback_group_id_on_invalid_request === null
@@ -2146,6 +2475,11 @@ const handleUpdateGroup = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+const handleRateMultipliers = (group: AdminGroup) => {
+  rateMultipliersGroup.value = group
+  showRateMultipliersModal.value = true
 }
 
 const handleDelete = (group: AdminGroup) => {
@@ -2184,6 +2518,10 @@ watch(
   (newVal) => {
     if (!['anthropic', 'antigravity'].includes(newVal)) {
       createForm.fallback_group_id_on_invalid_request = null
+    }
+    if (newVal !== 'openai') {
+      createForm.allow_messages_dispatch = false
+      createForm.default_mapped_model = ''
     }
   }
 )
@@ -2246,5 +2584,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  accountSearchRunner.clearAll()
+  clearAllAccountSearchState()
 })
 </script>

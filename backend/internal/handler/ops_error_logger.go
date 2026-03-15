@@ -31,6 +31,7 @@ const (
 const (
 	opsErrorLogTimeout      = 5 * time.Second
 	opsErrorLogDrainTimeout = 10 * time.Second
+	opsErrorLogBatchWindow  = 200 * time.Millisecond
 
 	opsErrorLogMinWorkerCount = 4
 	opsErrorLogMaxWorkerCount = 32
@@ -38,12 +39,12 @@ const (
 	opsErrorLogQueueSizePerWorker = 128
 	opsErrorLogMinQueueSize       = 256
 	opsErrorLogMaxQueueSize       = 8192
+	opsErrorLogBatchSize          = 32
 )
 
 type opsErrorLogJob struct {
-	ops         *service.OpsService
-	entry       *service.OpsInsertErrorLogInput
-	requestBody []byte
+	ops   *service.OpsService
+	entry *service.OpsInsertErrorLogInput
 }
 
 var (
@@ -58,6 +59,7 @@ var (
 	opsErrorLogEnqueued  atomic.Int64
 	opsErrorLogDropped   atomic.Int64
 	opsErrorLogProcessed atomic.Int64
+	opsErrorLogSanitized atomic.Int64
 
 	opsErrorLogLastDropLogAt atomic.Int64
 
@@ -82,28 +84,83 @@ func startOpsErrorLogWorkers() {
 	for i := 0; i < workerCount; i++ {
 		go func() {
 			defer opsErrorLogWorkersWg.Done()
-			for job := range opsErrorLogQueue {
-				opsErrorLogQueueLen.Add(-1)
-				if job.ops == nil || job.entry == nil {
-					continue
+			for {
+				job, ok := <-opsErrorLogQueue
+				if !ok {
+					return
 				}
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Printf("[OpsErrorLogger] worker panic: %v\n%s", r, debug.Stack())
+				opsErrorLogQueueLen.Add(-1)
+				batch := make([]opsErrorLogJob, 0, opsErrorLogBatchSize)
+				batch = append(batch, job)
+
+				timer := time.NewTimer(opsErrorLogBatchWindow)
+			batchLoop:
+				for len(batch) < opsErrorLogBatchSize {
+					select {
+					case nextJob, ok := <-opsErrorLogQueue:
+						if !ok {
+							if !timer.Stop() {
+								select {
+								case <-timer.C:
+								default:
+								}
+							}
+							flushOpsErrorLogBatch(batch)
+							return
 						}
-					}()
-					ctx, cancel := context.WithTimeout(context.Background(), opsErrorLogTimeout)
-					_ = job.ops.RecordError(ctx, job.entry, job.requestBody)
-					cancel()
-					opsErrorLogProcessed.Add(1)
-				}()
+						opsErrorLogQueueLen.Add(-1)
+						batch = append(batch, nextJob)
+					case <-timer.C:
+						break batchLoop
+					}
+				}
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				flushOpsErrorLogBatch(batch)
 			}
 		}()
 	}
 }
 
-func enqueueOpsErrorLog(ops *service.OpsService, entry *service.OpsInsertErrorLogInput, requestBody []byte) {
+func flushOpsErrorLogBatch(batch []opsErrorLogJob) {
+	if len(batch) == 0 {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[OpsErrorLogger] worker panic: %v\n%s", r, debug.Stack())
+		}
+	}()
+
+	grouped := make(map[*service.OpsService][]*service.OpsInsertErrorLogInput, len(batch))
+	var processed int64
+	for _, job := range batch {
+		if job.ops == nil || job.entry == nil {
+			continue
+		}
+		grouped[job.ops] = append(grouped[job.ops], job.entry)
+		processed++
+	}
+	if processed == 0 {
+		return
+	}
+
+	for opsSvc, entries := range grouped {
+		if opsSvc == nil || len(entries) == 0 {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), opsErrorLogTimeout)
+		_ = opsSvc.RecordErrorBatch(ctx, entries)
+		cancel()
+	}
+	opsErrorLogProcessed.Add(processed)
+}
+
+func enqueueOpsErrorLog(ops *service.OpsService, entry *service.OpsInsertErrorLogInput) {
 	if ops == nil || entry == nil {
 		return
 	}
@@ -129,7 +186,7 @@ func enqueueOpsErrorLog(ops *service.OpsService, entry *service.OpsInsertErrorLo
 	}
 
 	select {
-	case opsErrorLogQueue <- opsErrorLogJob{ops: ops, entry: entry, requestBody: requestBody}:
+	case opsErrorLogQueue <- opsErrorLogJob{ops: ops, entry: entry}:
 		opsErrorLogQueueLen.Add(1)
 		opsErrorLogEnqueued.Add(1)
 	default:
@@ -205,6 +262,10 @@ func OpsErrorLogProcessedTotal() int64 {
 	return opsErrorLogProcessed.Load()
 }
 
+func OpsErrorLogSanitizedTotal() int64 {
+	return opsErrorLogSanitized.Load()
+}
+
 func maybeLogOpsErrorLogDrop() {
 	now := time.Now().Unix()
 
@@ -222,12 +283,13 @@ func maybeLogOpsErrorLogDrop() {
 	queueCap := OpsErrorLogQueueCapacity()
 
 	log.Printf(
-		"[OpsErrorLogger] queue is full; dropping logs (queued=%d cap=%d enqueued_total=%d dropped_total=%d processed_total=%d)",
+		"[OpsErrorLogger] queue is full; dropping logs (queued=%d cap=%d enqueued_total=%d dropped_total=%d processed_total=%d sanitized_total=%d)",
 		queued,
 		queueCap,
 		opsErrorLogEnqueued.Load(),
 		opsErrorLogDropped.Load(),
 		opsErrorLogProcessed.Load(),
+		opsErrorLogSanitized.Load(),
 	)
 }
 
@@ -255,24 +317,84 @@ func setOpsRequestContext(c *gin.Context, model string, stream bool, requestBody
 	if c == nil {
 		return
 	}
+	model = strings.TrimSpace(model)
 	c.Set(opsModelKey, model)
 	c.Set(opsStreamKey, stream)
 	if len(requestBody) > 0 {
 		c.Set(opsRequestBodyKey, requestBody)
 	}
+	if c.Request != nil && model != "" {
+		ctx := context.WithValue(c.Request.Context(), ctxkey.Model, model)
+		c.Request = c.Request.WithContext(ctx)
+	}
 }
 
-func setOpsSelectedAccount(c *gin.Context, accountID int64) {
+func attachOpsRequestBodyToEntry(c *gin.Context, entry *service.OpsInsertErrorLogInput) {
+	if c == nil || entry == nil {
+		return
+	}
+	v, ok := c.Get(opsRequestBodyKey)
+	if !ok {
+		return
+	}
+	raw, ok := v.([]byte)
+	if !ok || len(raw) == 0 {
+		return
+	}
+	entry.RequestBodyJSON, entry.RequestBodyTruncated, entry.RequestBodyBytes = service.PrepareOpsRequestBodyForQueue(raw)
+	opsErrorLogSanitized.Add(1)
+}
+
+func setOpsSelectedAccount(c *gin.Context, accountID int64, platform ...string) {
 	if c == nil || accountID <= 0 {
 		return
 	}
 	c.Set(opsAccountIDKey, accountID)
+	if c.Request != nil {
+		ctx := context.WithValue(c.Request.Context(), ctxkey.AccountID, accountID)
+		if len(platform) > 0 {
+			p := strings.TrimSpace(platform[0])
+			if p != "" {
+				ctx = context.WithValue(ctx, ctxkey.Platform, p)
+			}
+		}
+		c.Request = c.Request.WithContext(ctx)
+	}
 }
 
 type opsCaptureWriter struct {
 	gin.ResponseWriter
 	limit int
 	buf   bytes.Buffer
+}
+
+const opsCaptureWriterLimit = 64 * 1024
+
+var opsCaptureWriterPool = sync.Pool{
+	New: func() any {
+		return &opsCaptureWriter{limit: opsCaptureWriterLimit}
+	},
+}
+
+func acquireOpsCaptureWriter(rw gin.ResponseWriter) *opsCaptureWriter {
+	w, ok := opsCaptureWriterPool.Get().(*opsCaptureWriter)
+	if !ok || w == nil {
+		w = &opsCaptureWriter{}
+	}
+	w.ResponseWriter = rw
+	w.limit = opsCaptureWriterLimit
+	w.buf.Reset()
+	return w
+}
+
+func releaseOpsCaptureWriter(w *opsCaptureWriter) {
+	if w == nil {
+		return
+	}
+	w.ResponseWriter = nil
+	w.limit = opsCaptureWriterLimit
+	w.buf.Reset()
+	opsCaptureWriterPool.Put(w)
 }
 
 func (w *opsCaptureWriter) Write(b []byte) (int, error) {
@@ -306,7 +428,16 @@ func (w *opsCaptureWriter) WriteString(s string) (int, error) {
 // - Streaming errors after the response has started (SSE) may still need explicit logging.
 func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		w := &opsCaptureWriter{ResponseWriter: c.Writer, limit: 64 * 1024}
+		originalWriter := c.Writer
+		w := acquireOpsCaptureWriter(originalWriter)
+		defer func() {
+			// Restore the original writer before returning so outer middlewares
+			// don't observe a pooled wrapper that has been released.
+			if c.Writer == w {
+				c.Writer = originalWriter
+			}
+			releaseOpsCaptureWriter(w)
+		}()
 		c.Writer = w
 		c.Next()
 
@@ -507,6 +638,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				RetryCount:  0,
 				CreatedAt:   time.Now(),
 			}
+			applyOpsLatencyFieldsFromContext(c, entry)
 
 			if apiKey != nil {
 				entry.APIKeyID = &apiKey.ID
@@ -528,14 +660,9 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				entry.ClientIP = &clientIP
 			}
 
-			var requestBody []byte
-			if v, ok := c.Get(opsRequestBodyKey); ok {
-				if b, ok := v.([]byte); ok && len(b) > 0 {
-					requestBody = b
-				}
-			}
 			// Store request headers/body only when an upstream error occurred to keep overhead minimal.
 			entry.RequestHeadersJSON = extractOpsRetryRequestHeaders(c)
+			attachOpsRequestBodyToEntry(c, entry)
 
 			// Skip logging if a passthrough rule with skip_monitoring=true matched.
 			if v, ok := c.Get(service.OpsSkipPassthroughKey); ok {
@@ -544,7 +671,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				}
 			}
 
-			enqueueOpsErrorLog(ops, entry, requestBody)
+			enqueueOpsErrorLog(ops, entry)
 			return
 		}
 
@@ -592,8 +719,10 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			requestID = c.Writer.Header().Get("x-request-id")
 		}
 
-		phase := classifyOpsPhase(parsed.ErrorType, parsed.Message, parsed.Code)
-		isBusinessLimited := classifyOpsIsBusinessLimited(parsed.ErrorType, phase, parsed.Code, status, parsed.Message)
+		normalizedType := normalizeOpsErrorType(parsed.ErrorType, parsed.Code)
+
+		phase := classifyOpsPhase(normalizedType, parsed.Message, parsed.Code)
+		isBusinessLimited := classifyOpsIsBusinessLimited(normalizedType, phase, parsed.Code, status, parsed.Message)
 
 		errorOwner := classifyOpsErrorOwner(phase, parsed.Message)
 		errorSource := classifyOpsErrorSource(phase, parsed.Message)
@@ -615,8 +744,8 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			UserAgent: c.GetHeader("User-Agent"),
 
 			ErrorPhase:        phase,
-			ErrorType:         normalizeOpsErrorType(parsed.ErrorType, parsed.Code),
-			Severity:          classifyOpsSeverity(parsed.ErrorType, status),
+			ErrorType:         normalizedType,
+			Severity:          classifyOpsSeverity(normalizedType, status),
 			StatusCode:        status,
 			IsBusinessLimited: isBusinessLimited,
 			IsCountTokens:     isCountTokensRequest(c),
@@ -628,10 +757,11 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			ErrorSource: errorSource,
 			ErrorOwner:  errorOwner,
 
-			IsRetryable: classifyOpsIsRetryable(parsed.ErrorType, status),
+			IsRetryable: classifyOpsIsRetryable(normalizedType, status),
 			RetryCount:  0,
 			CreatedAt:   time.Now(),
 		}
+		applyOpsLatencyFieldsFromContext(c, entry)
 
 		// Capture upstream error context set by gateway services (if present).
 		// This does NOT affect the client response; it enriches Ops troubleshooting data.
@@ -707,17 +837,12 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			entry.ClientIP = &clientIP
 		}
 
-		var requestBody []byte
-		if v, ok := c.Get(opsRequestBodyKey); ok {
-			if b, ok := v.([]byte); ok && len(b) > 0 {
-				requestBody = b
-			}
-		}
 		// Persist only a minimal, whitelisted set of request headers to improve retry fidelity.
 		// Do NOT store Authorization/Cookie/etc.
 		entry.RequestHeadersJSON = extractOpsRetryRequestHeaders(c)
+		attachOpsRequestBodyToEntry(c, entry)
 
-		enqueueOpsErrorLog(ops, entry, requestBody)
+		enqueueOpsErrorLog(ops, entry)
 	}
 }
 
@@ -758,6 +883,44 @@ func extractOpsRetryRequestHeaders(c *gin.Context) *string {
 	}
 	s := string(raw)
 	return &s
+}
+
+func applyOpsLatencyFieldsFromContext(c *gin.Context, entry *service.OpsInsertErrorLogInput) {
+	if c == nil || entry == nil {
+		return
+	}
+	entry.AuthLatencyMs = getContextLatencyMs(c, service.OpsAuthLatencyMsKey)
+	entry.RoutingLatencyMs = getContextLatencyMs(c, service.OpsRoutingLatencyMsKey)
+	entry.UpstreamLatencyMs = getContextLatencyMs(c, service.OpsUpstreamLatencyMsKey)
+	entry.ResponseLatencyMs = getContextLatencyMs(c, service.OpsResponseLatencyMsKey)
+	entry.TimeToFirstTokenMs = getContextLatencyMs(c, service.OpsTimeToFirstTokenMsKey)
+}
+
+func getContextLatencyMs(c *gin.Context, key string) *int64 {
+	if c == nil || strings.TrimSpace(key) == "" {
+		return nil
+	}
+	v, ok := c.Get(key)
+	if !ok {
+		return nil
+	}
+	var ms int64
+	switch t := v.(type) {
+	case int:
+		ms = int64(t)
+	case int32:
+		ms = int64(t)
+	case int64:
+		ms = t
+	case float64:
+		ms = int64(t)
+	default:
+		return nil
+	}
+	if ms < 0 {
+		return nil
+	}
+	return &ms
 }
 
 type parsedOpsError struct {
@@ -835,8 +998,29 @@ func guessPlatformFromPath(path string) string {
 	}
 }
 
+// isKnownOpsErrorType returns true if t is a recognized error type used by the
+// ops classification pipeline.  Upstream proxies sometimes return garbage values
+// (e.g. the Go-serialized literal "<nil>") which would pollute phase/severity
+// classification if accepted blindly.
+func isKnownOpsErrorType(t string) bool {
+	switch t {
+	case "invalid_request_error",
+		"authentication_error",
+		"rate_limit_error",
+		"billing_error",
+		"subscription_error",
+		"upstream_error",
+		"overloaded_error",
+		"api_error",
+		"not_found_error",
+		"forbidden_error":
+		return true
+	}
+	return false
+}
+
 func normalizeOpsErrorType(errType string, code string) string {
-	if errType != "" {
+	if errType != "" && isKnownOpsErrorType(errType) {
 		return errType
 	}
 	switch strings.TrimSpace(code) {

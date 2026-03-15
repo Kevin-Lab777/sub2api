@@ -27,8 +27,14 @@ type ErrorPassthroughRule func(*sql.Selector)
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 
+// IdempotencyRecord is the predicate function for idempotencyrecord builders.
+type IdempotencyRecord func(*sql.Selector)
+
 // Proxy is the predicate function for proxy builders.
 type Proxy func(*sql.Selector)
+
+// SecuritySecret is the predicate function for securitysecret builders.
+type SecuritySecret func(*sql.Selector)
 
 // Setting is the predicate function for setting builders.
 type Setting func(*sql.Selector)
@@ -41,6 +47,9 @@ type UsageLog func(*sql.Selector)
 
 // User is the predicate function for user builders.
 type User func(*sql.Selector)
+
+// UserAllowedGroup is the predicate function for userallowedgroup builders.
+type UserAllowedGroup func(*sql.Selector)
 
 // UserSubscription is the predicate function for usersubscription builders.
 type UserSubscription func(*sql.Selector)

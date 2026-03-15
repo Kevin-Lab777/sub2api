@@ -47,7 +47,8 @@
             "
             @click="handleMenuItemClick(item.path)"
           >
-            <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+            <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <transition name="fade">
               <span v-if="!sidebarCollapsed">{{ item.label }}</span>
             </transition>
@@ -117,6 +118,15 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
+import { sanitizeSvg } from '@/utils/sanitize'
+
+interface NavItem {
+  path: string
+  label: string
+  icon: unknown
+  iconSvg?: string
+  hideInSimpleMode?: boolean
+}
 
 const { t } = useI18n()
 
@@ -213,6 +223,8 @@ const CreditCardIcon = {
     )
 }
 
+// [LITE:DELETED] RechargeSubscriptionIcon removed (unused in Lite)
+
 const GlobeIcon = {
   render: () =>
     h(
@@ -238,6 +250,36 @@ const ServerIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z'
+        })
+      ]
+    )
+}
+
+const DatabaseIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M3.75 5.25C3.75 4.007 7.443 3 12 3s8.25 1.007 8.25 2.25S16.557 7.5 12 7.5 3.75 6.493 3.75 5.25z'
+        }),
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M3.75 5.25v4.5C3.75 10.993 7.443 12 12 12s8.25-1.007 8.25-2.25v-4.5'
+        }),
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M3.75 9.75v4.5c0 1.243 3.693 2.25 8.25 2.25s8.25-1.007 8.25-2.25v-4.5'
+        }),
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M3.75 14.25v4.5C3.75 19.993 7.443 21 12 21s8.25-1.007 8.25-2.25v-4.5'
         })
       ]
     )
@@ -323,6 +365,8 @@ const ChevronDoubleLeftIcon = {
     )
 }
 
+// [LITE:DELETED] SoraIcon removed (unused in Lite)
+
 const ChevronDoubleRightIcon = {
   render: () =>
     h(
@@ -353,9 +397,16 @@ const UserIcon = {
     )
 }
 
+// Custom menu items filtered by visibility
+const customMenuItemsForAdmin = computed(() => {
+  return adminSettingsStore.customMenuItems
+    .filter((item) => item.visibility === 'admin')
+    .sort((a, b) => a.sort_order - b.sort_order)
+})
+
 // [LITE] Admin navigation items - no user management, redeem, promo
-const adminNavItems = computed(() => {
-  const items = [
+const adminNavItems = computed((): NavItem[] => {
+  const items: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     ...(adminSettingsStore.opsMonitoringEnabled
       ? [{ path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon }]
@@ -367,8 +418,13 @@ const adminNavItems = computed(() => {
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
-    { path: '/admin/settings', label: t('nav.settings'), icon: CogIcon }
+    { path: '/admin/data-management', label: t('nav.dataManagement'), icon: DatabaseIcon },
+    { path: '/admin/settings', label: t('nav.settings'), icon: CogIcon },
   ]
+  // Add admin custom menu items after settings
+  for (const cm of customMenuItemsForAdmin.value) {
+    items.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
+  }
   return items
 })
 
@@ -447,5 +503,13 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Custom SVG icon in sidebar: inherit color, constrain size */
+.sidebar-svg-icon :deep(svg) {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke: currentColor;
+  fill: none;
 }
 </style>

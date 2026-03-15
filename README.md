@@ -39,6 +39,15 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 - **Concurrency Control** - Per-user and per-account concurrency limits
 - **Rate Limiting** - Configurable request and token rate limits
 - **Admin Dashboard** - Web interface for monitoring and management
+- **External System Integration** - Embed external systems (e.g. payment, ticketing) via iframe to extend the admin dashboard
+
+## Ecosystem
+
+Sub2API supports embedding external systems via iframe to extend the admin dashboard. Here are community-recommended integration projects:
+
+| Project | Description | Features |
+|---------|-------------|----------|
+| [Sub2ApiPay](https://github.com/touwaeriol/sub2apipay) | Self-service payment system | Self-service top-up and subscription purchase; supports YiPay protocol, WeChat Pay, Alipay, Stripe |
 
 ## Tech Stack
 
@@ -54,6 +63,7 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 ## Documentation
 
 - Dependency Security: `docs/dependency-security.md`
+- Admin Payment Integration API: `docs/ADMIN_PAYMENT_INTEGRATION_API.md`
 
 ---
 
@@ -149,14 +159,14 @@ mkdir -p sub2api-deploy && cd sub2api-deploy
 curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/docker-deploy.sh | bash
 
 # Start services
-docker-compose -f docker-compose.local.yml up -d
+docker-compose up -d
 
 # View logs
-docker-compose -f docker-compose.local.yml logs -f sub2api
+docker-compose logs -f sub2api
 ```
 
 **What the script does:**
-- Downloads `docker-compose.local.yml` and `.env.example`
+- Downloads `docker-compose.local.yml` (saved as `docker-compose.yml`) and `.env.example`
 - Generates secure credentials (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
 - Creates `.env` file with auto-generated secrets
 - Creates data directories (uses local directories for easy backup/migration)
@@ -363,6 +373,12 @@ default:
   rate_multiplier: 1.0
 ```
 
+### Sora Status (Temporarily Unavailable)
+
+> ⚠️ Sora-related features are temporarily unavailable due to technical issues in upstream integration and media delivery.
+> Please do not rely on Sora in production at this time.
+> Existing `gateway.sora_*` configuration keys are reserved and may not take effect until these issues are resolved.
+
 Additional security-related options are available in `config.yaml`:
 
 - `cors.allowed_origins` for CORS allowlist
@@ -514,6 +530,28 @@ sub2api/
     ├── config.example.yaml   # Full config file for binary deployment
     └── install.sh            # One-click installation script
 ```
+
+## Disclaimer
+
+> **Please read carefully before using this project:**
+>
+> :rotating_light: **Terms of Service Risk**: Using this project may violate Anthropic's Terms of Service. Please read Anthropic's user agreement carefully before use. All risks arising from the use of this project are borne solely by the user.
+>
+> :book: **Disclaimer**: This project is for technical learning and research purposes only. The author assumes no responsibility for account suspension, service interruption, or any other losses caused by the use of this project.
+
+---
+
+## Star History
+
+<a href="https://star-history.com/#Wei-Shaw/sub2api&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date" />
+ </picture>
+</a>
+
+---
 
 ## License
 

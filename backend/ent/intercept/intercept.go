@@ -15,12 +15,15 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/apikey"
 	"github.com/Kevin-Lab777/sub2api/ent/errorpassthroughrule"
 	"github.com/Kevin-Lab777/sub2api/ent/group"
+	"github.com/Kevin-Lab777/sub2api/ent/idempotencyrecord"
 	"github.com/Kevin-Lab777/sub2api/ent/predicate"
 	"github.com/Kevin-Lab777/sub2api/ent/proxy"
+	"github.com/Kevin-Lab777/sub2api/ent/securitysecret"
 	"github.com/Kevin-Lab777/sub2api/ent/setting"
 	"github.com/Kevin-Lab777/sub2api/ent/usagecleanuptask"
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
+	"github.com/Kevin-Lab777/sub2api/ent/userallowedgroup"
 	"github.com/Kevin-Lab777/sub2api/ent/usersubscription"
 )
 
@@ -269,6 +272,33 @@ func (f TraverseGroup) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.GroupQuery", q)
 }
 
+// The IdempotencyRecordFunc type is an adapter to allow the use of ordinary function as a Querier.
+type IdempotencyRecordFunc func(context.Context, *ent.IdempotencyRecordQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f IdempotencyRecordFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.IdempotencyRecordQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.IdempotencyRecordQuery", q)
+}
+
+// The TraverseIdempotencyRecord type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseIdempotencyRecord func(context.Context, *ent.IdempotencyRecordQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseIdempotencyRecord) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseIdempotencyRecord) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.IdempotencyRecordQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.IdempotencyRecordQuery", q)
+}
+
 // The ProxyFunc type is an adapter to allow the use of ordinary function as a Querier.
 type ProxyFunc func(context.Context, *ent.ProxyQuery) (ent.Value, error)
 
@@ -294,6 +324,33 @@ func (f TraverseProxy) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.ProxyQuery", q)
+}
+
+// The SecuritySecretFunc type is an adapter to allow the use of ordinary function as a Querier.
+type SecuritySecretFunc func(context.Context, *ent.SecuritySecretQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f SecuritySecretFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.SecuritySecretQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.SecuritySecretQuery", q)
+}
+
+// The TraverseSecuritySecret type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseSecuritySecret func(context.Context, *ent.SecuritySecretQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseSecuritySecret) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseSecuritySecret) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.SecuritySecretQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.SecuritySecretQuery", q)
 }
 
 // The SettingFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -404,6 +461,33 @@ func (f TraverseUser) Traverse(ctx context.Context, q ent.Query) error {
 	return fmt.Errorf("unexpected query type %T. expect *ent.UserQuery", q)
 }
 
+// The UserAllowedGroupFunc type is an adapter to allow the use of ordinary function as a Querier.
+type UserAllowedGroupFunc func(context.Context, *ent.UserAllowedGroupQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f UserAllowedGroupFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.UserAllowedGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserAllowedGroupQuery", q)
+}
+
+// The TraverseUserAllowedGroup type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseUserAllowedGroup func(context.Context, *ent.UserAllowedGroupQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseUserAllowedGroup) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseUserAllowedGroup) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.UserAllowedGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.UserAllowedGroupQuery", q)
+}
+
 // The UserSubscriptionFunc type is an adapter to allow the use of ordinary function as a Querier.
 type UserSubscriptionFunc func(context.Context, *ent.UserSubscriptionQuery) (ent.Value, error)
 
@@ -448,8 +532,12 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.ErrorPassthroughRuleQuery, predicate.ErrorPassthroughRule, errorpassthroughrule.OrderOption]{typ: ent.TypeErrorPassthroughRule, tq: q}, nil
 	case *ent.GroupQuery:
 		return &query[*ent.GroupQuery, predicate.Group, group.OrderOption]{typ: ent.TypeGroup, tq: q}, nil
+	case *ent.IdempotencyRecordQuery:
+		return &query[*ent.IdempotencyRecordQuery, predicate.IdempotencyRecord, idempotencyrecord.OrderOption]{typ: ent.TypeIdempotencyRecord, tq: q}, nil
 	case *ent.ProxyQuery:
 		return &query[*ent.ProxyQuery, predicate.Proxy, proxy.OrderOption]{typ: ent.TypeProxy, tq: q}, nil
+	case *ent.SecuritySecretQuery:
+		return &query[*ent.SecuritySecretQuery, predicate.SecuritySecret, securitysecret.OrderOption]{typ: ent.TypeSecuritySecret, tq: q}, nil
 	case *ent.SettingQuery:
 		return &query[*ent.SettingQuery, predicate.Setting, setting.OrderOption]{typ: ent.TypeSetting, tq: q}, nil
 	case *ent.UsageCleanupTaskQuery:
@@ -458,6 +546,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.UsageLogQuery, predicate.UsageLog, usagelog.OrderOption]{typ: ent.TypeUsageLog, tq: q}, nil
 	case *ent.UserQuery:
 		return &query[*ent.UserQuery, predicate.User, user.OrderOption]{typ: ent.TypeUser, tq: q}, nil
+	case *ent.UserAllowedGroupQuery:
+		return &query[*ent.UserAllowedGroupQuery, predicate.UserAllowedGroup, userallowedgroup.OrderOption]{typ: ent.TypeUserAllowedGroup, tq: q}, nil
 	case *ent.UserSubscriptionQuery:
 		return &query[*ent.UserSubscriptionQuery, predicate.UserSubscription, usersubscription.OrderOption]{typ: ent.TypeUserSubscription, tq: q}, nil
 	default:

@@ -27,7 +27,7 @@ func NewGroupHandler(adminService service.AdminService) *GroupHandler {
 type CreateGroupRequest struct {
 	Name             string   `json:"name" binding:"required"`
 	Description      string   `json:"description"`
-	Platform         string   `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity"`
+	Platform         string   `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity sora"`
 	RateMultiplier   float64  `json:"rate_multiplier"`
 	IsExclusive      bool     `json:"is_exclusive"`
 	SubscriptionType string   `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
@@ -38,6 +38,10 @@ type CreateGroupRequest struct {
 	ImagePrice1K                    *float64 `json:"image_price_1k"`
 	ImagePrice2K                    *float64 `json:"image_price_2k"`
 	ImagePrice4K                    *float64 `json:"image_price_4k"`
+	SoraImagePrice360               *float64 `json:"sora_image_price_360"`
+	SoraImagePrice540               *float64 `json:"sora_image_price_540"`
+	SoraVideoPricePerRequest        *float64 `json:"sora_video_price_per_request"`
+	SoraVideoPricePerRequestHD      *float64 `json:"sora_video_price_per_request_hd"`
 	ClaudeCodeOnly                  bool     `json:"claude_code_only"`
 	FallbackGroupID                 *int64   `json:"fallback_group_id"`
 	FallbackGroupIDOnInvalidRequest *int64   `json:"fallback_group_id_on_invalid_request"`
@@ -47,6 +51,11 @@ type CreateGroupRequest struct {
 	MCPXMLInject        *bool              `json:"mcp_xml_inject"`
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes []string `json:"supported_model_scopes"`
+	// Sora 存储配额
+	SoraStorageQuotaBytes int64 `json:"sora_storage_quota_bytes"`
+	// OpenAI Messages 调度配置（仅 openai 平台使用）
+	AllowMessagesDispatch bool   `json:"allow_messages_dispatch"`
+	DefaultMappedModel    string `json:"default_mapped_model"`
 	// 从指定分组复制账号（创建后自动绑定）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
 }
@@ -55,7 +64,7 @@ type CreateGroupRequest struct {
 type UpdateGroupRequest struct {
 	Name             string   `json:"name"`
 	Description      string   `json:"description"`
-	Platform         string   `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity"`
+	Platform         string   `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity sora"`
 	RateMultiplier   *float64 `json:"rate_multiplier"`
 	IsExclusive      *bool    `json:"is_exclusive"`
 	Status           string   `json:"status" binding:"omitempty,oneof=active inactive"`
@@ -67,6 +76,10 @@ type UpdateGroupRequest struct {
 	ImagePrice1K                    *float64 `json:"image_price_1k"`
 	ImagePrice2K                    *float64 `json:"image_price_2k"`
 	ImagePrice4K                    *float64 `json:"image_price_4k"`
+	SoraImagePrice360               *float64 `json:"sora_image_price_360"`
+	SoraImagePrice540               *float64 `json:"sora_image_price_540"`
+	SoraVideoPricePerRequest        *float64 `json:"sora_video_price_per_request"`
+	SoraVideoPricePerRequestHD      *float64 `json:"sora_video_price_per_request_hd"`
 	ClaudeCodeOnly                  *bool    `json:"claude_code_only"`
 	FallbackGroupID                 *int64   `json:"fallback_group_id"`
 	FallbackGroupIDOnInvalidRequest *int64   `json:"fallback_group_id_on_invalid_request"`
@@ -76,6 +89,11 @@ type UpdateGroupRequest struct {
 	MCPXMLInject        *bool              `json:"mcp_xml_inject"`
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes *[]string `json:"supported_model_scopes"`
+	// Sora 存储配额
+	SoraStorageQuotaBytes *int64 `json:"sora_storage_quota_bytes"`
+	// OpenAI Messages 调度配置（仅 openai 平台使用）
+	AllowMessagesDispatch *bool   `json:"allow_messages_dispatch"`
+	DefaultMappedModel    *string `json:"default_mapped_model"`
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
 }
@@ -179,6 +197,10 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		ImagePrice1K:                    req.ImagePrice1K,
 		ImagePrice2K:                    req.ImagePrice2K,
 		ImagePrice4K:                    req.ImagePrice4K,
+		SoraImagePrice360:               req.SoraImagePrice360,
+		SoraImagePrice540:               req.SoraImagePrice540,
+		SoraVideoPricePerRequest:        req.SoraVideoPricePerRequest,
+		SoraVideoPricePerRequestHD:      req.SoraVideoPricePerRequestHD,
 		ClaudeCodeOnly:                  req.ClaudeCodeOnly,
 		FallbackGroupID:                 req.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: req.FallbackGroupIDOnInvalidRequest,
@@ -186,6 +208,9 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		ModelRoutingEnabled:             req.ModelRoutingEnabled,
 		MCPXMLInject:                    req.MCPXMLInject,
 		SupportedModelScopes:            req.SupportedModelScopes,
+		SoraStorageQuotaBytes:           req.SoraStorageQuotaBytes,
+		AllowMessagesDispatch:           req.AllowMessagesDispatch,
+		DefaultMappedModel:              req.DefaultMappedModel,
 		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
@@ -225,6 +250,10 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		ImagePrice1K:                    req.ImagePrice1K,
 		ImagePrice2K:                    req.ImagePrice2K,
 		ImagePrice4K:                    req.ImagePrice4K,
+		SoraImagePrice360:               req.SoraImagePrice360,
+		SoraImagePrice540:               req.SoraImagePrice540,
+		SoraVideoPricePerRequest:        req.SoraVideoPricePerRequest,
+		SoraVideoPricePerRequestHD:      req.SoraVideoPricePerRequestHD,
 		ClaudeCodeOnly:                  req.ClaudeCodeOnly,
 		FallbackGroupID:                 req.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: req.FallbackGroupIDOnInvalidRequest,
@@ -232,6 +261,9 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		ModelRoutingEnabled:             req.ModelRoutingEnabled,
 		MCPXMLInject:                    req.MCPXMLInject,
 		SupportedModelScopes:            req.SupportedModelScopes,
+		SoraStorageQuotaBytes:           req.SoraStorageQuotaBytes,
+		AllowMessagesDispatch:           req.AllowMessagesDispatch,
+		DefaultMappedModel:              req.DefaultMappedModel,
 		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
@@ -301,6 +333,72 @@ func (h *GroupHandler) GetGroupAPIKeys(c *gin.Context) {
 		outKeys = append(outKeys, *dto.APIKeyFromService(&keys[i]))
 	}
 	response.Paginated(c, outKeys, total, page, pageSize)
+}
+
+// GetGroupRateMultipliers handles getting rate multipliers for users in a group
+// GET /api/v1/admin/groups/:id/rate-multipliers
+func (h *GroupHandler) GetGroupRateMultipliers(c *gin.Context) {
+	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid group ID")
+		return
+	}
+
+	entries, err := h.adminService.GetGroupRateMultipliers(c.Request.Context(), groupID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	if entries == nil {
+		entries = []service.UserGroupRateEntry{}
+	}
+	response.Success(c, entries)
+}
+
+// ClearGroupRateMultipliers handles clearing all rate multipliers for a group
+// DELETE /api/v1/admin/groups/:id/rate-multipliers
+func (h *GroupHandler) ClearGroupRateMultipliers(c *gin.Context) {
+	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid group ID")
+		return
+	}
+
+	if err := h.adminService.ClearGroupRateMultipliers(c.Request.Context(), groupID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{"message": "Rate multipliers cleared successfully"})
+}
+
+// BatchSetGroupRateMultipliersRequest represents batch set rate multipliers request
+type BatchSetGroupRateMultipliersRequest struct {
+	Entries []service.GroupRateMultiplierInput `json:"entries" binding:"required"`
+}
+
+// BatchSetGroupRateMultipliers handles batch setting rate multipliers for a group
+// PUT /api/v1/admin/groups/:id/rate-multipliers
+func (h *GroupHandler) BatchSetGroupRateMultipliers(c *gin.Context) {
+	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid group ID")
+		return
+	}
+
+	var req BatchSetGroupRateMultipliersRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.adminService.BatchSetGroupRateMultipliers(c.Request.Context(), groupID, req.Entries); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{"message": "Rate multipliers updated successfully"})
 }
 
 // UpdateSortOrderRequest represents the request to update group sort orders

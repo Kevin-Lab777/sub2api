@@ -22,7 +22,10 @@ func (AccountGroup) Annotations() []schema.Annotation {
 	return []schema.Annotation{
 		entsql.Annotation{Table: "account_groups"},
 		// Composite primary key: (account_id, group_id).
-		field.ID("account_id", "group_id"),
+		field.Annotation{
+			ID:        []string{"account_id", "group_id"},
+			StructTag: map[string]string{},
+		},
 	}
 }
 

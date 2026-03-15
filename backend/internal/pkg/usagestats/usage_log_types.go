@@ -57,25 +57,38 @@ type DashboardStats struct {
 
 // TrendDataPoint represents a single point in trend data
 type TrendDataPoint struct {
-	Date         string  `json:"date"`
-	Requests     int64   `json:"requests"`
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	CacheTokens  int64   `json:"cache_tokens"`
-	TotalTokens  int64   `json:"total_tokens"`
-	Cost         float64 `json:"cost"`        // 标准计费
-	ActualCost   float64 `json:"actual_cost"` // 实际扣除
+	Date                string  `json:"date"`
+	Requests            int64   `json:"requests"`
+	InputTokens         int64   `json:"input_tokens"`
+	OutputTokens        int64   `json:"output_tokens"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens"`
+	CacheReadTokens     int64   `json:"cache_read_tokens"`
+	TotalTokens         int64   `json:"total_tokens"`
+	Cost                float64 `json:"cost"`        // 标准计费
+	ActualCost          float64 `json:"actual_cost"` // 实际扣除
 }
 
 // ModelStat represents usage statistics for a single model
 type ModelStat struct {
-	Model        string  `json:"model"`
-	Requests     int64   `json:"requests"`
-	InputTokens  int64   `json:"input_tokens"`
-	OutputTokens int64   `json:"output_tokens"`
-	TotalTokens  int64   `json:"total_tokens"`
-	Cost         float64 `json:"cost"`        // 标准计费
-	ActualCost   float64 `json:"actual_cost"` // 实际扣除
+	Model               string  `json:"model"`
+	Requests            int64   `json:"requests"`
+	InputTokens         int64   `json:"input_tokens"`
+	OutputTokens        int64   `json:"output_tokens"`
+	CacheCreationTokens int64   `json:"cache_creation_tokens"`
+	CacheReadTokens     int64   `json:"cache_read_tokens"`
+	TotalTokens         int64   `json:"total_tokens"`
+	Cost                float64 `json:"cost"`        // 标准计费
+	ActualCost          float64 `json:"actual_cost"` // 实际扣除
+}
+
+// GroupStat represents usage statistics for a single group
+type GroupStat struct {
+	GroupID     int64   `json:"group_id"`
+	GroupName   string  `json:"group_name"`
+	Requests    int64   `json:"requests"`
+	TotalTokens int64   `json:"total_tokens"`
+	Cost        float64 `json:"cost"`        // 标准计费
+	ActualCost  float64 `json:"actual_cost"` // 实际扣除
 }
 
 // UserUsageTrendPoint represents user usage trend data point
@@ -83,10 +96,26 @@ type UserUsageTrendPoint struct {
 	Date       string  `json:"date"`
 	UserID     int64   `json:"user_id"`
 	Email      string  `json:"email"`
+	Username   string  `json:"username"`
 	Requests   int64   `json:"requests"`
 	Tokens     int64   `json:"tokens"`
 	Cost       float64 `json:"cost"`        // 标准计费
 	ActualCost float64 `json:"actual_cost"` // 实际扣除
+}
+
+// UserSpendingRankingItem represents a user spending ranking row.
+type UserSpendingRankingItem struct {
+	UserID     int64   `json:"user_id"`
+	Email      string  `json:"email"`
+	ActualCost float64 `json:"actual_cost"` // 实际扣除
+	Requests   int64   `json:"requests"`
+	Tokens     int64   `json:"tokens"`
+}
+
+// UserSpendingRankingResponse represents ranking rows plus total spend for the time range.
+type UserSpendingRankingResponse struct {
+	Ranking         []UserSpendingRankingItem `json:"ranking"`
+	TotalActualCost float64                   `json:"total_actual_cost"`
 }
 
 // APIKeyUsageTrendPoint represents API key usage trend data point
@@ -139,10 +168,13 @@ type UsageLogFilters struct {
 	AccountID   int64
 	GroupID     int64
 	Model       string
+	RequestType *int16
 	Stream      *bool
 	BillingType *int8
 	StartTime   *time.Time
 	EndTime     *time.Time
+	// ExactTotal requests exact COUNT(*) for pagination. Default false for fast large-table paging.
+	ExactTotal bool
 }
 
 // UsageStats represents usage statistics

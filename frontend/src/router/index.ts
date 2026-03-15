@@ -6,8 +6,10 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
+import { useAdminSettingsStore } from '@/stores/adminSettings'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
+import { resolveDocumentTitle } from './title'
 
 /**
  * Route definitions with lazy loading
@@ -40,9 +42,20 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/auth/LoginView.vue'),
     meta: {
       requiresAuth: false,
-      title: 'Login'
+      title: 'Login',
+      titleKey: 'common.login'
     }
   },
+  {
+    path: '/key-usage',
+    name: 'KeyUsage',
+    component: () => import('@/views/KeyUsageView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Key Usage',
+    }
+  },
+
 
   // ==================== Root Redirect ====================
   {
@@ -77,6 +90,30 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'profile.description'
     }
   },
+  {
+    path: '/sora',
+    name: 'Sora',
+    component: () => import('@/views/user/SoraView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Sora',
+      titleKey: 'sora.title',
+      descriptionKey: 'sora.description'
+    }
+  },
+  {
+    path: '/custom/:id',
+    name: 'CustomPage',
+    component: () => import('@/views/user/CustomPageView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Custom Page',
+      titleKey: 'customPage.title',
+    }
+  },
+
 
   // ==================== Admin Routes ====================
   {
@@ -169,6 +206,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/data-management',
+    name: 'AdminDataManagement',
+    component: () => import('@/views/admin/DataManagementView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Data Management',
+      titleKey: 'admin.dataManagement.title',
+      descriptionKey: 'admin.dataManagement.description'
+    }
+  },
+  {
     path: '/admin/settings',
     name: 'AdminSettings',
     component: () => import('@/views/admin/SettingsView.vue'),
@@ -244,11 +293,21 @@ router.beforeEach((to, _from, next) => {
 
   // Set page title
   const appStore = useAppStore()
-  const siteName = appStore.siteName || 'Sub2API Lite'
-  if (to.meta.title) {
-    document.title = `${to.meta.title} - ${siteName}`
+  // For custom pages, use menu item label as document title
+  if (to.name === 'CustomPage') {
+    const id = to.params.id as string
+    const publicItems = appStore.cachedPublicSettings?.custom_menu_items ?? []
+    const adminSettingsStore = useAdminSettingsStore()
+    const menuItem = publicItems.find((item) => item.id === id)
+      ?? (authStore.isAdmin ? adminSettingsStore.customMenuItems.find((item) => item.id === id) : undefined)
+    if (menuItem?.label) {
+      const siteName = appStore.siteName || 'Sub2API Lite'
+      document.title = `${menuItem.label} - ${siteName}`
+    } else {
+      document.title = resolveDocumentTitle(to.meta.title, appStore.siteName, to.meta.titleKey as string)
+    }
   } else {
-    document.title = siteName
+    document.title = resolveDocumentTitle(to.meta.title, appStore.siteName, to.meta.titleKey as string)
   }
 
   // Check if route requires authentication

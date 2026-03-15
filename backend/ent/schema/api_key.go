@@ -47,6 +47,10 @@ func (APIKey) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		field.Time("last_used_at").
+			Optional().
+			Nillable().
+			Comment("Last usage time of this API key"),
 		field.JSON("ip_whitelist", []string{}).
 			Optional().
 			Comment("Allowed IPs/CIDRs, e.g. [\"192.168.1.100\", \"10.0.0.0/8\"]"),
@@ -54,61 +58,7 @@ func (APIKey) Fields() []ent.Field {
 			Optional().
 			Comment("Blocked IPs/CIDRs"),
 
-		// [LITE] 限额字段
-		field.Float("daily_limit_usd").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Comment("日限额 (USD)，nil = 使用分组限额"),
-		field.Float("weekly_limit_usd").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Comment("周限额 (USD)，nil = 使用分组限额"),
-		field.Float("monthly_limit_usd").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Comment("月限额 (USD)，nil = 使用分组限额"),
-		field.Float("total_limit_usd").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Comment("总限额 (USD)，nil = 无限制"),
-
-		// [LITE] 用量追踪字段
-		field.Float("daily_usage_usd").
-			Default(0).
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Comment("今日已用额度"),
-		field.Float("weekly_usage_usd").
-			Default(0).
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Comment("本周已用额度"),
-		field.Float("monthly_usage_usd").
-			Default(0).
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Comment("本月已用额度"),
-		field.Float("total_usage_usd").
-			Default(0).
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Comment("累计已用额度"),
-
-		// [LITE] 用量重置时间字段
-		field.Time("usage_reset_daily").
-			Optional().
-			Nillable().
-			Comment("日用量重置时间"),
-		field.Time("usage_reset_weekly").
-			Optional().
-			Nillable().
-			Comment("周用量重置时间"),
-		field.Time("usage_reset_monthly").
-			Optional().
-			Nillable().
-			Comment("月用量重置时间"),
-
-		// ========== Quota fields (from upstream) ==========
+		// ========== Quota fields ==========
 		// Quota limit in USD (0 = unlimited)
 		field.Float("quota").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
@@ -124,6 +74,75 @@ func (APIKey) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Expiration time for this API key (null = never expires)"),
+
+		// ========== Rate limit fields ==========
+		// Rate limit configuration (0 = unlimited)
+		field.Float("rate_limit_5h").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Rate limit in USD per 5 hours (0 = unlimited)"),
+		field.Float("rate_limit_1d").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Rate limit in USD per day (0 = unlimited)"),
+		field.Float("rate_limit_7d").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Rate limit in USD per 7 days (0 = unlimited)"),
+		// Rate limit usage tracking
+		field.Float("usage_5h").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Used amount in USD for the current 5h window"),
+		field.Float("usage_1d").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Used amount in USD for the current 1d window"),
+		field.Float("usage_7d").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("Used amount in USD for the current 7d window"),
+		// Window start times
+		field.Time("window_5h_start").
+			Optional().
+			Nillable().
+			Comment("Start time of the current 5h rate limit window"),
+		field.Time("window_1d_start").
+			Optional().
+			Nillable().
+			Comment("Start time of the current 1d rate limit window"),
+		field.Time("window_7d_start").
+			Optional().
+			Nillable().
+			Comment("Start time of the current 7d rate limit window"),
+
+		// ========== [LITE:ADD] 限额字段 ==========
+		field.Float("daily_limit_usd").Optional().Nillable().
+			Comment("Daily usage limit in USD"),
+		field.Float("weekly_limit_usd").Optional().Nillable().
+			Comment("Weekly usage limit in USD"),
+		field.Float("monthly_limit_usd").Optional().Nillable().
+			Comment("Monthly usage limit in USD"),
+		field.Float("total_limit_usd").Optional().Nillable().
+			Comment("Total usage limit in USD"),
+
+		// [LITE:ADD] 用量追踪字段
+		field.Float("daily_usage_usd").Default(0).
+			Comment("Current daily usage in USD"),
+		field.Float("weekly_usage_usd").Default(0).
+			Comment("Current weekly usage in USD"),
+		field.Float("monthly_usage_usd").Default(0).
+			Comment("Current monthly usage in USD"),
+		field.Float("total_usage_usd").Default(0).
+			Comment("Current total usage in USD"),
+
+		// [LITE:ADD] 重置时间字段
+		field.Time("usage_reset_daily").Optional().Nillable().
+			Comment("Next daily reset time"),
+		field.Time("usage_reset_weekly").Optional().Nillable().
+			Comment("Next weekly reset time"),
+		field.Time("usage_reset_monthly").Optional().Nillable().
+			Comment("Next monthly reset time"),
 	}
 }
 
@@ -149,6 +168,7 @@ func (APIKey) Indexes() []ent.Index {
 		index.Fields("group_id"),
 		index.Fields("status"),
 		index.Fields("deleted_at"),
+		index.Fields("last_used_at"),
 		// Index for quota queries
 		index.Fields("quota", "quota_used"),
 		index.Fields("expires_at"),

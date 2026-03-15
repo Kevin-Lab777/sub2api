@@ -157,10 +157,12 @@ export const useAuthStore = defineStore('auth', () => {
 
       // Update state
       token.value = response.access_token
-      refreshTokenValue.value = response.refresh_token
+      refreshTokenValue.value = response.refresh_token ?? null
 
       // Schedule next refresh (this also updates tokenExpiresAt and localStorage)
-      scheduleTokenRefresh(response.expires_in)
+      if (response.expires_in) {
+        scheduleTokenRefresh(response.expires_in)
+      }
     } catch (error) {
       console.error('Token refresh failed:', error)
       // Don't clear auth here - the interceptor will handle 401 errors

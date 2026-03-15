@@ -3,7 +3,7 @@
     <!-- Rate Limit Display (429) - Two-line layout -->
     <div v-if="isRateLimited" class="flex flex-col items-center gap-1">
       <span class="badge text-xs badge-warning">{{ t('admin.accounts.status.rateLimited') }}</span>
-      <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ rateLimitCountdown }}</span>
+      <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ rateLimitResumeText }}</span>
     </div>
 
     <!-- Overload Display (529) - Two-line layout -->
@@ -67,9 +67,9 @@
       </span>
       <!-- Tooltip -->
       <div
-        class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+        class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 whitespace-normal rounded bg-gray-900 px-3 py-2 text-center text-xs leading-relaxed text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
       >
-        {{ t('admin.accounts.status.rateLimitedUntil', { time: formatTime(account.rate_limit_reset_at) }) }}
+        {{ t('admin.accounts.status.rateLimitedUntil', { time: formatDateTime(account.rate_limit_reset_at) }) }}
         <div
           class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"
         ></div>
@@ -77,17 +77,27 @@
     </div>
 
     <!-- Model Rate Limit Indicators (Antigravity OAuth Smart Retry) -->
-    <template v-if="activeModelRateLimits.length > 0">
-      <div v-for="item in activeModelRateLimits" :key="item.model" class="group relative">
+    <div
+      v-if="activeModelRateLimits.length > 0"
+      :class="[
+        activeModelRateLimits.length <= 4
+          ? 'flex flex-col gap-1'
+          : activeModelRateLimits.length <= 8
+            ? 'columns-2 gap-x-2'
+            : 'columns-3 gap-x-2'
+      ]"
+    >
+      <div v-for="item in activeModelRateLimits" :key="item.model" class="group relative mb-1 break-inside-avoid">
         <span
           class="inline-flex items-center gap-1 rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
         >
           <Icon name="exclamationTriangle" size="xs" :stroke-width="2" />
           {{ formatScopeName(item.model) }}
+          <span class="text-[10px] opacity-70">{{ formatModelResetTime(item.reset_at) }}</span>
         </span>
         <!-- Tooltip -->
         <div
-          class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+          class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 whitespace-normal rounded bg-gray-900 px-3 py-2 text-center text-xs leading-relaxed text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
         >
           {{ t('admin.accounts.status.modelRateLimitedUntil', { model: formatScopeName(item.model), time: formatTime(item.reset_at) }) }}
           <div
@@ -95,7 +105,7 @@
           ></div>
         </div>
       </div>
-    </template>
+    </div>
 
     <!-- Overload Indicator (529) -->
     <div v-if="isOverloaded" class="group relative">
@@ -107,7 +117,7 @@
       </span>
       <!-- Tooltip -->
       <div
-        class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
+        class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 whitespace-normal rounded bg-gray-900 px-3 py-2 text-center text-xs leading-relaxed text-white opacity-0 transition-opacity group-hover:opacity-100 dark:bg-gray-700"
       >
         {{ t('admin.accounts.status.overloadedUntil', { time: formatTime(account.overload_until) }) }}
         <div
@@ -122,7 +132,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/types'
-import { formatCountdownWithSuffix, formatTime } from '@/utils/format'
+import { formatCountdown, formatDateTime, formatCountdownWithSuffix, formatTime } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -154,17 +164,53 @@ const activeModelRateLimits = computed(() => {
 })
 
 const formatScopeName = (scope: string): string => {
-  const names: Record<string, string> = {
+  const aliases: Record<string, string> = {
+    // Claude 系列
+    'claude-opus-4-6': 'COpus46',
+    'claude-opus-4-6-thinking': 'COpus46T',
+    'claude-sonnet-4-6': 'CSon46',
+    'claude-sonnet-4-5': 'CSon45',
+    'claude-sonnet-4-5-thinking': 'CSon45T',
+    // Gemini 2.5 系列
+    'gemini-2.5-flash': 'G25F',
+    'gemini-2.5-flash-lite': 'G25FL',
+    'gemini-2.5-flash-thinking': 'G25FT',
+    'gemini-2.5-pro': 'G25P',
+    'gemini-2.5-flash-image': 'G25I',
+    // Gemini 3 系列
+    'gemini-3-flash': 'G3F',
+    'gemini-3.1-pro-high': 'G3PH',
+    'gemini-3.1-pro-low': 'G3PL',
+    'gemini-3-pro-image': 'G3PI',
+    'gemini-3.1-flash-image': 'GImage',
+    // 其他
+    'gpt-oss-120b-medium': 'GPT120',
+    'tab_flash_lite_preview': 'TabFL',
+    // 旧版 scope 别名（兼容）
     claude: 'Claude',
-    claude_sonnet: 'Claude Sonnet',
-    claude_opus: 'Claude Opus',
-    claude_haiku: 'Claude Haiku',
+    claude_sonnet: 'CSon',
+    claude_opus: 'COpus',
+    claude_haiku: 'CHaiku',
     gemini_text: 'Gemini',
-    gemini_image: 'Image',
-    gemini_flash: 'Gemini Flash',
-    gemini_pro: 'Gemini Pro'
+    gemini_image: 'GImg',
+    gemini_flash: 'GFlash',
+    gemini_pro: 'GPro',
   }
-  return names[scope] || scope
+  return aliases[scope] || scope
+}
+
+const formatModelResetTime = (resetAt: string): string => {
+  const date = new Date(resetAt)
+  const now = new Date()
+  const diffMs = date.getTime() - now.getTime()
+  if (diffMs <= 0) return ''
+  const totalSecs = Math.floor(diffMs / 1000)
+  const h = Math.floor(totalSecs / 3600)
+  const m = Math.floor((totalSecs % 3600) / 60)
+  const s = totalSecs % 60
+  if (h > 0) return `${h}h${m}m`
+  if (m > 0) return `${m}m${s}s`
+  return `${s}s`
 }
 
 // Computed: is overloaded (529)
@@ -186,7 +232,12 @@ const hasError = computed(() => {
 
 // Computed: countdown text for rate limit (429)
 const rateLimitCountdown = computed(() => {
-  return formatCountdownWithSuffix(props.account.rate_limit_reset_at)
+  return formatCountdown(props.account.rate_limit_reset_at)
+})
+
+const rateLimitResumeText = computed(() => {
+  if (!rateLimitCountdown.value) return ''
+  return t('admin.accounts.status.rateLimitedAutoResume', { time: rateLimitCountdown.value })
 })
 
 // Computed: countdown text for overload (529)

@@ -26,13 +26,13 @@ func ProvideConcurrencyCache(rdb *redis.Client, cfg *config.Config) service.Conc
 // ProvideGitHubReleaseClient 创建 GitHub Release 客户端
 // 从配置中读取代理设置，支持国内服务器通过代理访问 GitHub
 func ProvideGitHubReleaseClient(cfg *config.Config) service.GitHubReleaseClient {
-	return NewGitHubReleaseClient(cfg.Update.ProxyURL)
+	return NewGitHubReleaseClient(cfg.Update.ProxyURL, cfg.Security.ProxyFallback.AllowDirectOnError)
 }
 
 // ProvidePricingRemoteClient 创建定价数据远程客户端
 // 从配置中读取代理设置，支持国内服务器通过代理访问 GitHub 上的定价数据
 func ProvidePricingRemoteClient(cfg *config.Config) service.PricingRemoteClient {
-	return NewPricingRemoteClient(cfg.Update.ProxyURL)
+	return NewPricingRemoteClient(cfg.Update.ProxyURL, cfg.Security.ProxyFallback.AllowDirectOnError)
 }
 
 // EntAndDB 包含 Ent 客户端和底层 SQL DB
@@ -84,12 +84,18 @@ var ProviderSet = wire.NewSet(
 	ProvideAPIKeyUsageRepository,
 	NewGroupRepository,
 	NewAccountRepository,
+	NewSoraAccountRepository,         // Sora 账号扩展表仓储
+	NewSoraGenerationRepository,      // Sora 生成记录仓储
+	NewScheduledTestPlanRepository,   // 定时测试计划仓储
+	NewScheduledTestResultRepository, // 定时测试结果仓储
 	NewProxyRepository,
 	// [LITE:DELETED] NewRedeemCodeRepository
 	// [LITE:DELETED] NewPromoCodeRepository
 	NewAnnouncementRepository,
 	NewAnnouncementReadRepository,
 	NewUsageLogRepository,
+	NewUsageBillingRepository,
+	NewIdempotencyRepository,
 	NewUsageCleanupRepository,
 	NewDashboardAggregationRepository,
 	NewSettingRepository,
@@ -108,6 +114,8 @@ var ProviderSet = wire.NewSet(
 	NewTimeoutCounterCache,
 	ProvideConcurrencyCache,
 	ProvideSessionLimitCache,
+	NewRPMCache,
+	NewUserMsgQueueCache,
 	NewDashboardCache,
 	// [LITE:DELETED] NewEmailCache
 	// [LITE:DELETED] NewIdentityCache
@@ -135,6 +143,7 @@ var ProviderSet = wire.NewSet(
 	NewOpenAIOAuthClient,
 	NewGeminiOAuthClient,
 	NewGeminiCliCodeAssistClient,
+	NewGeminiDriveClient,
 
 	ProvideEntAndDB,
 	ProvideEntClient,

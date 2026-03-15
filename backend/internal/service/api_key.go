@@ -1,6 +1,10 @@
 package service
 
-import "time"
+import (
+	"time"
+
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/ip"
+)
 
 // API Key status constants
 const (
@@ -9,6 +13,18 @@ const (
 	StatusAPIKeyQuotaExhausted = "quota_exhausted"
 	StatusAPIKeyExpired        = "expired"
 )
+
+// Rate limit window durations
+const (
+	RateLimitWindow5h = 5 * time.Hour
+	RateLimitWindow1d = 24 * time.Hour
+	RateLimitWindow7d = 7 * 24 * time.Hour
+)
+
+// IsWindowExpired returns true if the window starting at windowStart has exceeded the given duration.
+func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
+	return windowStart != nil && time.Since(*windowStart) >= duration
+}
 
 type APIKey struct {
 	ID          int64
@@ -19,34 +35,56 @@ type APIKey struct {
 	Status      string
 	IPWhitelist []string
 	IPBlacklist []string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	User        *User
-	Group       *Group
+	// 预编译的 IP 规则，用于认证热路径避免重复 ParseIP/ParseCIDR。
+	CompiledIPWhitelist *ip.CompiledIPRules `json:"-"`
+	CompiledIPBlacklist *ip.CompiledIPRules `json:"-"`
+	LastUsedAt          *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	User                *User
+	Group               *Group
 
 	// Quota fields
 	Quota     float64    // Quota limit in USD (0 = unlimited)
 	QuotaUsed float64    // Used quota amount
 	ExpiresAt *time.Time // Expiration time (nil = never expires)
 
-	// Per-period limit fields (Lite)
-	DailyLimitUSD   *float64   // Daily spending limit in USD (nil = unlimited)
-	WeeklyLimitUSD  *float64   // Weekly spending limit in USD (nil = unlimited)
-	MonthlyLimitUSD *float64   // Monthly spending limit in USD (nil = unlimited)
-	TotalLimitUSD   *float64   // Total spending limit in USD (nil = unlimited)
-	DailyUsageUSD   float64    // Current daily usage in USD
-	WeeklyUsageUSD  float64    // Current weekly usage in USD
-	MonthlyUsageUSD float64    // Current monthly usage in USD
-	TotalUsageUSD   float64    // Total cumulative usage in USD
+	// Rate limit fields
+	RateLimit5h   float64    // Rate limit in USD per 5h (0 = unlimited)
+	RateLimit1d   float64    // Rate limit in USD per 1d (0 = unlimited)
+	RateLimit7d   float64    // Rate limit in USD per 7d (0 = unlimited)
+	Usage5h       float64    // Used amount in current 5h window
+	Usage1d       float64    // Used amount in current 1d window
+	Usage7d       float64    // Used amount in current 7d window
+	Window5hStart *time.Time // Start of current 5h window
+	Window1dStart *time.Time // Start of current 1d window
+	Window7dStart *time.Time // Start of current 7d window
 
-	// Usage reset timestamps (Lite)
-	UsageResetDaily   *time.Time // Next daily usage reset time
-	UsageResetWeekly  *time.Time // Next weekly usage reset time
-	UsageResetMonthly *time.Time // Next monthly usage reset time
+	// [LITE:ADD] 限额字段
+	DailyLimitUSD   *float64
+	WeeklyLimitUSD  *float64
+	MonthlyLimitUSD *float64
+	TotalLimitUSD   *float64
+
+	// [LITE:ADD] 用量追踪字段
+	DailyUsageUSD   float64
+	WeeklyUsageUSD  float64
+	MonthlyUsageUSD float64
+	TotalUsageUSD   float64
+
+	// [LITE:ADD] 重置时间字段
+	UsageResetDaily   *time.Time
+	UsageResetWeekly  *time.Time
+	UsageResetMonthly *time.Time
 }
 
 func (k *APIKey) IsActive() bool {
 	return k.Status == StatusActive
+}
+
+// HasRateLimits returns true if any rate limit window is configured
+func (k *APIKey) HasRateLimits() bool {
+	return k.RateLimit5h > 0 || k.RateLimit1d > 0 || k.RateLimit7d > 0
 }
 
 // IsExpired checks if the API key has expired
@@ -89,7 +127,38 @@ func (k *APIKey) GetDaysUntilExpiry() int {
 	return int(duration.Hours() / 24)
 }
 
-// HasAnyLimit returns true if the API key has any per-period spending limit configured.
+// EffectiveUsage5h returns the 5h window usage, or 0 if the window has expired.
+func (k *APIKey) EffectiveUsage5h() float64 {
+	if IsWindowExpired(k.Window5hStart, RateLimitWindow5h) {
+		return 0
+	}
+	return k.Usage5h
+}
+
+// EffectiveUsage1d returns the 1d window usage, or 0 if the window has expired.
+func (k *APIKey) EffectiveUsage1d() float64 {
+	if IsWindowExpired(k.Window1dStart, RateLimitWindow1d) {
+		return 0
+	}
+	return k.Usage1d
+}
+
+// EffectiveUsage7d returns the 7d window usage, or 0 if the window has expired.
+func (k *APIKey) EffectiveUsage7d() float64 {
+	if IsWindowExpired(k.Window7dStart, RateLimitWindow7d) {
+		return 0
+	}
+	return k.Usage7d
+}
+
+// APIKeyListFilters holds optional filtering parameters for listing API keys.
+type APIKeyListFilters struct {
+	Search  string
+	Status  string
+	GroupID *int64 // nil=不筛选, 0=无分组, >0=指定分组
+}
+
+// [LITE:ADD] HasAnyLimit 检查是否设置了任何限额
 func (k *APIKey) HasAnyLimit() bool {
 	return (k.DailyLimitUSD != nil && *k.DailyLimitUSD > 0) ||
 		(k.WeeklyLimitUSD != nil && *k.WeeklyLimitUSD > 0) ||
@@ -97,34 +166,22 @@ func (k *APIKey) HasAnyLimit() bool {
 		(k.TotalLimitUSD != nil && *k.TotalLimitUSD > 0)
 }
 
-// IsDailyLimitExceeded returns true if daily usage has reached or exceeded the daily limit.
+// [LITE:ADD] IsDailyLimitExceeded 检查日限额是否超限
 func (k *APIKey) IsDailyLimitExceeded() bool {
-	if k.DailyLimitUSD == nil || *k.DailyLimitUSD <= 0 {
-		return false
-	}
-	return k.DailyUsageUSD >= *k.DailyLimitUSD
+	return k.DailyLimitUSD != nil && *k.DailyLimitUSD > 0 && k.DailyUsageUSD >= *k.DailyLimitUSD
 }
 
-// IsWeeklyLimitExceeded returns true if weekly usage has reached or exceeded the weekly limit.
+// [LITE:ADD] IsWeeklyLimitExceeded 检查周限额是否超限
 func (k *APIKey) IsWeeklyLimitExceeded() bool {
-	if k.WeeklyLimitUSD == nil || *k.WeeklyLimitUSD <= 0 {
-		return false
-	}
-	return k.WeeklyUsageUSD >= *k.WeeklyLimitUSD
+	return k.WeeklyLimitUSD != nil && *k.WeeklyLimitUSD > 0 && k.WeeklyUsageUSD >= *k.WeeklyLimitUSD
 }
 
-// IsMonthlyLimitExceeded returns true if monthly usage has reached or exceeded the monthly limit.
+// [LITE:ADD] IsMonthlyLimitExceeded 检查月限额是否超限
 func (k *APIKey) IsMonthlyLimitExceeded() bool {
-	if k.MonthlyLimitUSD == nil || *k.MonthlyLimitUSD <= 0 {
-		return false
-	}
-	return k.MonthlyUsageUSD >= *k.MonthlyLimitUSD
+	return k.MonthlyLimitUSD != nil && *k.MonthlyLimitUSD > 0 && k.MonthlyUsageUSD >= *k.MonthlyLimitUSD
 }
 
-// IsTotalLimitExceeded returns true if total cumulative usage has reached or exceeded the total limit.
+// [LITE:ADD] IsTotalLimitExceeded 检查总限额是否超限
 func (k *APIKey) IsTotalLimitExceeded() bool {
-	if k.TotalLimitUSD == nil || *k.TotalLimitUSD <= 0 {
-		return false
-	}
-	return k.TotalUsageUSD >= *k.TotalLimitUSD
+	return k.TotalLimitUSD != nil && *k.TotalLimitUSD > 0 && k.TotalUsageUSD >= *k.TotalLimitUSD
 }

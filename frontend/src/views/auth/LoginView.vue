@@ -328,7 +328,7 @@ async function handleLogin(): Promise<void> {
 
     // Check if 2FA is required
     if (isTotp2FARequired(response)) {
-      const totpResponse = response as TotpLoginResponse
+      const totpResponse = response as unknown as TotpLoginResponse
       totpTempToken.value = totpResponse.temp_token || ''
       totpUserEmailMasked.value = totpResponse.user_email_masked || ''
       show2FAModal.value = true

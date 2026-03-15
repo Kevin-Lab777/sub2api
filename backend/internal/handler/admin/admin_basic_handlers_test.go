@@ -19,6 +19,7 @@ func setupAdminRouter() (*gin.Engine, *stubAdminService) {
 	userHandler := NewUserHandler(adminSvc, nil)
 	groupHandler := NewGroupHandler(adminSvc)
 	proxyHandler := NewProxyHandler(adminSvc)
+	redeemHandler := NewRedeemHandler(adminSvc, nil)
 
 	router.GET("/api/v1/admin/users", userHandler.List)
 	router.GET("/api/v1/admin/users/:id", userHandler.GetByID)
@@ -46,8 +47,17 @@ func setupAdminRouter() (*gin.Engine, *stubAdminService) {
 	router.DELETE("/api/v1/admin/proxies/:id", proxyHandler.Delete)
 	router.POST("/api/v1/admin/proxies/batch-delete", proxyHandler.BatchDelete)
 	router.POST("/api/v1/admin/proxies/:id/test", proxyHandler.Test)
+	router.POST("/api/v1/admin/proxies/:id/quality-check", proxyHandler.CheckQuality)
 	router.GET("/api/v1/admin/proxies/:id/stats", proxyHandler.GetStats)
 	router.GET("/api/v1/admin/proxies/:id/accounts", proxyHandler.GetProxyAccounts)
+
+	router.GET("/api/v1/admin/redeem-codes", redeemHandler.List)
+	router.GET("/api/v1/admin/redeem-codes/:id", redeemHandler.GetByID)
+	router.POST("/api/v1/admin/redeem-codes", redeemHandler.Generate)
+	router.DELETE("/api/v1/admin/redeem-codes/:id", redeemHandler.Delete)
+	router.POST("/api/v1/admin/redeem-codes/batch-delete", redeemHandler.BatchDelete)
+	router.POST("/api/v1/admin/redeem-codes/:id/expire", redeemHandler.Expire)
+	router.GET("/api/v1/admin/redeem-codes/:id/stats", redeemHandler.GetStats)
 
 	return router, adminSvc
 }
@@ -200,12 +210,59 @@ func TestProxyHandlerEndpoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/admin/proxies/4/quality-check", nil)
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/admin/proxies/4/stats", nil)
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/admin/proxies/4/accounts", nil)
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestRedeemHandlerEndpoints(t *testing.T) {
+	router, _ := setupAdminRouter()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/redeem-codes", nil)
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/admin/redeem-codes/5", nil)
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	body, _ := json.Marshal(map[string]any{"count": 1, "type": "balance", "value": 10})
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/admin/redeem-codes/5", nil)
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/batch-delete", bytes.NewBufferString(`{"ids":[1,2]}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/5/expire", nil)
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/admin/redeem-codes/5/stats", nil)
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 }

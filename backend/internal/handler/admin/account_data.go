@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/openai"
 	"github.com/Kevin-Lab777/sub2api/internal/pkg/response"
 	"github.com/Kevin-Lab777/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -175,22 +178,28 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 		return
 	}
 
-	dataPayload := req.Data
-	if err := validateDataHeader(dataPayload); err != nil {
+	if err := validateDataHeader(req.Data); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
+	executeAdminIdempotentJSON(c, "admin.accounts.import_data", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
+		return h.importData(ctx, req)
+	})
+}
+
+func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) (DataImportResult, error) {
 	skipDefaultGroupBind := true
 	if req.SkipDefaultGroupBind != nil {
 		skipDefaultGroupBind = *req.SkipDefaultGroupBind
 	}
 
+	dataPayload := req.Data
 	result := DataImportResult{}
-	existingProxies, err := h.listAllProxies(c.Request.Context())
+
+	existingProxies, err := h.listAllProxies(ctx)
 	if err != nil {
-		response.ErrorFrom(c, err)
-		return
+		return result, err
 	}
 
 	proxyKeyToID := make(map[string]int64, len(existingProxies))
@@ -221,8 +230,8 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 			proxyKeyToID[key] = existingID
 			result.ProxyReused++
 			if normalizedStatus != "" {
-				if proxy, err := h.adminService.GetProxy(c.Request.Context(), existingID); err == nil && proxy != nil && proxy.Status != normalizedStatus {
-					_, _ = h.adminService.UpdateProxy(c.Request.Context(), existingID, &service.UpdateProxyInput{
+				if proxy, getErr := h.adminService.GetProxy(ctx, existingID); getErr == nil && proxy != nil && proxy.Status != normalizedStatus {
+					_, _ = h.adminService.UpdateProxy(ctx, existingID, &service.UpdateProxyInput{
 						Status: normalizedStatus,
 					})
 				}
@@ -230,7 +239,7 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 			continue
 		}
 
-		created, err := h.adminService.CreateProxy(c.Request.Context(), &service.CreateProxyInput{
+		created, createErr := h.adminService.CreateProxy(ctx, &service.CreateProxyInput{
 			Name:     defaultProxyName(item.Name),
 			Protocol: item.Protocol,
 			Host:     item.Host,
@@ -238,13 +247,13 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 			Username: item.Username,
 			Password: item.Password,
 		})
-		if err != nil {
+		if createErr != nil {
 			result.ProxyFailed++
 			result.Errors = append(result.Errors, DataImportError{
 				Kind:     "proxy",
 				Name:     item.Name,
 				ProxyKey: key,
-				Message:  err.Error(),
+				Message:  createErr.Error(),
 			})
 			continue
 		}
@@ -252,7 +261,7 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 		result.ProxyCreated++
 
 		if normalizedStatus != "" && normalizedStatus != created.Status {
-			_, _ = h.adminService.UpdateProxy(c.Request.Context(), created.ID, &service.UpdateProxyInput{
+			_, _ = h.adminService.UpdateProxy(ctx, created.ID, &service.UpdateProxyInput{
 				Status: normalizedStatus,
 			})
 		}
@@ -286,6 +295,8 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 			}
 		}
 
+		enrichCredentialsFromIDToken(&item)
+
 		accountInput := &service.CreateAccountInput{
 			Name:                 item.Name,
 			Notes:                item.Notes,
@@ -303,7 +314,7 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 			SkipDefaultGroupBind: skipDefaultGroupBind,
 		}
 
-		if _, err := h.adminService.CreateAccount(c.Request.Context(), accountInput); err != nil {
+		if _, err := h.adminService.CreateAccount(ctx, accountInput); err != nil {
 			result.AccountFailed++
 			result.Errors = append(result.Errors, DataImportError{
 				Kind:    "account",
@@ -315,7 +326,7 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 		result.AccountCreated++
 	}
 
-	response.Success(c, result)
+	return result, nil
 }
 
 func (h *AccountHandler) listAllProxies(ctx context.Context) ([]service.Proxy, error) {
@@ -527,6 +538,57 @@ func defaultProxyName(name string) string {
 		return "imported-proxy"
 	}
 	return name
+}
+
+// enrichCredentialsFromIDToken performs best-effort extraction of user info fields
+// (email, plan_type, chatgpt_account_id, etc.) from id_token in credentials.
+// Only applies to OpenAI/Sora OAuth accounts. Skips expired token errors silently.
+// Existing credential values are never overwritten — only missing fields are filled.
+func enrichCredentialsFromIDToken(item *DataAccount) {
+	if item.Credentials == nil {
+		return
+	}
+	// Only enrich OpenAI/Sora OAuth accounts
+	platform := strings.ToLower(strings.TrimSpace(item.Platform))
+	if platform != service.PlatformOpenAI && platform != service.PlatformSora {
+		return
+	}
+	if strings.ToLower(strings.TrimSpace(item.Type)) != service.AccountTypeOAuth {
+		return
+	}
+
+	idToken, _ := item.Credentials["id_token"].(string)
+	if strings.TrimSpace(idToken) == "" {
+		return
+	}
+
+	// DecodeIDToken skips expiry validation — safe for imported data
+	claims, err := openai.DecodeIDToken(idToken)
+	if err != nil {
+		slog.Debug("import_enrich_id_token_decode_failed", "account", item.Name, "error", err)
+		return
+	}
+
+	userInfo := claims.GetUserInfo()
+	if userInfo == nil {
+		return
+	}
+
+	// Fill missing fields only (never overwrite existing values)
+	setIfMissing := func(key, value string) {
+		if value == "" {
+			return
+		}
+		if existing, _ := item.Credentials[key].(string); existing == "" {
+			item.Credentials[key] = value
+		}
+	}
+
+	setIfMissing("email", userInfo.Email)
+	setIfMissing("plan_type", userInfo.PlanType)
+	setIfMissing("chatgpt_account_id", userInfo.ChatGPTAccountID)
+	setIfMissing("chatgpt_user_id", userInfo.ChatGPTUserID)
+	setIfMissing("organization_id", userInfo.OrganizationID)
 }
 
 func normalizeProxyStatus(status string) string {

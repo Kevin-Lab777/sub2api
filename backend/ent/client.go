@@ -22,11 +22,14 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/apikey"
 	"github.com/Kevin-Lab777/sub2api/ent/errorpassthroughrule"
 	"github.com/Kevin-Lab777/sub2api/ent/group"
+	"github.com/Kevin-Lab777/sub2api/ent/idempotencyrecord"
 	"github.com/Kevin-Lab777/sub2api/ent/proxy"
+	"github.com/Kevin-Lab777/sub2api/ent/securitysecret"
 	"github.com/Kevin-Lab777/sub2api/ent/setting"
 	"github.com/Kevin-Lab777/sub2api/ent/usagecleanuptask"
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
+	"github.com/Kevin-Lab777/sub2api/ent/userallowedgroup"
 	"github.com/Kevin-Lab777/sub2api/ent/usersubscription"
 
 	stdsql "database/sql"
@@ -51,8 +54,12 @@ type Client struct {
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// IdempotencyRecord is the client for interacting with the IdempotencyRecord builders.
+	IdempotencyRecord *IdempotencyRecordClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
+	// SecuritySecret is the client for interacting with the SecuritySecret builders.
+	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -61,6 +68,8 @@ type Client struct {
 	UsageLog *UsageLogClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
+	// UserAllowedGroup is the client for interacting with the UserAllowedGroup builders.
+	UserAllowedGroup *UserAllowedGroupClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
 	UserSubscription *UserSubscriptionClient
 }
@@ -81,11 +90,14 @@ func (c *Client) init() {
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
+	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
+	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
 	c.User = NewUserClient(c.config)
+	c.UserAllowedGroup = NewUserAllowedGroupClient(c.config)
 	c.UserSubscription = NewUserSubscriptionClient(c.config)
 }
 
@@ -186,11 +198,14 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AnnouncementRead:     NewAnnouncementReadClient(cfg),
 		ErrorPassthroughRule: NewErrorPassthroughRuleClient(cfg),
 		Group:                NewGroupClient(cfg),
+		IdempotencyRecord:    NewIdempotencyRecordClient(cfg),
 		Proxy:                NewProxyClient(cfg),
+		SecuritySecret:       NewSecuritySecretClient(cfg),
 		Setting:              NewSettingClient(cfg),
 		UsageCleanupTask:     NewUsageCleanupTaskClient(cfg),
 		UsageLog:             NewUsageLogClient(cfg),
 		User:                 NewUserClient(cfg),
+		UserAllowedGroup:     NewUserAllowedGroupClient(cfg),
 		UserSubscription:     NewUserSubscriptionClient(cfg),
 	}, nil
 }
@@ -218,11 +233,14 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AnnouncementRead:     NewAnnouncementReadClient(cfg),
 		ErrorPassthroughRule: NewErrorPassthroughRuleClient(cfg),
 		Group:                NewGroupClient(cfg),
+		IdempotencyRecord:    NewIdempotencyRecordClient(cfg),
 		Proxy:                NewProxyClient(cfg),
+		SecuritySecret:       NewSecuritySecretClient(cfg),
 		Setting:              NewSettingClient(cfg),
 		UsageCleanupTask:     NewUsageCleanupTaskClient(cfg),
 		UsageLog:             NewUsageLogClient(cfg),
 		User:                 NewUserClient(cfg),
+		UserAllowedGroup:     NewUserAllowedGroupClient(cfg),
 		UserSubscription:     NewUserSubscriptionClient(cfg),
 	}, nil
 }
@@ -254,8 +272,9 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.Proxy, c.Setting, c.UsageCleanupTask,
-		c.UsageLog, c.User, c.UserSubscription,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.Proxy,
+		c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -266,8 +285,9 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.Proxy, c.Setting, c.UsageCleanupTask,
-		c.UsageLog, c.User, c.UserSubscription,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.Proxy,
+		c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -290,8 +310,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ErrorPassthroughRule.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
+	case *IdempotencyRecordMutation:
+		return c.IdempotencyRecord.mutate(ctx, m)
 	case *ProxyMutation:
 		return c.Proxy.mutate(ctx, m)
+	case *SecuritySecretMutation:
+		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
 		return c.Setting.mutate(ctx, m)
 	case *UsageCleanupTaskMutation:
@@ -300,6 +324,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UsageLog.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
+	case *UserAllowedGroupMutation:
+		return c.UserAllowedGroup.mutate(ctx, m)
 	case *UserSubscriptionMutation:
 		return c.UserSubscription.mutate(ctx, m)
 	default:
@@ -1467,6 +1493,139 @@ func (c *GroupClient) mutate(ctx context.Context, m *GroupMutation) (Value, erro
 	}
 }
 
+// IdempotencyRecordClient is a client for the IdempotencyRecord schema.
+type IdempotencyRecordClient struct {
+	config
+}
+
+// NewIdempotencyRecordClient returns a client for the IdempotencyRecord from the given config.
+func NewIdempotencyRecordClient(c config) *IdempotencyRecordClient {
+	return &IdempotencyRecordClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `idempotencyrecord.Hooks(f(g(h())))`.
+func (c *IdempotencyRecordClient) Use(hooks ...Hook) {
+	c.hooks.IdempotencyRecord = append(c.hooks.IdempotencyRecord, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `idempotencyrecord.Intercept(f(g(h())))`.
+func (c *IdempotencyRecordClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IdempotencyRecord = append(c.inters.IdempotencyRecord, interceptors...)
+}
+
+// Create returns a builder for creating a IdempotencyRecord entity.
+func (c *IdempotencyRecordClient) Create() *IdempotencyRecordCreate {
+	mutation := newIdempotencyRecordMutation(c.config, OpCreate)
+	return &IdempotencyRecordCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IdempotencyRecord entities.
+func (c *IdempotencyRecordClient) CreateBulk(builders ...*IdempotencyRecordCreate) *IdempotencyRecordCreateBulk {
+	return &IdempotencyRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IdempotencyRecordClient) MapCreateBulk(slice any, setFunc func(*IdempotencyRecordCreate, int)) *IdempotencyRecordCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IdempotencyRecordCreateBulk{err: fmt.Errorf("calling to IdempotencyRecordClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IdempotencyRecordCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IdempotencyRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IdempotencyRecord.
+func (c *IdempotencyRecordClient) Update() *IdempotencyRecordUpdate {
+	mutation := newIdempotencyRecordMutation(c.config, OpUpdate)
+	return &IdempotencyRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IdempotencyRecordClient) UpdateOne(_m *IdempotencyRecord) *IdempotencyRecordUpdateOne {
+	mutation := newIdempotencyRecordMutation(c.config, OpUpdateOne, withIdempotencyRecord(_m))
+	return &IdempotencyRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IdempotencyRecordClient) UpdateOneID(id int64) *IdempotencyRecordUpdateOne {
+	mutation := newIdempotencyRecordMutation(c.config, OpUpdateOne, withIdempotencyRecordID(id))
+	return &IdempotencyRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IdempotencyRecord.
+func (c *IdempotencyRecordClient) Delete() *IdempotencyRecordDelete {
+	mutation := newIdempotencyRecordMutation(c.config, OpDelete)
+	return &IdempotencyRecordDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IdempotencyRecordClient) DeleteOne(_m *IdempotencyRecord) *IdempotencyRecordDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IdempotencyRecordClient) DeleteOneID(id int64) *IdempotencyRecordDeleteOne {
+	builder := c.Delete().Where(idempotencyrecord.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IdempotencyRecordDeleteOne{builder}
+}
+
+// Query returns a query builder for IdempotencyRecord.
+func (c *IdempotencyRecordClient) Query() *IdempotencyRecordQuery {
+	return &IdempotencyRecordQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIdempotencyRecord},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IdempotencyRecord entity by its id.
+func (c *IdempotencyRecordClient) Get(ctx context.Context, id int64) (*IdempotencyRecord, error) {
+	return c.Query().Where(idempotencyrecord.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IdempotencyRecordClient) GetX(ctx context.Context, id int64) *IdempotencyRecord {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IdempotencyRecordClient) Hooks() []Hook {
+	return c.hooks.IdempotencyRecord
+}
+
+// Interceptors returns the client interceptors.
+func (c *IdempotencyRecordClient) Interceptors() []Interceptor {
+	return c.inters.IdempotencyRecord
+}
+
+func (c *IdempotencyRecordClient) mutate(ctx context.Context, m *IdempotencyRecordMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IdempotencyRecordCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IdempotencyRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IdempotencyRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IdempotencyRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IdempotencyRecord mutation op: %q", m.Op())
+	}
+}
+
 // ProxyClient is a client for the Proxy schema.
 type ProxyClient struct {
 	config
@@ -1615,6 +1774,139 @@ func (c *ProxyClient) mutate(ctx context.Context, m *ProxyMutation) (Value, erro
 		return (&ProxyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Proxy mutation op: %q", m.Op())
+	}
+}
+
+// SecuritySecretClient is a client for the SecuritySecret schema.
+type SecuritySecretClient struct {
+	config
+}
+
+// NewSecuritySecretClient returns a client for the SecuritySecret from the given config.
+func NewSecuritySecretClient(c config) *SecuritySecretClient {
+	return &SecuritySecretClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `securitysecret.Hooks(f(g(h())))`.
+func (c *SecuritySecretClient) Use(hooks ...Hook) {
+	c.hooks.SecuritySecret = append(c.hooks.SecuritySecret, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `securitysecret.Intercept(f(g(h())))`.
+func (c *SecuritySecretClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SecuritySecret = append(c.inters.SecuritySecret, interceptors...)
+}
+
+// Create returns a builder for creating a SecuritySecret entity.
+func (c *SecuritySecretClient) Create() *SecuritySecretCreate {
+	mutation := newSecuritySecretMutation(c.config, OpCreate)
+	return &SecuritySecretCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SecuritySecret entities.
+func (c *SecuritySecretClient) CreateBulk(builders ...*SecuritySecretCreate) *SecuritySecretCreateBulk {
+	return &SecuritySecretCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SecuritySecretClient) MapCreateBulk(slice any, setFunc func(*SecuritySecretCreate, int)) *SecuritySecretCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SecuritySecretCreateBulk{err: fmt.Errorf("calling to SecuritySecretClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SecuritySecretCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SecuritySecretCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SecuritySecret.
+func (c *SecuritySecretClient) Update() *SecuritySecretUpdate {
+	mutation := newSecuritySecretMutation(c.config, OpUpdate)
+	return &SecuritySecretUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SecuritySecretClient) UpdateOne(_m *SecuritySecret) *SecuritySecretUpdateOne {
+	mutation := newSecuritySecretMutation(c.config, OpUpdateOne, withSecuritySecret(_m))
+	return &SecuritySecretUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SecuritySecretClient) UpdateOneID(id int64) *SecuritySecretUpdateOne {
+	mutation := newSecuritySecretMutation(c.config, OpUpdateOne, withSecuritySecretID(id))
+	return &SecuritySecretUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SecuritySecret.
+func (c *SecuritySecretClient) Delete() *SecuritySecretDelete {
+	mutation := newSecuritySecretMutation(c.config, OpDelete)
+	return &SecuritySecretDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SecuritySecretClient) DeleteOne(_m *SecuritySecret) *SecuritySecretDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SecuritySecretClient) DeleteOneID(id int64) *SecuritySecretDeleteOne {
+	builder := c.Delete().Where(securitysecret.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SecuritySecretDeleteOne{builder}
+}
+
+// Query returns a query builder for SecuritySecret.
+func (c *SecuritySecretClient) Query() *SecuritySecretQuery {
+	return &SecuritySecretQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSecuritySecret},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SecuritySecret entity by its id.
+func (c *SecuritySecretClient) Get(ctx context.Context, id int64) (*SecuritySecret, error) {
+	return c.Query().Where(securitysecret.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SecuritySecretClient) GetX(ctx context.Context, id int64) *SecuritySecret {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SecuritySecretClient) Hooks() []Hook {
+	return c.hooks.SecuritySecret
+}
+
+// Interceptors returns the client interceptors.
+func (c *SecuritySecretClient) Interceptors() []Interceptor {
+	return c.inters.SecuritySecret
+}
+
+func (c *SecuritySecretClient) mutate(ctx context.Context, m *SecuritySecretMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SecuritySecretCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SecuritySecretUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SecuritySecretUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SecuritySecretDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SecuritySecret mutation op: %q", m.Op())
 	}
 }
 
@@ -2312,6 +2604,171 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 	}
 }
 
+// UserAllowedGroupClient is a client for the UserAllowedGroup schema.
+type UserAllowedGroupClient struct {
+	config
+}
+
+// NewUserAllowedGroupClient returns a client for the UserAllowedGroup from the given config.
+func NewUserAllowedGroupClient(c config) *UserAllowedGroupClient {
+	return &UserAllowedGroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `userallowedgroup.Hooks(f(g(h())))`.
+func (c *UserAllowedGroupClient) Use(hooks ...Hook) {
+	c.hooks.UserAllowedGroup = append(c.hooks.UserAllowedGroup, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `userallowedgroup.Intercept(f(g(h())))`.
+func (c *UserAllowedGroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserAllowedGroup = append(c.inters.UserAllowedGroup, interceptors...)
+}
+
+// Create returns a builder for creating a UserAllowedGroup entity.
+func (c *UserAllowedGroupClient) Create() *UserAllowedGroupCreate {
+	mutation := newUserAllowedGroupMutation(c.config, OpCreate)
+	return &UserAllowedGroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserAllowedGroup entities.
+func (c *UserAllowedGroupClient) CreateBulk(builders ...*UserAllowedGroupCreate) *UserAllowedGroupCreateBulk {
+	return &UserAllowedGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserAllowedGroupClient) MapCreateBulk(slice any, setFunc func(*UserAllowedGroupCreate, int)) *UserAllowedGroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserAllowedGroupCreateBulk{err: fmt.Errorf("calling to UserAllowedGroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserAllowedGroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserAllowedGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserAllowedGroup.
+func (c *UserAllowedGroupClient) Update() *UserAllowedGroupUpdate {
+	mutation := newUserAllowedGroupMutation(c.config, OpUpdate)
+	return &UserAllowedGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserAllowedGroupClient) UpdateOne(_m *UserAllowedGroup) *UserAllowedGroupUpdateOne {
+	mutation := newUserAllowedGroupMutation(c.config, OpUpdateOne, withUserAllowedGroup(_m))
+	return &UserAllowedGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserAllowedGroupClient) UpdateOneID(id int64) *UserAllowedGroupUpdateOne {
+	mutation := newUserAllowedGroupMutation(c.config, OpUpdateOne, withUserAllowedGroupID(id))
+	return &UserAllowedGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserAllowedGroup.
+func (c *UserAllowedGroupClient) Delete() *UserAllowedGroupDelete {
+	mutation := newUserAllowedGroupMutation(c.config, OpDelete)
+	return &UserAllowedGroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserAllowedGroupClient) DeleteOne(_m *UserAllowedGroup) *UserAllowedGroupDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserAllowedGroupClient) DeleteOneID(id int64) *UserAllowedGroupDeleteOne {
+	builder := c.Delete().Where(userallowedgroup.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserAllowedGroupDeleteOne{builder}
+}
+
+// Query returns a query builder for UserAllowedGroup.
+func (c *UserAllowedGroupClient) Query() *UserAllowedGroupQuery {
+	return &UserAllowedGroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserAllowedGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserAllowedGroup entity by its id.
+func (c *UserAllowedGroupClient) Get(ctx context.Context, id int64) (*UserAllowedGroup, error) {
+	return c.Query().Where(userallowedgroup.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserAllowedGroupClient) GetX(ctx context.Context, id int64) *UserAllowedGroup {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a UserAllowedGroup.
+func (c *UserAllowedGroupClient) QueryUser(_m *UserAllowedGroup) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(userallowedgroup.Table, userallowedgroup.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, userallowedgroup.UserTable, userallowedgroup.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGroup queries the group edge of a UserAllowedGroup.
+func (c *UserAllowedGroupClient) QueryGroup(_m *UserAllowedGroup) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(userallowedgroup.Table, userallowedgroup.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, userallowedgroup.GroupTable, userallowedgroup.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserAllowedGroupClient) Hooks() []Hook {
+	return c.hooks.UserAllowedGroup
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserAllowedGroupClient) Interceptors() []Interceptor {
+	return c.inters.UserAllowedGroup
+}
+
+func (c *UserAllowedGroupClient) mutate(ctx context.Context, m *UserAllowedGroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserAllowedGroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserAllowedGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserAllowedGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserAllowedGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserAllowedGroup mutation op: %q", m.Op())
+	}
+}
+
 // UserSubscriptionClient is a client for the UserSubscription schema.
 type UserSubscriptionClient struct {
 	config
@@ -2515,12 +2972,13 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, Proxy, Setting, UsageCleanupTask, UsageLog, User,
-		UserSubscription []ent.Hook
+		ErrorPassthroughRule, Group, IdempotencyRecord, Proxy, SecuritySecret, Setting,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, Proxy, Setting, UsageCleanupTask, UsageLog, User,
+		ErrorPassthroughRule, Group, IdempotencyRecord, Proxy, SecuritySecret, Setting,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserSubscription []ent.Interceptor
 	}
 )

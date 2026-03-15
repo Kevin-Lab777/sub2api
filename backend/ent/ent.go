@@ -19,11 +19,14 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/apikey"
 	"github.com/Kevin-Lab777/sub2api/ent/errorpassthroughrule"
 	"github.com/Kevin-Lab777/sub2api/ent/group"
+	"github.com/Kevin-Lab777/sub2api/ent/idempotencyrecord"
 	"github.com/Kevin-Lab777/sub2api/ent/proxy"
+	"github.com/Kevin-Lab777/sub2api/ent/securitysecret"
 	"github.com/Kevin-Lab777/sub2api/ent/setting"
 	"github.com/Kevin-Lab777/sub2api/ent/usagecleanuptask"
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
+	"github.com/Kevin-Lab777/sub2api/ent/userallowedgroup"
 	"github.com/Kevin-Lab777/sub2api/ent/usersubscription"
 )
 
@@ -92,11 +95,14 @@ func checkColumn(t, c string) error {
 			announcementread.Table:     announcementread.ValidColumn,
 			errorpassthroughrule.Table: errorpassthroughrule.ValidColumn,
 			group.Table:                group.ValidColumn,
+			idempotencyrecord.Table:    idempotencyrecord.ValidColumn,
 			proxy.Table:                proxy.ValidColumn,
+			securitysecret.Table:       securitysecret.ValidColumn,
 			setting.Table:              setting.ValidColumn,
 			usagecleanuptask.Table:     usagecleanuptask.ValidColumn,
 			usagelog.Table:             usagelog.ValidColumn,
 			user.Table:                 user.ValidColumn,
+			userallowedgroup.Table:     userallowedgroup.ValidColumn,
 			usersubscription.Table:     usersubscription.ValidColumn,
 		})
 	})

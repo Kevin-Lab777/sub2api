@@ -31,10 +31,36 @@ const (
 	FieldGroupID = "group_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
+	FieldLastUsedAt = "last_used_at"
 	// FieldIPWhitelist holds the string denoting the ip_whitelist field in the database.
 	FieldIPWhitelist = "ip_whitelist"
 	// FieldIPBlacklist holds the string denoting the ip_blacklist field in the database.
 	FieldIPBlacklist = "ip_blacklist"
+	// FieldQuota holds the string denoting the quota field in the database.
+	FieldQuota = "quota"
+	// FieldQuotaUsed holds the string denoting the quota_used field in the database.
+	FieldQuotaUsed = "quota_used"
+	// FieldExpiresAt holds the string denoting the expires_at field in the database.
+	FieldExpiresAt = "expires_at"
+	// FieldRateLimit5h holds the string denoting the rate_limit_5h field in the database.
+	FieldRateLimit5h = "rate_limit_5h"
+	// FieldRateLimit1d holds the string denoting the rate_limit_1d field in the database.
+	FieldRateLimit1d = "rate_limit_1d"
+	// FieldRateLimit7d holds the string denoting the rate_limit_7d field in the database.
+	FieldRateLimit7d = "rate_limit_7d"
+	// FieldUsage5h holds the string denoting the usage_5h field in the database.
+	FieldUsage5h = "usage_5h"
+	// FieldUsage1d holds the string denoting the usage_1d field in the database.
+	FieldUsage1d = "usage_1d"
+	// FieldUsage7d holds the string denoting the usage_7d field in the database.
+	FieldUsage7d = "usage_7d"
+	// FieldWindow5hStart holds the string denoting the window_5h_start field in the database.
+	FieldWindow5hStart = "window_5h_start"
+	// FieldWindow1dStart holds the string denoting the window_1d_start field in the database.
+	FieldWindow1dStart = "window_1d_start"
+	// FieldWindow7dStart holds the string denoting the window_7d_start field in the database.
+	FieldWindow7dStart = "window_7d_start"
 	// FieldDailyLimitUsd holds the string denoting the daily_limit_usd field in the database.
 	FieldDailyLimitUsd = "daily_limit_usd"
 	// FieldWeeklyLimitUsd holds the string denoting the weekly_limit_usd field in the database.
@@ -57,12 +83,6 @@ const (
 	FieldUsageResetWeekly = "usage_reset_weekly"
 	// FieldUsageResetMonthly holds the string denoting the usage_reset_monthly field in the database.
 	FieldUsageResetMonthly = "usage_reset_monthly"
-	// FieldQuota holds the string denoting the quota field in the database.
-	FieldQuota = "quota"
-	// FieldQuotaUsed holds the string denoting the quota_used field in the database.
-	FieldQuotaUsed = "quota_used"
-	// FieldExpiresAt holds the string denoting the expires_at field in the database.
-	FieldExpiresAt = "expires_at"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
@@ -105,8 +125,21 @@ var Columns = []string{
 	FieldName,
 	FieldGroupID,
 	FieldStatus,
+	FieldLastUsedAt,
 	FieldIPWhitelist,
 	FieldIPBlacklist,
+	FieldQuota,
+	FieldQuotaUsed,
+	FieldExpiresAt,
+	FieldRateLimit5h,
+	FieldRateLimit1d,
+	FieldRateLimit7d,
+	FieldUsage5h,
+	FieldUsage1d,
+	FieldUsage7d,
+	FieldWindow5hStart,
+	FieldWindow1dStart,
+	FieldWindow7dStart,
 	FieldDailyLimitUsd,
 	FieldWeeklyLimitUsd,
 	FieldMonthlyLimitUsd,
@@ -118,9 +151,6 @@ var Columns = []string{
 	FieldUsageResetDaily,
 	FieldUsageResetWeekly,
 	FieldUsageResetMonthly,
-	FieldQuota,
-	FieldQuotaUsed,
-	FieldExpiresAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -155,6 +185,22 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// DefaultQuota holds the default value on creation for the "quota" field.
+	DefaultQuota float64
+	// DefaultQuotaUsed holds the default value on creation for the "quota_used" field.
+	DefaultQuotaUsed float64
+	// DefaultRateLimit5h holds the default value on creation for the "rate_limit_5h" field.
+	DefaultRateLimit5h float64
+	// DefaultRateLimit1d holds the default value on creation for the "rate_limit_1d" field.
+	DefaultRateLimit1d float64
+	// DefaultRateLimit7d holds the default value on creation for the "rate_limit_7d" field.
+	DefaultRateLimit7d float64
+	// DefaultUsage5h holds the default value on creation for the "usage_5h" field.
+	DefaultUsage5h float64
+	// DefaultUsage1d holds the default value on creation for the "usage_1d" field.
+	DefaultUsage1d float64
+	// DefaultUsage7d holds the default value on creation for the "usage_7d" field.
+	DefaultUsage7d float64
 	// DefaultDailyUsageUsd holds the default value on creation for the "daily_usage_usd" field.
 	DefaultDailyUsageUsd float64
 	// DefaultWeeklyUsageUsd holds the default value on creation for the "weekly_usage_usd" field.
@@ -163,10 +209,6 @@ var (
 	DefaultMonthlyUsageUsd float64
 	// DefaultTotalUsageUsd holds the default value on creation for the "total_usage_usd" field.
 	DefaultTotalUsageUsd float64
-	// DefaultQuota holds the default value on creation for the "quota" field.
-	DefaultQuota float64
-	// DefaultQuotaUsed holds the default value on creation for the "quota_used" field.
-	DefaultQuotaUsed float64
 )
 
 // OrderOption defines the ordering options for the APIKey queries.
@@ -215,6 +257,71 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByLastUsedAt orders the results by the last_used_at field.
+func ByLastUsedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastUsedAt, opts...).ToFunc()
+}
+
+// ByQuota orders the results by the quota field.
+func ByQuota(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuota, opts...).ToFunc()
+}
+
+// ByQuotaUsed orders the results by the quota_used field.
+func ByQuotaUsed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaUsed, opts...).ToFunc()
+}
+
+// ByExpiresAt orders the results by the expires_at field.
+func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
+}
+
+// ByRateLimit5h orders the results by the rate_limit_5h field.
+func ByRateLimit5h(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRateLimit5h, opts...).ToFunc()
+}
+
+// ByRateLimit1d orders the results by the rate_limit_1d field.
+func ByRateLimit1d(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRateLimit1d, opts...).ToFunc()
+}
+
+// ByRateLimit7d orders the results by the rate_limit_7d field.
+func ByRateLimit7d(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRateLimit7d, opts...).ToFunc()
+}
+
+// ByUsage5h orders the results by the usage_5h field.
+func ByUsage5h(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsage5h, opts...).ToFunc()
+}
+
+// ByUsage1d orders the results by the usage_1d field.
+func ByUsage1d(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsage1d, opts...).ToFunc()
+}
+
+// ByUsage7d orders the results by the usage_7d field.
+func ByUsage7d(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsage7d, opts...).ToFunc()
+}
+
+// ByWindow5hStart orders the results by the window_5h_start field.
+func ByWindow5hStart(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWindow5hStart, opts...).ToFunc()
+}
+
+// ByWindow1dStart orders the results by the window_1d_start field.
+func ByWindow1dStart(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWindow1dStart, opts...).ToFunc()
+}
+
+// ByWindow7dStart orders the results by the window_7d_start field.
+func ByWindow7dStart(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWindow7dStart, opts...).ToFunc()
 }
 
 // ByDailyLimitUsd orders the results by the daily_limit_usd field.
@@ -270,21 +377,6 @@ func ByUsageResetWeekly(opts ...sql.OrderTermOption) OrderOption {
 // ByUsageResetMonthly orders the results by the usage_reset_monthly field.
 func ByUsageResetMonthly(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUsageResetMonthly, opts...).ToFunc()
-}
-
-// ByQuota orders the results by the quota field.
-func ByQuota(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldQuota, opts...).ToFunc()
-}
-
-// ByQuotaUsed orders the results by the quota_used field.
-func ByQuotaUsed(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldQuotaUsed, opts...).ToFunc()
-}
-
-// ByExpiresAt orders the results by the expires_at field.
-func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.

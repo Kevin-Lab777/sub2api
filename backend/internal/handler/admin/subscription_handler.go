@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/Kevin-Lab777/sub2api/internal/handler/dto"
@@ -199,13 +200,52 @@ func (h *SubscriptionHandler) Extend(c *gin.Context) {
 		return
 	}
 
-	subscription, err := h.subscriptionService.ExtendSubscription(c.Request.Context(), subscriptionID, req.Days)
+	idempotencyPayload := struct {
+		SubscriptionID int64                     `json:"subscription_id"`
+		Body           AdjustSubscriptionRequest `json:"body"`
+	}{
+		SubscriptionID: subscriptionID,
+		Body:           req,
+	}
+	executeAdminIdempotentJSON(c, "admin.subscriptions.extend", idempotencyPayload, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
+		subscription, execErr := h.subscriptionService.ExtendSubscription(ctx, subscriptionID, req.Days)
+		if execErr != nil {
+			return nil, execErr
+		}
+		return dto.UserSubscriptionFromServiceAdmin(subscription), nil
+	})
+}
+
+// ResetSubscriptionQuotaRequest represents the reset quota request
+type ResetSubscriptionQuotaRequest struct {
+	Daily   bool `json:"daily"`
+	Weekly  bool `json:"weekly"`
+	Monthly bool `json:"monthly"`
+}
+
+// ResetQuota resets daily, weekly, and/or monthly usage for a subscription.
+// POST /api/v1/admin/subscriptions/:id/reset-quota
+func (h *SubscriptionHandler) ResetQuota(c *gin.Context) {
+	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid subscription ID")
+		return
+	}
+	var req ResetSubscriptionQuotaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if !req.Daily && !req.Weekly && !req.Monthly {
+		response.BadRequest(c, "At least one of 'daily', 'weekly', or 'monthly' must be true")
+		return
+	}
+	sub, err := h.subscriptionService.AdminResetQuota(c.Request.Context(), subscriptionID, req.Daily, req.Weekly, req.Monthly)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-
-	response.Success(c, dto.UserSubscriptionFromServiceAdmin(subscription))
+	response.Success(c, dto.UserSubscriptionFromServiceAdmin(sub))
 }
 
 // Revoke handles revoking a subscription
