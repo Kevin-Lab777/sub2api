@@ -145,14 +145,16 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		return nil
 	}
 	out := &AdminGroup{
-		Group:                groupFromServiceBase(g),
-		ModelRouting:         g.ModelRouting,
-		ModelRoutingEnabled:  g.ModelRoutingEnabled,
-		MCPXMLInject:         g.MCPXMLInject,
-		DefaultMappedModel:   g.DefaultMappedModel,
-		SupportedModelScopes: g.SupportedModelScopes,
-		AccountCount:         g.AccountCount,
-		SortOrder:            g.SortOrder,
+		Group:                   groupFromServiceBase(g),
+		ModelRouting:            g.ModelRouting,
+		ModelRoutingEnabled:     g.ModelRoutingEnabled,
+		MCPXMLInject:            g.MCPXMLInject,
+		DefaultMappedModel:      g.DefaultMappedModel,
+		SupportedModelScopes:    g.SupportedModelScopes,
+		AccountCount:            g.AccountCount,
+		ActiveAccountCount:      g.ActiveAccountCount,
+		RateLimitedAccountCount: g.RateLimitedAccountCount,
+		SortOrder:               g.SortOrder,
 	}
 	if len(g.AccountGroups) > 0 {
 		out.AccountGroups = make([]AccountGroup, 0, len(g.AccountGroups))
@@ -274,8 +276,8 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		}
 	}
 
-	// 提取 API Key 账号配额限制（仅 apikey 类型有效）
-	if a.Type == service.AccountTypeAPIKey {
+	// 提取账号配额限制（apikey / bedrock 类型有效）
+	if a.IsAPIKeyOrBedrock() {
 		if limit := a.GetQuotaLimit(); limit > 0 {
 			out.QuotaLimit = &limit
 			used := a.GetQuotaUsed()
@@ -290,6 +292,31 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 			out.QuotaWeeklyLimit = &limit
 			used := a.GetQuotaWeeklyUsed()
 			out.QuotaWeeklyUsed = &used
+		}
+		// 固定时间重置配置
+		if mode := a.GetQuotaDailyResetMode(); mode == "fixed" {
+			out.QuotaDailyResetMode = &mode
+			hour := a.GetQuotaDailyResetHour()
+			out.QuotaDailyResetHour = &hour
+		}
+		if mode := a.GetQuotaWeeklyResetMode(); mode == "fixed" {
+			out.QuotaWeeklyResetMode = &mode
+			day := a.GetQuotaWeeklyResetDay()
+			out.QuotaWeeklyResetDay = &day
+			hour := a.GetQuotaWeeklyResetHour()
+			out.QuotaWeeklyResetHour = &hour
+		}
+		if a.GetQuotaDailyResetMode() == "fixed" || a.GetQuotaWeeklyResetMode() == "fixed" {
+			tz := a.GetQuotaResetTimezone()
+			out.QuotaResetTimezone = &tz
+		}
+		if a.Extra != nil {
+			if v, ok := a.Extra["quota_daily_reset_at"].(string); ok && v != "" {
+				out.QuotaDailyResetAt = &v
+			}
+			if v, ok := a.Extra["quota_weekly_reset_at"].(string); ok && v != "" {
+				out.QuotaWeeklyResetAt = &v
+			}
 		}
 	}
 
@@ -472,8 +499,11 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		AccountID:             l.AccountID,
 		RequestID:             l.RequestID,
 		Model:                 l.Model,
+		UpstreamModel:         l.UpstreamModel,
 		ServiceTier:           l.ServiceTier,
 		ReasoningEffort:       l.ReasoningEffort,
+		InboundEndpoint:       l.InboundEndpoint,
+		UpstreamEndpoint:      l.UpstreamEndpoint,
 		GroupID:               l.GroupID,
 		SubscriptionID:        l.SubscriptionID,
 		InputTokens:           l.InputTokens,

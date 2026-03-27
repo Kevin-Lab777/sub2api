@@ -362,6 +362,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				User:               apiKey.User,
 				Account:            account,
 				Subscription:       subscription,
+				InboundEndpoint:    GetInboundEndpoint(c),
+				UpstreamEndpoint:   GetUpstreamEndpoint(c, account.Platform),
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
@@ -655,14 +657,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
 
-		defaultMappedModel := ""
-		if apiKey.Group != nil {
-			defaultMappedModel = apiKey.Group.DefaultMappedModel
-		}
-		// 如果使用了降级模型调度，强制使用降级模型
-		if fallbackModel := c.GetString("openai_messages_fallback_model"); fallbackModel != "" {
-			defaultMappedModel = fallbackModel
-		}
+		// 仅在调度时实际触发了降级（原模型无可用账号、改用默认模型重试成功）时，
+		// 才将降级模型传给 Forward 层做模型替换；否则保持用户请求的原始模型。
+		defaultMappedModel := c.GetString("openai_messages_fallback_model")
 		result, err := h.gatewayService.ForwardAsAnthropic(c.Request.Context(), c, account, body, promptCacheKey, defaultMappedModel)
 
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
@@ -743,6 +740,8 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				User:               apiKey.User,
 				Account:            account,
 				Subscription:       subscription,
+				InboundEndpoint:    GetInboundEndpoint(c),
+				UpstreamEndpoint:   GetUpstreamEndpoint(c, account.Platform),
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
@@ -1240,6 +1239,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					User:               apiKey.User,
 					Account:            account,
 					Subscription:       subscription,
+					InboundEndpoint:    GetInboundEndpoint(c),
+					UpstreamEndpoint:   GetUpstreamEndpoint(c, account.Platform),
 					UserAgent:          userAgent,
 					IPAddress:          clientIP,
 					RequestPayloadHash: service.HashUsageRequestPayload(firstMessage),

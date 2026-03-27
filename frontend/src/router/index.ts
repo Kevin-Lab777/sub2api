@@ -278,6 +278,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
+const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup']
 
 router.beforeEach((to, _from, next) => {
   // 开始导航加载状态
@@ -318,8 +319,22 @@ router.beforeEach((to, _from, next) => {
   if (!requiresAuth) {
     // If already authenticated and trying to access login, redirect to admin dashboard
     if (authStore.isAuthenticated && to.path === '/login') {
+      // In backend mode, non-admin users should NOT be redirected away from login
+      // (they are blocked from all protected routes, so redirecting would cause a loop)
+      if (appStore.backendModeEnabled && !authStore.isAdmin) {
+        next()
+        return
+      }
       next('/admin/dashboard')
       return
+    }
+    // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)
+    if (appStore.backendModeEnabled && !authStore.isAuthenticated) {
+      const isAllowed = BACKEND_MODE_ALLOWED_PATHS.some((p) => to.path === p || to.path.startsWith(p))
+      if (!isAllowed) {
+        next('/login')
+        return
+      }
     }
     next()
     return
@@ -340,6 +355,19 @@ router.beforeEach((to, _from, next) => {
     // User is authenticated but not admin, redirect to login
     next('/login')
     return
+  }
+
+  // Backend mode: admin gets full access, non-admin blocked
+  if (appStore.backendModeEnabled) {
+    if (authStore.isAuthenticated && authStore.isAdmin) {
+      next()
+      return
+    }
+    const isAllowed = BACKEND_MODE_ALLOWED_PATHS.some((p) => to.path === p || to.path.startsWith(p))
+    if (!isAllowed) {
+      next('/login')
+      return
+    }
   }
 
   // All checks passed, allow navigation
