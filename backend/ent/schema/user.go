@@ -73,11 +73,6 @@ func (User) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		// Sora 存储配额
-		field.Int64("sora_storage_quota_bytes").
-			Default(0),
-		field.Int64("sora_storage_used_bytes").
-			Default(0),
 	}
 }
 
@@ -88,7 +83,9 @@ func (User) Edges() []ent.Edge {
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("assigned_subscriptions", UserSubscription.Type),
 		edge.To("announcement_reads", AnnouncementRead.Type),
-		// [LITE:DELETED] allowed_groups edge
+		// [LITE:KEPT] allowed_groups - v0.1.88 core feature
+			edge.To("allowed_groups", Group.Type).
+				Through("user_allowed_groups", UserAllowedGroup.Type),
 		edge.To("usage_logs", UsageLog.Type),
 		// [LITE:DELETED] attribute_values edge
 		// [LITE:DELETED] promo_code_usages edge

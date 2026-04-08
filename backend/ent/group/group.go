@@ -49,16 +49,6 @@ const (
 	FieldImagePrice2k = "image_price_2k"
 	// FieldImagePrice4k holds the string denoting the image_price_4k field in the database.
 	FieldImagePrice4k = "image_price_4k"
-	// FieldSoraImagePrice360 holds the string denoting the sora_image_price_360 field in the database.
-	FieldSoraImagePrice360 = "sora_image_price_360"
-	// FieldSoraImagePrice540 holds the string denoting the sora_image_price_540 field in the database.
-	FieldSoraImagePrice540 = "sora_image_price_540"
-	// FieldSoraVideoPricePerRequest holds the string denoting the sora_video_price_per_request field in the database.
-	FieldSoraVideoPricePerRequest = "sora_video_price_per_request"
-	// FieldSoraVideoPricePerRequestHd holds the string denoting the sora_video_price_per_request_hd field in the database.
-	FieldSoraVideoPricePerRequestHd = "sora_video_price_per_request_hd"
-	// FieldSoraStorageQuotaBytes holds the string denoting the sora_storage_quota_bytes field in the database.
-	FieldSoraStorageQuotaBytes = "sora_storage_quota_bytes"
 	// FieldClaudeCodeOnly holds the string denoting the claude_code_only field in the database.
 	FieldClaudeCodeOnly = "claude_code_only"
 	// FieldFallbackGroupID holds the string denoting the fallback_group_id field in the database.
@@ -79,6 +69,10 @@ const (
 	FieldAllowMessagesDispatch = "allow_messages_dispatch"
 	// FieldDefaultMappedModel holds the string denoting the default_mapped_model field in the database.
 	FieldDefaultMappedModel = "default_mapped_model"
+	// FieldRequireOauthOnly holds the string denoting the require_oauth_only field in the database.
+	FieldRequireOauthOnly = "require_oauth_only"
+	// FieldRequirePrivacySet holds the string denoting the require_privacy_set field in the database.
+	FieldRequirePrivacySet = "require_privacy_set"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
@@ -87,8 +81,12 @@ const (
 	EdgeUsageLogs = "usage_logs"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
+	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
+	EdgeAllowedUsers = "allowed_users"
 	// EdgeAccountGroups holds the string denoting the account_groups edge name in mutations.
 	EdgeAccountGroups = "account_groups"
+	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
+	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the group in the database.
 	Table = "groups"
 	// APIKeysTable is the table that holds the api_keys relation/edge.
@@ -117,6 +115,11 @@ const (
 	// AccountsInverseTable is the table name for the Account entity.
 	// It exists in this package in order to avoid circular dependency with the "account" package.
 	AccountsInverseTable = "accounts"
+	// AllowedUsersTable is the table that holds the allowed_users relation/edge. The primary key declared below.
+	AllowedUsersTable = "user_allowed_groups"
+	// AllowedUsersInverseTable is the table name for the User entity.
+	// It exists in this package in order to avoid circular dependency with the "user" package.
+	AllowedUsersInverseTable = "users"
 	// AccountGroupsTable is the table that holds the account_groups relation/edge.
 	AccountGroupsTable = "account_groups"
 	// AccountGroupsInverseTable is the table name for the AccountGroup entity.
@@ -124,6 +127,13 @@ const (
 	AccountGroupsInverseTable = "account_groups"
 	// AccountGroupsColumn is the table column denoting the account_groups relation/edge.
 	AccountGroupsColumn = "group_id"
+	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
+	UserAllowedGroupsTable = "user_allowed_groups"
+	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
+	// It exists in this package in order to avoid circular dependency with the "userallowedgroup" package.
+	UserAllowedGroupsInverseTable = "user_allowed_groups"
+	// UserAllowedGroupsColumn is the table column denoting the user_allowed_groups relation/edge.
+	UserAllowedGroupsColumn = "group_id"
 )
 
 // Columns holds all SQL columns for group fields.
@@ -146,11 +156,6 @@ var Columns = []string{
 	FieldImagePrice1k,
 	FieldImagePrice2k,
 	FieldImagePrice4k,
-	FieldSoraImagePrice360,
-	FieldSoraImagePrice540,
-	FieldSoraVideoPricePerRequest,
-	FieldSoraVideoPricePerRequestHd,
-	FieldSoraStorageQuotaBytes,
 	FieldClaudeCodeOnly,
 	FieldFallbackGroupID,
 	FieldFallbackGroupIDOnInvalidRequest,
@@ -161,12 +166,17 @@ var Columns = []string{
 	FieldSortOrder,
 	FieldAllowMessagesDispatch,
 	FieldDefaultMappedModel,
+	FieldRequireOauthOnly,
+	FieldRequirePrivacySet,
 }
 
 var (
 	// AccountsPrimaryKey and AccountsColumn2 are the table columns denoting the
 	// primary key for the accounts relation (M2M).
 	AccountsPrimaryKey = []string{"account_id", "group_id"}
+	// AllowedUsersPrimaryKey and AllowedUsersColumn2 are the table columns denoting the
+	// primary key for the allowed_users relation (M2M).
+	AllowedUsersPrimaryKey = []string{"user_id", "group_id"}
 )
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -213,8 +223,6 @@ var (
 	SubscriptionTypeValidator func(string) error
 	// DefaultDefaultValidityDays holds the default value on creation for the "default_validity_days" field.
 	DefaultDefaultValidityDays int
-	// DefaultSoraStorageQuotaBytes holds the default value on creation for the "sora_storage_quota_bytes" field.
-	DefaultSoraStorageQuotaBytes int64
 	// DefaultClaudeCodeOnly holds the default value on creation for the "claude_code_only" field.
 	DefaultClaudeCodeOnly bool
 	// DefaultModelRoutingEnabled holds the default value on creation for the "model_routing_enabled" field.
@@ -231,6 +239,10 @@ var (
 	DefaultDefaultMappedModel string
 	// DefaultMappedModelValidator is a validator for the "default_mapped_model" field. It is called by the builders before save.
 	DefaultMappedModelValidator func(string) error
+	// DefaultRequireOauthOnly holds the default value on creation for the "require_oauth_only" field.
+	DefaultRequireOauthOnly bool
+	// DefaultRequirePrivacySet holds the default value on creation for the "require_privacy_set" field.
+	DefaultRequirePrivacySet bool
 )
 
 // OrderOption defines the ordering options for the Group queries.
@@ -326,31 +338,6 @@ func ByImagePrice4k(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldImagePrice4k, opts...).ToFunc()
 }
 
-// BySoraImagePrice360 orders the results by the sora_image_price_360 field.
-func BySoraImagePrice360(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSoraImagePrice360, opts...).ToFunc()
-}
-
-// BySoraImagePrice540 orders the results by the sora_image_price_540 field.
-func BySoraImagePrice540(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSoraImagePrice540, opts...).ToFunc()
-}
-
-// BySoraVideoPricePerRequest orders the results by the sora_video_price_per_request field.
-func BySoraVideoPricePerRequest(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSoraVideoPricePerRequest, opts...).ToFunc()
-}
-
-// BySoraVideoPricePerRequestHd orders the results by the sora_video_price_per_request_hd field.
-func BySoraVideoPricePerRequestHd(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSoraVideoPricePerRequestHd, opts...).ToFunc()
-}
-
-// BySoraStorageQuotaBytes orders the results by the sora_storage_quota_bytes field.
-func BySoraStorageQuotaBytes(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSoraStorageQuotaBytes, opts...).ToFunc()
-}
-
 // ByClaudeCodeOnly orders the results by the claude_code_only field.
 func ByClaudeCodeOnly(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldClaudeCodeOnly, opts...).ToFunc()
@@ -389,6 +376,16 @@ func ByAllowMessagesDispatch(opts ...sql.OrderTermOption) OrderOption {
 // ByDefaultMappedModel orders the results by the default_mapped_model field.
 func ByDefaultMappedModel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDefaultMappedModel, opts...).ToFunc()
+}
+
+// ByRequireOauthOnly orders the results by the require_oauth_only field.
+func ByRequireOauthOnly(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequireOauthOnly, opts...).ToFunc()
+}
+
+// ByRequirePrivacySet orders the results by the require_privacy_set field.
+func ByRequirePrivacySet(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequirePrivacySet, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.
@@ -447,6 +444,20 @@ func ByAccounts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByAllowedUsersCount orders the results by allowed_users count.
+func ByAllowedUsersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAllowedUsersStep(), opts...)
+	}
+}
+
+// ByAllowedUsers orders the results by allowed_users terms.
+func ByAllowedUsers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAllowedUsersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByAccountGroupsCount orders the results by account_groups count.
 func ByAccountGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -458,6 +469,20 @@ func ByAccountGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 func ByAccountGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newAccountGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
+func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newUserAllowedGroupsStep(), opts...)
+	}
+}
+
+// ByUserAllowedGroups orders the results by user_allowed_groups terms.
+func ByUserAllowedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newUserAllowedGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 func newAPIKeysStep() *sqlgraph.Step {
@@ -488,10 +513,24 @@ func newAccountsStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.M2M, true, AccountsTable, AccountsPrimaryKey...),
 	)
 }
+func newAllowedUsersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AllowedUsersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, true, AllowedUsersTable, AllowedUsersPrimaryKey...),
+	)
+}
 func newAccountGroupsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(AccountGroupsInverseTable, AccountGroupsColumn),
 		sqlgraph.Edge(sqlgraph.O2M, true, AccountGroupsTable, AccountGroupsColumn),
+	)
+}
+func newUserAllowedGroupsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(UserAllowedGroupsInverseTable, UserAllowedGroupsColumn),
+		sqlgraph.Edge(sqlgraph.O2M, true, UserAllowedGroupsTable, UserAllowedGroupsColumn),
 	)
 }

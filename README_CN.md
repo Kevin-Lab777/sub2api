@@ -12,7 +12,7 @@
 
 **AI API 网关平台 - 订阅配额分发管理**
 
-[English](README.md) | 中文
+[English](README.md) | 中文 | [日本語](README_JA.md)
 
 </div>
 
@@ -44,13 +44,31 @@ Sub2API 是一个 AI API 网关平台，用于分发和管理 AI 产品订阅的
 - **管理后台** - Web 界面进行监控和管理
 - **外部系统集成** - 支持通过 iframe 嵌入外部系统（如支付、工单等），扩展管理后台功能
 
-## 不想自建？试试官方中转
+## ❤️ 赞助商
+
+> [想出现在这里？](mailto:support@pincc.ai)
 
 <table>
 <tr>
-<td width="180" align="center" valign="middle"><a href="https://shop.pincc.ai/"><img src="assets/partners/logos/pincc-logo.png" alt="pincc" width="120"></a></td>
+<td width="180" align="center" valign="middle"><a href="https://shop.pincc.ai/"><img src="assets/partners/logos/pincc-logo.png" alt="pincc" width="150"></a></td>
 <td valign="middle"><b><a href="https://shop.pincc.ai/">PinCC</a></b> 是基于 Sub2API 搭建的官方中转服务，提供 Claude Code、Codex、Gemini 等主流模型的稳定中转，开箱即用，免去自建部署与运维烦恼。</td>
 </tr>
+
+<tr>
+<td width="180"><a href="https://www.packyapi.com/register?aff=sub2api"><img src="assets/partners/logos/packycode.png" alt="PackyCode" width="150"></a></td>
+<td>感谢 PackyCode 赞助了本项目！PackyCode 是一家稳定、高效的API中转服务商，提供 Claude Code、Codex、Gemini 等多种中转服务。PackyCode 为本软件的用户提供了特别优惠，使用<a href="https://www.packyapi.com/register?aff=sub2api">此链接</a>注册并在充值时填写"sub2api"优惠码，首次充值可以享受9折优惠！</td>
+</tr>
+
+<tr>
+<td width="180"><a href="https://poixe.com/i/sub2api"><img src="assets/partners/logos/poixe.png" alt="PoixeAI" width="150"></a></td>
+<td>感谢 Poixe AI 赞助了本项目！Poixe AI 提供可靠的 AI 模型接口服务，您可以使用平台提供的 LLM API 接口轻松构建 AI 产品，同时也可以成为供应商，为平台提供大模型资源以赚取收益。通过 <a href="https://poixe.com/i/sub2api">此链接</a> 专属链接注册，充值额外赠送 $5 美金</td>
+</tr>
+
+<tr>
+<td width="180"><a href="https://ctok.ai"><img src="assets/partners/logos/ctok.png" alt="CTok" width="150"></a></td>
+<td>感谢 CTok.ai 赞助了本项目！CTok.ai 致力于打造一站式 AI 编程工具服务平台。我们提供 Claude Code 专业套餐及技术社群服务，同时支持 Google Gemini 和 OpenAI Codex。通过精心设计的套餐方案和专业的技术社群，为开发者提供稳定的服务保障和持续的技术支持，让 AI 辅助编程真正成为开发者的生产力工具。点击<a href="https://ctok.ai">这里</a>注册！</td>
+</tr>
+
 </table>
 
 ## 生态项目
@@ -177,10 +195,10 @@ mkdir -p sub2api-deploy && cd sub2api-deploy
 curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/docker-deploy.sh | bash
 
 # 启动服务
-docker-compose up -d
+docker compose up -d
 
 # 查看日志
-docker-compose logs -f sub2api
+docker compose logs -f sub2api
 ```
 
 **脚本功能：**
@@ -244,16 +262,16 @@ mkdir -p data postgres_data redis_data
 
 # 5. 启动所有服务
 # 选项 A：本地目录版（推荐 - 易于迁移）
-docker-compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml up -d
 
 # 选项 B：命名卷版（简单设置）
-docker-compose up -d
+docker compose up -d
 
 # 6. 查看状态
-docker-compose -f docker-compose.local.yml ps
+docker compose -f docker-compose.local.yml ps
 
 # 7. 查看日志
-docker-compose -f docker-compose.local.yml logs -f sub2api
+docker compose -f docker-compose.local.yml logs -f sub2api
 ```
 
 #### 部署版本对比
@@ -283,15 +301,15 @@ docker-compose -f docker-compose.local.yml logs -f sub2api
 
 如果管理员密码是自动生成的，在日志中查找：
 ```bash
-docker-compose -f docker-compose.local.yml logs sub2api | grep "admin password"
+docker compose -f docker-compose.local.yml logs sub2api | grep "admin password"
 ```
 
 #### 升级
 
 ```bash
 # 拉取最新镜像并重建容器
-docker-compose -f docker-compose.local.yml pull
-docker-compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml pull
+docker compose -f docker-compose.local.yml up -d
 ```
 
 #### 轻松迁移（本地目录版）
@@ -300,7 +318,7 @@ docker-compose -f docker-compose.local.yml up -d
 
 ```bash
 # 源服务器
-docker-compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml down
 cd ..
 tar czf sub2api-complete.tar.gz sub2api-deploy/
 
@@ -310,23 +328,23 @@ scp sub2api-complete.tar.gz user@new-server:/path/
 # 新服务器
 tar xzf sub2api-complete.tar.gz
 cd sub2api-deploy/
-docker-compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml up -d
 ```
 
 #### 常用命令
 
 ```bash
 # 停止所有服务
-docker-compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml down
 
 # 重启
-docker-compose -f docker-compose.local.yml restart
+docker compose -f docker-compose.local.yml restart
 
 # 查看所有日志
-docker-compose -f docker-compose.local.yml logs -f
+docker compose -f docker-compose.local.yml logs -f
 
 # 删除所有数据（谨慎！）
-docker-compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml down
 rm -rf data/ postgres_data/ redis_data/
 ```
 

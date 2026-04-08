@@ -12,7 +12,7 @@
 
 **AI API Gateway Platform for Subscription Quota Distribution**
 
-English | [中文](README_CN.md)
+English | [中文](README_CN.md) | [日本語](README_JA.md)
 
 </div>
 
@@ -45,12 +45,29 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 - **Admin Dashboard** - Web interface for monitoring and management
 - **External System Integration** - Embed external systems (e.g. payment, ticketing) via iframe to extend the admin dashboard
 
-## Don't Want to Self-Host?
+## ❤️ Sponsors
+
+> [Want to appear here?](mailto:support@pincc.ai)
 
 <table>
 <tr>
-<td width="180" align="center" valign="middle"><a href="https://shop.pincc.ai/"><img src="assets/partners/logos/pincc-logo.png" alt="pincc" width="120"></a></td>
+<td width="180" align="center" valign="middle"><a href="https://shop.pincc.ai/"><img src="assets/partners/logos/pincc-logo.png" alt="pincc" width="150"></a></td>
 <td valign="middle"><b><a href="https://shop.pincc.ai/">PinCC</a></b> is the official relay service built on Sub2API, offering stable access to Claude Code, Codex, Gemini and other popular models — ready to use, no deployment or maintenance required.</td>
+</tr>
+
+<tr>
+<td width="180"><a href="https://www.packyapi.com/register?aff=sub2api"><img src="assets/partners/logos/packycode.png" alt="PackyCode" width="150"></a></td>
+<td>Thanks to PackyCode for sponsoring this project! PackyCode is a reliable and efficient API relay service provider, offering relay services for Claude Code, Codex, Gemini, and more. PackyCode provides special discounts for our software users: register using <a href="https://www.packyapi.com/register?aff=sub2api">this link</a> and enter the "sub2api" promo code during first recharge to get 10% off.</td>
+</tr>
+
+<tr>
+<td width="180"><a href="https://poixe.com/i/sub2api"><img src="assets/partners/logos/poixe.png" alt="PoixeAi" width="150"></a></td>
+<td>Thanks to Poixe Ai for sponsoring this project! Poixe AI provides reliable LLM API services. You can leverage the platform's API endpoints to seamlessly build AI-powered products. Additionally, you can become a vendor by providing AI API resources to the platform and earn revenue. Register through the exclusive <a href="https://poixe.com/i/sub2api">sub2api</a> referral link and receive a bonus of $5 USD on your first top-up.</td>
+</tr>
+
+<tr>
+<td width="180"><a href="https://ctok.ai"><img src="assets/partners/logos/ctok.png" alt="CTok" width="150"></a></td>
+<td>Thanks to CTok.ai for sponsoring this project! CTok.ai is dedicated to building a one-stop AI programming tool service platform. We offer professional Claude Code packages and technical community services, with support for Google Gemini and OpenAI Codex. Through carefully designed plans and a professional tech community, we provide developers with reliable service guarantees and continuous technical support, making AI-assisted programming a true productivity tool. Click <a href="https://ctok.ai">here</a> to register!</td>
 </tr>
 </table>
 
@@ -178,10 +195,10 @@ mkdir -p sub2api-deploy && cd sub2api-deploy
 curl -sSL https://raw.githubusercontent.com/Kevin-Lab777/sub2api/main/deploy/docker-deploy.sh | bash
 
 # Start services
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f sub2api
+docker compose logs -f sub2api
 ```
 
 **What the script does:**
@@ -245,16 +262,16 @@ mkdir -p data postgres_data redis_data
 
 # 5. Start all services
 # Option A: Local directory version (recommended - easy migration)
-docker-compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml up -d
 
 # Option B: Named volumes version (simple setup)
-docker-compose up -d
+docker compose up -d
 
 # 6. Check status
-docker-compose -f docker-compose.local.yml ps
+docker compose -f docker-compose.local.yml ps
 
 # 7. View logs
-docker-compose -f docker-compose.local.yml logs -f sub2api
+docker compose -f docker-compose.local.yml logs -f sub2api
 ```
 
 #### Deployment Versions
@@ -272,15 +289,15 @@ Open `http://YOUR_SERVER_IP:8080` in your browser.
 
 If admin password was auto-generated, find it in logs:
 ```bash
-docker-compose -f docker-compose.local.yml logs sub2api | grep "admin password"
+docker compose -f docker-compose.local.yml logs sub2api | grep "admin password"
 ```
 
 #### Upgrade
 
 ```bash
 # Pull latest image and recreate container
-docker-compose -f docker-compose.local.yml pull
-docker-compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml pull
+docker compose -f docker-compose.local.yml up -d
 ```
 
 #### Easy Migration (Local Directory Version)
@@ -289,7 +306,7 @@ When using `docker-compose.local.yml`, migrate to a new server easily:
 
 ```bash
 # On source server
-docker-compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml down
 cd ..
 tar czf sub2api-complete.tar.gz sub2api-deploy/
 
@@ -299,23 +316,23 @@ scp sub2api-complete.tar.gz user@new-server:/path/
 # On new server
 tar xzf sub2api-complete.tar.gz
 cd sub2api-deploy/
-docker-compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml up -d
 ```
 
 #### Useful Commands
 
 ```bash
 # Stop all services
-docker-compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml down
 
 # Restart
-docker-compose -f docker-compose.local.yml restart
+docker compose -f docker-compose.local.yml restart
 
 # View all logs
-docker-compose -f docker-compose.local.yml logs -f
+docker compose -f docker-compose.local.yml logs -f
 
 # Remove all data (caution!)
-docker-compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml down
 rm -rf data/ postgres_data/ redis_data/
 ```
 

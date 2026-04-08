@@ -17,8 +17,6 @@ import (
 // UserAllowedGroup is the model entity for the UserAllowedGroup schema.
 type UserAllowedGroup struct {
 	config `json:"-"`
-	// ID of the ent.
-	ID int64 `json:"id,omitempty"`
 	// UserID holds the value of the "user_id" field.
 	UserID int64 `json:"user_id,omitempty"`
 	// GroupID holds the value of the "group_id" field.
@@ -69,7 +67,7 @@ func (*UserAllowedGroup) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case userallowedgroup.FieldID, userallowedgroup.FieldUserID, userallowedgroup.FieldGroupID:
+		case userallowedgroup.FieldUserID, userallowedgroup.FieldGroupID:
 			values[i] = new(sql.NullInt64)
 		case userallowedgroup.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -88,12 +86,6 @@ func (_m *UserAllowedGroup) assignValues(columns []string, values []any) error {
 	}
 	for i := range columns {
 		switch columns[i] {
-		case userallowedgroup.FieldID:
-			value, ok := values[i].(*sql.NullInt64)
-			if !ok {
-				return fmt.Errorf("unexpected type %T for field id", value)
-			}
-			_m.ID = int64(value.Int64)
 		case userallowedgroup.FieldUserID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field user_id", values[i])
@@ -157,7 +149,6 @@ func (_m *UserAllowedGroup) Unwrap() *UserAllowedGroup {
 func (_m *UserAllowedGroup) String() string {
 	var builder strings.Builder
 	builder.WriteString("UserAllowedGroup(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
 	builder.WriteString(", ")

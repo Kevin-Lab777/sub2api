@@ -132,17 +132,13 @@ func (_c *UserAllowedGroupCreate) sqlSave(ctx context.Context) (*UserAllowedGrou
 		}
 		return nil, err
 	}
-	id := _spec.ID.Value.(int64)
-	_node.ID = int64(id)
-	_c.mutation.id = &_node.ID
-	_c.mutation.done = true
 	return _node, nil
 }
 
 func (_c *UserAllowedGroupCreate) createSpec() (*UserAllowedGroup, *sqlgraph.CreateSpec) {
 	var (
 		_node = &UserAllowedGroup{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(userallowedgroup.Table, sqlgraph.NewFieldSpec(userallowedgroup.FieldID, field.TypeInt64))
+		_spec = sqlgraph.NewCreateSpec(userallowedgroup.Table, nil)
 	)
 	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CreatedAt(); ok {
@@ -347,24 +343,6 @@ func (u *UserAllowedGroupUpsertOne) ExecX(ctx context.Context) {
 	}
 }
 
-// Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *UserAllowedGroupUpsertOne) ID(ctx context.Context) (id int64, err error) {
-	node, err := u.create.Save(ctx)
-	if err != nil {
-		return id, err
-	}
-	return node.ID, nil
-}
-
-// IDX is like ID, but panics if an error occurs.
-func (u *UserAllowedGroupUpsertOne) IDX(ctx context.Context) int64 {
-	id, err := u.ID(ctx)
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
-
 // UserAllowedGroupCreateBulk is the builder for creating many UserAllowedGroup entities in bulk.
 type UserAllowedGroupCreateBulk struct {
 	config
@@ -410,11 +388,6 @@ func (_c *UserAllowedGroupCreateBulk) Save(ctx context.Context) ([]*UserAllowedG
 				}
 				if err != nil {
 					return nil, err
-				}
-				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil {
-					id := specs[i].ID.Value.(int64)
-					nodes[i].ID = int64(id)
 				}
 				mutation.done = true
 				return nodes[i], nil

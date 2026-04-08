@@ -7,25 +7,27 @@ import (
 // AdminHandlers contains all admin-related HTTP handlers
 // [LITE] 移除了: User, Redeem, Promo, UserAttribute
 type AdminHandlers struct {
-	Dashboard        *admin.DashboardHandler
-	Group            *admin.GroupHandler
-	Account          *admin.AccountHandler
-	Announcement     *admin.AnnouncementHandler
-	DataManagement   *admin.DataManagementHandler
-	Backup           *admin.BackupHandler
-	OAuth            *admin.OAuthHandler
-	OpenAIOAuth      *admin.OpenAIOAuthHandler
-	GeminiOAuth      *admin.GeminiOAuthHandler
-	AntigravityOAuth *admin.AntigravityOAuthHandler
-	Proxy            *admin.ProxyHandler
-	Setting          *admin.SettingHandler
-	Ops              *admin.OpsHandler
-	System           *admin.SystemHandler
-	Subscription     *admin.SubscriptionHandler
-	Usage            *admin.UsageHandler
-	ErrorPassthrough *admin.ErrorPassthroughHandler
-	APIKey           *admin.AdminAPIKeyHandler
-	ScheduledTest    *admin.ScheduledTestHandler
+	Dashboard             *admin.DashboardHandler
+	Group                 *admin.GroupHandler
+	Account               *admin.AccountHandler
+	Announcement          *admin.AnnouncementHandler
+	DataManagement        *admin.DataManagementHandler
+	Backup                *admin.BackupHandler
+	OAuth                 *admin.OAuthHandler
+	OpenAIOAuth           *admin.OpenAIOAuthHandler
+	GeminiOAuth           *admin.GeminiOAuthHandler
+	AntigravityOAuth      *admin.AntigravityOAuthHandler
+	Proxy                 *admin.ProxyHandler
+	Setting               *admin.SettingHandler
+	Ops                   *admin.OpsHandler
+	System                *admin.SystemHandler
+	Subscription          *admin.SubscriptionHandler
+	Usage                 *admin.UsageHandler
+	ErrorPassthrough      *admin.ErrorPassthroughHandler
+	TLSFingerprintProfile *admin.TLSFingerprintProfileHandler
+	APIKey                *admin.AdminAPIKeyHandler
+	ScheduledTest         *admin.ScheduledTestHandler
+	Channel               *admin.ChannelHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -39,8 +41,6 @@ type Handlers struct {
 	Admin         *AdminHandlers
 	Gateway       *GatewayHandler
 	OpenAIGateway *OpenAIGatewayHandler
-	SoraGateway   *SoraGatewayHandler
-	SoraClient    *SoraClientHandler
 	Setting       *SettingHandler
 	Public        *PublicHandler
 	Totp          *TotpHandler

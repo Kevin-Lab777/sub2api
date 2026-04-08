@@ -26,6 +26,7 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/proxy"
 	"github.com/Kevin-Lab777/sub2api/ent/securitysecret"
 	"github.com/Kevin-Lab777/sub2api/ent/setting"
+	"github.com/Kevin-Lab777/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Kevin-Lab777/sub2api/ent/usagecleanuptask"
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
@@ -62,6 +63,8 @@ type Client struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
+	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
 	UsageCleanupTask *UsageCleanupTaskClient
 	// UsageLog is the client for interacting with the UsageLog builders.
@@ -94,6 +97,7 @@ func (c *Client) init() {
 	c.Proxy = NewProxyClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
+	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
 	c.User = NewUserClient(c.config)
@@ -189,24 +193,25 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                  ctx,
-		config:               cfg,
-		APIKey:               NewAPIKeyClient(cfg),
-		Account:              NewAccountClient(cfg),
-		AccountGroup:         NewAccountGroupClient(cfg),
-		Announcement:         NewAnnouncementClient(cfg),
-		AnnouncementRead:     NewAnnouncementReadClient(cfg),
-		ErrorPassthroughRule: NewErrorPassthroughRuleClient(cfg),
-		Group:                NewGroupClient(cfg),
-		IdempotencyRecord:    NewIdempotencyRecordClient(cfg),
-		Proxy:                NewProxyClient(cfg),
-		SecuritySecret:       NewSecuritySecretClient(cfg),
-		Setting:              NewSettingClient(cfg),
-		UsageCleanupTask:     NewUsageCleanupTaskClient(cfg),
-		UsageLog:             NewUsageLogClient(cfg),
-		User:                 NewUserClient(cfg),
-		UserAllowedGroup:     NewUserAllowedGroupClient(cfg),
-		UserSubscription:     NewUserSubscriptionClient(cfg),
+		ctx:                   ctx,
+		config:                cfg,
+		APIKey:                NewAPIKeyClient(cfg),
+		Account:               NewAccountClient(cfg),
+		AccountGroup:          NewAccountGroupClient(cfg),
+		Announcement:          NewAnnouncementClient(cfg),
+		AnnouncementRead:      NewAnnouncementReadClient(cfg),
+		ErrorPassthroughRule:  NewErrorPassthroughRuleClient(cfg),
+		Group:                 NewGroupClient(cfg),
+		IdempotencyRecord:     NewIdempotencyRecordClient(cfg),
+		Proxy:                 NewProxyClient(cfg),
+		SecuritySecret:        NewSecuritySecretClient(cfg),
+		Setting:               NewSettingClient(cfg),
+		TLSFingerprintProfile: NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:      NewUsageCleanupTaskClient(cfg),
+		UsageLog:              NewUsageLogClient(cfg),
+		User:                  NewUserClient(cfg),
+		UserAllowedGroup:      NewUserAllowedGroupClient(cfg),
+		UserSubscription:      NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -224,24 +229,25 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                  ctx,
-		config:               cfg,
-		APIKey:               NewAPIKeyClient(cfg),
-		Account:              NewAccountClient(cfg),
-		AccountGroup:         NewAccountGroupClient(cfg),
-		Announcement:         NewAnnouncementClient(cfg),
-		AnnouncementRead:     NewAnnouncementReadClient(cfg),
-		ErrorPassthroughRule: NewErrorPassthroughRuleClient(cfg),
-		Group:                NewGroupClient(cfg),
-		IdempotencyRecord:    NewIdempotencyRecordClient(cfg),
-		Proxy:                NewProxyClient(cfg),
-		SecuritySecret:       NewSecuritySecretClient(cfg),
-		Setting:              NewSettingClient(cfg),
-		UsageCleanupTask:     NewUsageCleanupTaskClient(cfg),
-		UsageLog:             NewUsageLogClient(cfg),
-		User:                 NewUserClient(cfg),
-		UserAllowedGroup:     NewUserAllowedGroupClient(cfg),
-		UserSubscription:     NewUserSubscriptionClient(cfg),
+		ctx:                   ctx,
+		config:                cfg,
+		APIKey:                NewAPIKeyClient(cfg),
+		Account:               NewAccountClient(cfg),
+		AccountGroup:          NewAccountGroupClient(cfg),
+		Announcement:          NewAnnouncementClient(cfg),
+		AnnouncementRead:      NewAnnouncementReadClient(cfg),
+		ErrorPassthroughRule:  NewErrorPassthroughRuleClient(cfg),
+		Group:                 NewGroupClient(cfg),
+		IdempotencyRecord:     NewIdempotencyRecordClient(cfg),
+		Proxy:                 NewProxyClient(cfg),
+		SecuritySecret:        NewSecuritySecretClient(cfg),
+		Setting:               NewSettingClient(cfg),
+		TLSFingerprintProfile: NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:      NewUsageCleanupTaskClient(cfg),
+		UsageLog:              NewUsageLogClient(cfg),
+		User:                  NewUserClient(cfg),
+		UserAllowedGroup:      NewUserAllowedGroupClient(cfg),
+		UserSubscription:      NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -273,8 +279,8 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.Proxy,
-		c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserSubscription,
+		c.SecuritySecret, c.Setting, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -286,8 +292,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.Proxy,
-		c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserSubscription,
+		c.SecuritySecret, c.Setting, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -318,6 +324,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
 		return c.Setting.mutate(ctx, m)
+	case *TLSFingerprintProfileMutation:
+		return c.TLSFingerprintProfile.mutate(ctx, m)
 	case *UsageCleanupTaskMutation:
 		return c.UsageCleanupTask.mutate(ctx, m)
 	case *UsageLogMutation:
@@ -1450,6 +1458,22 @@ func (c *GroupClient) QueryAccounts(_m *Group) *AccountQuery {
 	return query
 }
 
+// QueryAllowedUsers queries the allowed_users edge of a Group.
+func (c *GroupClient) QueryAllowedUsers(_m *Group) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, group.AllowedUsersTable, group.AllowedUsersPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryAccountGroups queries the account_groups edge of a Group.
 func (c *GroupClient) QueryAccountGroups(_m *Group) *AccountGroupQuery {
 	query := (&AccountGroupClient{config: c.config}).Query()
@@ -1459,6 +1483,22 @@ func (c *GroupClient) QueryAccountGroups(_m *Group) *AccountGroupQuery {
 			sqlgraph.From(group.Table, group.FieldID, id),
 			sqlgraph.To(accountgroup.Table, accountgroup.GroupColumn),
 			sqlgraph.Edge(sqlgraph.O2M, true, group.AccountGroupsTable, group.AccountGroupsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUserAllowedGroups queries the user_allowed_groups edge of a Group.
+func (c *GroupClient) QueryUserAllowedGroups(_m *Group) *UserAllowedGroupQuery {
+	query := (&UserAllowedGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(group.Table, group.FieldID, id),
+			sqlgraph.To(userallowedgroup.Table, userallowedgroup.GroupColumn),
+			sqlgraph.Edge(sqlgraph.O2M, true, group.UserAllowedGroupsTable, group.UserAllowedGroupsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -2043,6 +2083,139 @@ func (c *SettingClient) mutate(ctx context.Context, m *SettingMutation) (Value, 
 	}
 }
 
+// TLSFingerprintProfileClient is a client for the TLSFingerprintProfile schema.
+type TLSFingerprintProfileClient struct {
+	config
+}
+
+// NewTLSFingerprintProfileClient returns a client for the TLSFingerprintProfile from the given config.
+func NewTLSFingerprintProfileClient(c config) *TLSFingerprintProfileClient {
+	return &TLSFingerprintProfileClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `tlsfingerprintprofile.Hooks(f(g(h())))`.
+func (c *TLSFingerprintProfileClient) Use(hooks ...Hook) {
+	c.hooks.TLSFingerprintProfile = append(c.hooks.TLSFingerprintProfile, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `tlsfingerprintprofile.Intercept(f(g(h())))`.
+func (c *TLSFingerprintProfileClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TLSFingerprintProfile = append(c.inters.TLSFingerprintProfile, interceptors...)
+}
+
+// Create returns a builder for creating a TLSFingerprintProfile entity.
+func (c *TLSFingerprintProfileClient) Create() *TLSFingerprintProfileCreate {
+	mutation := newTLSFingerprintProfileMutation(c.config, OpCreate)
+	return &TLSFingerprintProfileCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TLSFingerprintProfile entities.
+func (c *TLSFingerprintProfileClient) CreateBulk(builders ...*TLSFingerprintProfileCreate) *TLSFingerprintProfileCreateBulk {
+	return &TLSFingerprintProfileCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TLSFingerprintProfileClient) MapCreateBulk(slice any, setFunc func(*TLSFingerprintProfileCreate, int)) *TLSFingerprintProfileCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TLSFingerprintProfileCreateBulk{err: fmt.Errorf("calling to TLSFingerprintProfileClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TLSFingerprintProfileCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TLSFingerprintProfileCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TLSFingerprintProfile.
+func (c *TLSFingerprintProfileClient) Update() *TLSFingerprintProfileUpdate {
+	mutation := newTLSFingerprintProfileMutation(c.config, OpUpdate)
+	return &TLSFingerprintProfileUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TLSFingerprintProfileClient) UpdateOne(_m *TLSFingerprintProfile) *TLSFingerprintProfileUpdateOne {
+	mutation := newTLSFingerprintProfileMutation(c.config, OpUpdateOne, withTLSFingerprintProfile(_m))
+	return &TLSFingerprintProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TLSFingerprintProfileClient) UpdateOneID(id int64) *TLSFingerprintProfileUpdateOne {
+	mutation := newTLSFingerprintProfileMutation(c.config, OpUpdateOne, withTLSFingerprintProfileID(id))
+	return &TLSFingerprintProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TLSFingerprintProfile.
+func (c *TLSFingerprintProfileClient) Delete() *TLSFingerprintProfileDelete {
+	mutation := newTLSFingerprintProfileMutation(c.config, OpDelete)
+	return &TLSFingerprintProfileDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TLSFingerprintProfileClient) DeleteOne(_m *TLSFingerprintProfile) *TLSFingerprintProfileDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TLSFingerprintProfileClient) DeleteOneID(id int64) *TLSFingerprintProfileDeleteOne {
+	builder := c.Delete().Where(tlsfingerprintprofile.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TLSFingerprintProfileDeleteOne{builder}
+}
+
+// Query returns a query builder for TLSFingerprintProfile.
+func (c *TLSFingerprintProfileClient) Query() *TLSFingerprintProfileQuery {
+	return &TLSFingerprintProfileQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTLSFingerprintProfile},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TLSFingerprintProfile entity by its id.
+func (c *TLSFingerprintProfileClient) Get(ctx context.Context, id int64) (*TLSFingerprintProfile, error) {
+	return c.Query().Where(tlsfingerprintprofile.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TLSFingerprintProfileClient) GetX(ctx context.Context, id int64) *TLSFingerprintProfile {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TLSFingerprintProfileClient) Hooks() []Hook {
+	return c.hooks.TLSFingerprintProfile
+}
+
+// Interceptors returns the client interceptors.
+func (c *TLSFingerprintProfileClient) Interceptors() []Interceptor {
+	return c.inters.TLSFingerprintProfile
+}
+
+func (c *TLSFingerprintProfileClient) mutate(ctx context.Context, m *TLSFingerprintProfileMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TLSFingerprintProfileCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TLSFingerprintProfileUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TLSFingerprintProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TLSFingerprintProfileDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TLSFingerprintProfile mutation op: %q", m.Op())
+	}
+}
+
 // UsageCleanupTaskClient is a client for the UsageCleanupTask schema.
 type UsageCleanupTaskClient struct {
 	config
@@ -2561,6 +2734,22 @@ func (c *UserClient) QueryAnnouncementReads(_m *User) *AnnouncementReadQuery {
 	return query
 }
 
+// QueryAllowedGroups queries the allowed_groups edge of a User.
+func (c *UserClient) QueryAllowedGroups(_m *User) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, user.AllowedGroupsTable, user.AllowedGroupsPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUsageLogs queries the usage_logs edge of a User.
 func (c *UserClient) QueryUsageLogs(_m *User) *UsageLogQuery {
 	query := (&UsageLogClient{config: c.config}).Query()
@@ -2570,6 +2759,22 @@ func (c *UserClient) QueryUsageLogs(_m *User) *UsageLogQuery {
 			sqlgraph.From(user.Table, user.FieldID, id),
 			sqlgraph.To(usagelog.Table, usagelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.UsageLogsTable, user.UsageLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
+func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
+	query := (&UserAllowedGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(userallowedgroup.Table, userallowedgroup.UserColumn),
+			sqlgraph.Edge(sqlgraph.O2M, true, user.UserAllowedGroupsTable, user.UserAllowedGroupsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -2660,13 +2865,9 @@ func (c *UserAllowedGroupClient) Update() *UserAllowedGroupUpdate {
 
 // UpdateOne returns an update builder for the given entity.
 func (c *UserAllowedGroupClient) UpdateOne(_m *UserAllowedGroup) *UserAllowedGroupUpdateOne {
-	mutation := newUserAllowedGroupMutation(c.config, OpUpdateOne, withUserAllowedGroup(_m))
-	return &UserAllowedGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *UserAllowedGroupClient) UpdateOneID(id int64) *UserAllowedGroupUpdateOne {
-	mutation := newUserAllowedGroupMutation(c.config, OpUpdateOne, withUserAllowedGroupID(id))
+	mutation := newUserAllowedGroupMutation(c.config, OpUpdateOne)
+	mutation.user = &_m.UserID
+	mutation.group = &_m.GroupID
 	return &UserAllowedGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
 
@@ -2674,19 +2875,6 @@ func (c *UserAllowedGroupClient) UpdateOneID(id int64) *UserAllowedGroupUpdateOn
 func (c *UserAllowedGroupClient) Delete() *UserAllowedGroupDelete {
 	mutation := newUserAllowedGroupMutation(c.config, OpDelete)
 	return &UserAllowedGroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *UserAllowedGroupClient) DeleteOne(_m *UserAllowedGroup) *UserAllowedGroupDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *UserAllowedGroupClient) DeleteOneID(id int64) *UserAllowedGroupDeleteOne {
-	builder := c.Delete().Where(userallowedgroup.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &UserAllowedGroupDeleteOne{builder}
 }
 
 // Query returns a query builder for UserAllowedGroup.
@@ -2698,50 +2886,18 @@ func (c *UserAllowedGroupClient) Query() *UserAllowedGroupQuery {
 	}
 }
 
-// Get returns a UserAllowedGroup entity by its id.
-func (c *UserAllowedGroupClient) Get(ctx context.Context, id int64) (*UserAllowedGroup, error) {
-	return c.Query().Where(userallowedgroup.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *UserAllowedGroupClient) GetX(ctx context.Context, id int64) *UserAllowedGroup {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
 // QueryUser queries the user edge of a UserAllowedGroup.
 func (c *UserAllowedGroupClient) QueryUser(_m *UserAllowedGroup) *UserQuery {
-	query := (&UserClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(userallowedgroup.Table, userallowedgroup.FieldID, id),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, userallowedgroup.UserTable, userallowedgroup.UserColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
+	return c.Query().
+		Where(userallowedgroup.UserID(_m.UserID), userallowedgroup.GroupID(_m.GroupID)).
+		QueryUser()
 }
 
 // QueryGroup queries the group edge of a UserAllowedGroup.
 func (c *UserAllowedGroupClient) QueryGroup(_m *UserAllowedGroup) *GroupQuery {
-	query := (&GroupClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(userallowedgroup.Table, userallowedgroup.FieldID, id),
-			sqlgraph.To(group.Table, group.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, userallowedgroup.GroupTable, userallowedgroup.GroupColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
+	return c.Query().
+		Where(userallowedgroup.UserID(_m.UserID), userallowedgroup.GroupID(_m.GroupID)).
+		QueryGroup()
 }
 
 // Hooks returns the client hooks.
@@ -2973,12 +3129,13 @@ type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, IdempotencyRecord, Proxy, SecuritySecret, Setting,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserSubscription []ent.Hook
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, IdempotencyRecord, Proxy, SecuritySecret, Setting,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
 		UserSubscription []ent.Interceptor
 	}
 )

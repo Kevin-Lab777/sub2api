@@ -23,6 +23,7 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/proxy"
 	"github.com/Kevin-Lab777/sub2api/ent/securitysecret"
 	"github.com/Kevin-Lab777/sub2api/ent/setting"
+	"github.com/Kevin-Lab777/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Kevin-Lab777/sub2api/ent/usagecleanuptask"
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
@@ -88,22 +89,23 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			apikey.Table:               apikey.ValidColumn,
-			account.Table:              account.ValidColumn,
-			accountgroup.Table:         accountgroup.ValidColumn,
-			announcement.Table:         announcement.ValidColumn,
-			announcementread.Table:     announcementread.ValidColumn,
-			errorpassthroughrule.Table: errorpassthroughrule.ValidColumn,
-			group.Table:                group.ValidColumn,
-			idempotencyrecord.Table:    idempotencyrecord.ValidColumn,
-			proxy.Table:                proxy.ValidColumn,
-			securitysecret.Table:       securitysecret.ValidColumn,
-			setting.Table:              setting.ValidColumn,
-			usagecleanuptask.Table:     usagecleanuptask.ValidColumn,
-			usagelog.Table:             usagelog.ValidColumn,
-			user.Table:                 user.ValidColumn,
-			userallowedgroup.Table:     userallowedgroup.ValidColumn,
-			usersubscription.Table:     usersubscription.ValidColumn,
+			apikey.Table:                apikey.ValidColumn,
+			account.Table:               account.ValidColumn,
+			accountgroup.Table:          accountgroup.ValidColumn,
+			announcement.Table:          announcement.ValidColumn,
+			announcementread.Table:      announcementread.ValidColumn,
+			errorpassthroughrule.Table:  errorpassthroughrule.ValidColumn,
+			group.Table:                 group.ValidColumn,
+			idempotencyrecord.Table:     idempotencyrecord.ValidColumn,
+			proxy.Table:                 proxy.ValidColumn,
+			securitysecret.Table:        securitysecret.ValidColumn,
+			setting.Table:               setting.ValidColumn,
+			tlsfingerprintprofile.Table: tlsfingerprintprofile.ValidColumn,
+			usagecleanuptask.Table:      usagecleanuptask.ValidColumn,
+			usagelog.Table:              usagelog.ValidColumn,
+			user.Table:                  user.ValidColumn,
+			userallowedgroup.Table:      userallowedgroup.ValidColumn,
+			usersubscription.Table:      usersubscription.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

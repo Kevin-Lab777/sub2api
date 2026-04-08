@@ -43,10 +43,6 @@ const (
 	FieldTotpEnabled = "totp_enabled"
 	// FieldTotpEnabledAt holds the string denoting the totp_enabled_at field in the database.
 	FieldTotpEnabledAt = "totp_enabled_at"
-	// FieldSoraStorageQuotaBytes holds the string denoting the sora_storage_quota_bytes field in the database.
-	FieldSoraStorageQuotaBytes = "sora_storage_quota_bytes"
-	// FieldSoraStorageUsedBytes holds the string denoting the sora_storage_used_bytes field in the database.
-	FieldSoraStorageUsedBytes = "sora_storage_used_bytes"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
@@ -55,8 +51,12 @@ const (
 	EdgeAssignedSubscriptions = "assigned_subscriptions"
 	// EdgeAnnouncementReads holds the string denoting the announcement_reads edge name in mutations.
 	EdgeAnnouncementReads = "announcement_reads"
+	// EdgeAllowedGroups holds the string denoting the allowed_groups edge name in mutations.
+	EdgeAllowedGroups = "allowed_groups"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
+	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// APIKeysTable is the table that holds the api_keys relation/edge.
@@ -87,6 +87,11 @@ const (
 	AnnouncementReadsInverseTable = "announcement_reads"
 	// AnnouncementReadsColumn is the table column denoting the announcement_reads relation/edge.
 	AnnouncementReadsColumn = "user_id"
+	// AllowedGroupsTable is the table that holds the allowed_groups relation/edge. The primary key declared below.
+	AllowedGroupsTable = "user_allowed_groups"
+	// AllowedGroupsInverseTable is the table name for the Group entity.
+	// It exists in this package in order to avoid circular dependency with the "group" package.
+	AllowedGroupsInverseTable = "groups"
 	// UsageLogsTable is the table that holds the usage_logs relation/edge.
 	UsageLogsTable = "usage_logs"
 	// UsageLogsInverseTable is the table name for the UsageLog entity.
@@ -94,6 +99,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "user_id"
+	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
+	UserAllowedGroupsTable = "user_allowed_groups"
+	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
+	// It exists in this package in order to avoid circular dependency with the "userallowedgroup" package.
+	UserAllowedGroupsInverseTable = "user_allowed_groups"
+	// UserAllowedGroupsColumn is the table column denoting the user_allowed_groups relation/edge.
+	UserAllowedGroupsColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -113,9 +125,13 @@ var Columns = []string{
 	FieldTotpSecretEncrypted,
 	FieldTotpEnabled,
 	FieldTotpEnabledAt,
-	FieldSoraStorageQuotaBytes,
-	FieldSoraStorageUsedBytes,
 }
+
+var (
+	// AllowedGroupsPrimaryKey and AllowedGroupsColumn2 are the table columns denoting the
+	// primary key for the allowed_groups relation (M2M).
+	AllowedGroupsPrimaryKey = []string{"user_id", "group_id"}
+)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -165,10 +181,6 @@ var (
 	DefaultNotes string
 	// DefaultTotpEnabled holds the default value on creation for the "totp_enabled" field.
 	DefaultTotpEnabled bool
-	// DefaultSoraStorageQuotaBytes holds the default value on creation for the "sora_storage_quota_bytes" field.
-	DefaultSoraStorageQuotaBytes int64
-	// DefaultSoraStorageUsedBytes holds the default value on creation for the "sora_storage_used_bytes" field.
-	DefaultSoraStorageUsedBytes int64
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -249,16 +261,6 @@ func ByTotpEnabledAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotpEnabledAt, opts...).ToFunc()
 }
 
-// BySoraStorageQuotaBytes orders the results by the sora_storage_quota_bytes field.
-func BySoraStorageQuotaBytes(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSoraStorageQuotaBytes, opts...).ToFunc()
-}
-
-// BySoraStorageUsedBytes orders the results by the sora_storage_used_bytes field.
-func BySoraStorageUsedBytes(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSoraStorageUsedBytes, opts...).ToFunc()
-}
-
 // ByAPIKeysCount orders the results by api_keys count.
 func ByAPIKeysCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -315,6 +317,20 @@ func ByAnnouncementReads(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption
 	}
 }
 
+// ByAllowedGroupsCount orders the results by allowed_groups count.
+func ByAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAllowedGroupsStep(), opts...)
+	}
+}
+
+// ByAllowedGroups orders the results by allowed_groups terms.
+func ByAllowedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAllowedGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUsageLogsCount orders the results by usage_logs count.
 func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -326,6 +342,20 @@ func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
+func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newUserAllowedGroupsStep(), opts...)
+	}
+}
+
+// ByUserAllowedGroups orders the results by user_allowed_groups terms.
+func ByUserAllowedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newUserAllowedGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 func newAPIKeysStep() *sqlgraph.Step {
@@ -356,10 +386,24 @@ func newAnnouncementReadsStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, AnnouncementReadsTable, AnnouncementReadsColumn),
 	)
 }
+func newAllowedGroupsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AllowedGroupsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, false, AllowedGroupsTable, AllowedGroupsPrimaryKey...),
+	)
+}
 func newUsageLogsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newUserAllowedGroupsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(UserAllowedGroupsInverseTable, UserAllowedGroupsColumn),
+		sqlgraph.Edge(sqlgraph.O2M, true, UserAllowedGroupsTable, UserAllowedGroupsColumn),
 	)
 }

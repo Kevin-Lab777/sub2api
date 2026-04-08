@@ -7,7 +7,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/schema/field"
 	"github.com/Kevin-Lab777/sub2api/ent/predicate"
 	"github.com/Kevin-Lab777/sub2api/ent/userallowedgroup"
 )
@@ -40,7 +39,7 @@ func (_d *UserAllowedGroupDelete) ExecX(ctx context.Context) int {
 }
 
 func (_d *UserAllowedGroupDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(userallowedgroup.Table, sqlgraph.NewFieldSpec(userallowedgroup.FieldID, field.TypeInt64))
+	_spec := sqlgraph.NewDeleteSpec(userallowedgroup.Table, nil)
 	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {

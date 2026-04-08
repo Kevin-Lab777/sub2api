@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"entgo.io/ent/schema/field"
 	"github.com/Kevin-Lab777/sub2api/ent/group"
 	"github.com/Kevin-Lab777/sub2api/ent/predicate"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
@@ -76,7 +75,7 @@ func (_q *UserAllowedGroupQuery) QueryUser() *UserQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(userallowedgroup.Table, userallowedgroup.FieldID, selector),
+			sqlgraph.From(userallowedgroup.Table, userallowedgroup.UserColumn, selector),
 			sqlgraph.To(user.Table, user.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, userallowedgroup.UserTable, userallowedgroup.UserColumn),
 		)
@@ -98,7 +97,7 @@ func (_q *UserAllowedGroupQuery) QueryGroup() *GroupQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(userallowedgroup.Table, userallowedgroup.FieldID, selector),
+			sqlgraph.From(userallowedgroup.Table, userallowedgroup.GroupColumn, selector),
 			sqlgraph.To(group.Table, group.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, userallowedgroup.GroupTable, userallowedgroup.GroupColumn),
 		)
@@ -130,29 +129,6 @@ func (_q *UserAllowedGroupQuery) FirstX(ctx context.Context) *UserAllowedGroup {
 	return node
 }
 
-// FirstID returns the first UserAllowedGroup ID from the query.
-// Returns a *NotFoundError when no UserAllowedGroup ID was found.
-func (_q *UserAllowedGroupQuery) FirstID(ctx context.Context) (id int64, err error) {
-	var ids []int64
-	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
-		return
-	}
-	if len(ids) == 0 {
-		err = &NotFoundError{userallowedgroup.Label}
-		return
-	}
-	return ids[0], nil
-}
-
-// FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *UserAllowedGroupQuery) FirstIDX(ctx context.Context) int64 {
-	id, err := _q.FirstID(ctx)
-	if err != nil && !IsNotFound(err) {
-		panic(err)
-	}
-	return id
-}
-
 // Only returns a single UserAllowedGroup entity found by the query, ensuring it only returns one.
 // Returns a *NotSingularError when more than one UserAllowedGroup entity is found.
 // Returns a *NotFoundError when no UserAllowedGroup entities are found.
@@ -180,34 +156,6 @@ func (_q *UserAllowedGroupQuery) OnlyX(ctx context.Context) *UserAllowedGroup {
 	return node
 }
 
-// OnlyID is like Only, but returns the only UserAllowedGroup ID in the query.
-// Returns a *NotSingularError when more than one UserAllowedGroup ID is found.
-// Returns a *NotFoundError when no entities are found.
-func (_q *UserAllowedGroupQuery) OnlyID(ctx context.Context) (id int64, err error) {
-	var ids []int64
-	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
-		return
-	}
-	switch len(ids) {
-	case 1:
-		id = ids[0]
-	case 0:
-		err = &NotFoundError{userallowedgroup.Label}
-	default:
-		err = &NotSingularError{userallowedgroup.Label}
-	}
-	return
-}
-
-// OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *UserAllowedGroupQuery) OnlyIDX(ctx context.Context) int64 {
-	id, err := _q.OnlyID(ctx)
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
-
 // All executes the query and returns a list of UserAllowedGroups.
 func (_q *UserAllowedGroupQuery) All(ctx context.Context) ([]*UserAllowedGroup, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
@@ -225,27 +173,6 @@ func (_q *UserAllowedGroupQuery) AllX(ctx context.Context) []*UserAllowedGroup {
 		panic(err)
 	}
 	return nodes
-}
-
-// IDs executes the query and returns a list of UserAllowedGroup IDs.
-func (_q *UserAllowedGroupQuery) IDs(ctx context.Context) (ids []int64, err error) {
-	if _q.ctx.Unique == nil && _q.path != nil {
-		_q.Unique(true)
-	}
-	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(userallowedgroup.FieldID).Scan(ctx, &ids); err != nil {
-		return nil, err
-	}
-	return ids, nil
-}
-
-// IDsX is like IDs, but panics if an error occurs.
-func (_q *UserAllowedGroupQuery) IDsX(ctx context.Context) []int64 {
-	ids, err := _q.IDs(ctx)
-	if err != nil {
-		panic(err)
-	}
-	return ids
 }
 
 // Count returns the count of the given query.
@@ -269,7 +196,7 @@ func (_q *UserAllowedGroupQuery) CountX(ctx context.Context) int {
 // Exist returns true if the query has elements in the graph.
 func (_q *UserAllowedGroupQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
-	switch _, err := _q.FirstID(ctx); {
+	switch _, err := _q.First(ctx); {
 	case IsNotFound(err):
 		return false, nil
 	case err != nil:
@@ -513,15 +440,13 @@ func (_q *UserAllowedGroupQuery) sqlCount(ctx context.Context) (int, error) {
 	if len(_q.modifiers) > 0 {
 		_spec.Modifiers = _q.modifiers
 	}
-	_spec.Node.Columns = _q.ctx.Fields
-	if len(_q.ctx.Fields) > 0 {
-		_spec.Unique = _q.ctx.Unique != nil && *_q.ctx.Unique
-	}
+	_spec.Unique = false
+	_spec.Node.Columns = nil
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
 func (_q *UserAllowedGroupQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(userallowedgroup.Table, userallowedgroup.Columns, sqlgraph.NewFieldSpec(userallowedgroup.FieldID, field.TypeInt64))
+	_spec := sqlgraph.NewQuerySpec(userallowedgroup.Table, userallowedgroup.Columns, nil)
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -530,11 +455,8 @@ func (_q *UserAllowedGroupQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, userallowedgroup.FieldID)
 		for i := range fields {
-			if fields[i] != userallowedgroup.FieldID {
-				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
-			}
+			_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 		}
 		if _q.withUser != nil {
 			_spec.Node.AddColumnOnce(userallowedgroup.FieldUserID)

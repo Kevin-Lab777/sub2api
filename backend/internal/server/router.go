@@ -111,7 +111,6 @@ func registerRoutes(
 
 	// [LITE] 注册用户路由 (API Key 管理等，Admin 使用)
 	routes.RegisterUserRoutes(v1, h, jwtAuth)
-	routes.RegisterSoraClientRoutes(v1, h, jwtAuth)
 	routes.RegisterAdminRoutes(v1, h, adminAuth)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
 }

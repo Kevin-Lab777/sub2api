@@ -12,8 +12,6 @@ import (
 const (
 	// Label holds the string label denoting the userallowedgroup type in the database.
 	Label = "user_allowed_group"
-	// FieldID holds the string denoting the id field in the database.
-	FieldID = "id"
 	// FieldUserID holds the string denoting the user_id field in the database.
 	FieldUserID = "user_id"
 	// FieldGroupID holds the string denoting the group_id field in the database.
@@ -24,6 +22,10 @@ const (
 	EdgeUser = "user"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
 	EdgeGroup = "group"
+	// UserFieldID holds the string denoting the ID field of the User.
+	UserFieldID = "id"
+	// GroupFieldID holds the string denoting the ID field of the Group.
+	GroupFieldID = "id"
 	// Table holds the table name of the userallowedgroup in the database.
 	Table = "user_allowed_groups"
 	// UserTable is the table that holds the user relation/edge.
@@ -44,7 +46,6 @@ const (
 
 // Columns holds all SQL columns for userallowedgroup fields.
 var Columns = []string{
-	FieldID,
 	FieldUserID,
 	FieldGroupID,
 	FieldCreatedAt,
@@ -67,11 +68,6 @@ var (
 
 // OrderOption defines the ordering options for the UserAllowedGroup queries.
 type OrderOption func(*sql.Selector)
-
-// ByID orders the results by the id field.
-func ByID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldID, opts...).ToFunc()
-}
 
 // ByUserID orders the results by the user_id field.
 func ByUserID(opts ...sql.OrderTermOption) OrderOption {
@@ -103,15 +99,15 @@ func ByGroupField(field string, opts ...sql.OrderTermOption) OrderOption {
 }
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(UserInverseTable, FieldID),
+		sqlgraph.From(Table, UserColumn),
+		sqlgraph.To(UserInverseTable, UserFieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, UserTable, UserColumn),
 	)
 }
 func newGroupStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(GroupInverseTable, FieldID),
+		sqlgraph.From(Table, GroupColumn),
+		sqlgraph.To(GroupInverseTable, GroupFieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, GroupTable, GroupColumn),
 	)
 }

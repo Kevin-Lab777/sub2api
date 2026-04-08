@@ -91,18 +91,6 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/sora',
-    name: 'Sora',
-    component: () => import('@/views/user/SoraView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: 'Sora',
-      titleKey: 'sora.title',
-      descriptionKey: 'sora.description'
-    }
-  },
-  {
     path: '/custom/:id',
     name: 'CustomPage',
     component: () => import('@/views/user/CustomPageView.vue'),
@@ -158,6 +146,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/channels',
+    name: 'AdminChannels',
+    component: () => import('@/views/admin/ChannelsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Channel Management',
+      titleKey: 'admin.channels.title',
+      descriptionKey: 'admin.channels.description'
+    }
+  },
+  {
     path: '/admin/subscriptions',
     name: 'AdminSubscriptions',
     component: () => import('@/views/admin/SubscriptionsView.vue'),
@@ -203,18 +203,6 @@ const routes: RouteRecordRaw[] = [
       title: 'Proxy Management',
       titleKey: 'admin.proxies.title',
       descriptionKey: 'admin.proxies.description'
-    }
-  },
-  {
-    path: '/admin/data-management',
-    name: 'AdminDataManagement',
-    component: () => import('@/views/admin/DataManagementView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Data Management',
-      titleKey: 'admin.dataManagement.title',
-      descriptionKey: 'admin.dataManagement.description'
     }
   },
   {

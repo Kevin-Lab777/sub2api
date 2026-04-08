@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Kevin-Lab777/sub2api/ent/announcementread"
 	"github.com/Kevin-Lab777/sub2api/ent/apikey"
+	"github.com/Kevin-Lab777/sub2api/ent/group"
 	"github.com/Kevin-Lab777/sub2api/ent/predicate"
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
@@ -238,48 +239,6 @@ func (_u *UserUpdate) ClearTotpEnabledAt() *UserUpdate {
 	return _u
 }
 
-// SetSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field.
-func (_u *UserUpdate) SetSoraStorageQuotaBytes(v int64) *UserUpdate {
-	_u.mutation.ResetSoraStorageQuotaBytes()
-	_u.mutation.SetSoraStorageQuotaBytes(v)
-	return _u
-}
-
-// SetNillableSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableSoraStorageQuotaBytes(v *int64) *UserUpdate {
-	if v != nil {
-		_u.SetSoraStorageQuotaBytes(*v)
-	}
-	return _u
-}
-
-// AddSoraStorageQuotaBytes adds value to the "sora_storage_quota_bytes" field.
-func (_u *UserUpdate) AddSoraStorageQuotaBytes(v int64) *UserUpdate {
-	_u.mutation.AddSoraStorageQuotaBytes(v)
-	return _u
-}
-
-// SetSoraStorageUsedBytes sets the "sora_storage_used_bytes" field.
-func (_u *UserUpdate) SetSoraStorageUsedBytes(v int64) *UserUpdate {
-	_u.mutation.ResetSoraStorageUsedBytes()
-	_u.mutation.SetSoraStorageUsedBytes(v)
-	return _u
-}
-
-// SetNillableSoraStorageUsedBytes sets the "sora_storage_used_bytes" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableSoraStorageUsedBytes(v *int64) *UserUpdate {
-	if v != nil {
-		_u.SetSoraStorageUsedBytes(*v)
-	}
-	return _u
-}
-
-// AddSoraStorageUsedBytes adds value to the "sora_storage_used_bytes" field.
-func (_u *UserUpdate) AddSoraStorageUsedBytes(v int64) *UserUpdate {
-	_u.mutation.AddSoraStorageUsedBytes(v)
-	return _u
-}
-
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdate) AddAPIKeyIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -338,6 +297,21 @@ func (_u *UserUpdate) AddAnnouncementReads(v ...*AnnouncementRead) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.AddAnnouncementReadIDs(ids...)
+}
+
+// AddAllowedGroupIDs adds the "allowed_groups" edge to the Group entity by IDs.
+func (_u *UserUpdate) AddAllowedGroupIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddAllowedGroupIDs(ids...)
+	return _u
+}
+
+// AddAllowedGroups adds the "allowed_groups" edges to the Group entity.
+func (_u *UserUpdate) AddAllowedGroups(v ...*Group) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddAllowedGroupIDs(ids...)
 }
 
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
@@ -442,6 +416,27 @@ func (_u *UserUpdate) RemoveAnnouncementReads(v ...*AnnouncementRead) *UserUpdat
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAnnouncementReadIDs(ids...)
+}
+
+// ClearAllowedGroups clears all "allowed_groups" edges to the Group entity.
+func (_u *UserUpdate) ClearAllowedGroups() *UserUpdate {
+	_u.mutation.ClearAllowedGroups()
+	return _u
+}
+
+// RemoveAllowedGroupIDs removes the "allowed_groups" edge to Group entities by IDs.
+func (_u *UserUpdate) RemoveAllowedGroupIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveAllowedGroupIDs(ids...)
+	return _u
+}
+
+// RemoveAllowedGroups removes "allowed_groups" edges to Group entities.
+func (_u *UserUpdate) RemoveAllowedGroups(v ...*Group) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveAllowedGroupIDs(ids...)
 }
 
 // ClearUsageLogs clears all "usage_logs" edges to the UsageLog entity.
@@ -602,18 +597,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.TotpEnabledAtCleared() {
 		_spec.ClearField(user.FieldTotpEnabledAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.SoraStorageQuotaBytes(); ok {
-		_spec.SetField(user.FieldSoraStorageQuotaBytes, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedSoraStorageQuotaBytes(); ok {
-		_spec.AddField(user.FieldSoraStorageQuotaBytes, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.SoraStorageUsedBytes(); ok {
-		_spec.SetField(user.FieldSoraStorageUsedBytes, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedSoraStorageUsedBytes(); ok {
-		_spec.AddField(user.FieldSoraStorageUsedBytes, field.TypeInt64, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -793,6 +776,63 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.AllowedGroupsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   user.AllowedGroupsTable,
+			Columns: user.AllowedGroupsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		createE := &UserAllowedGroupCreate{config: _u.config, mutation: newUserAllowedGroupMutation(_u.config, OpCreate)}
+		createE.defaults()
+		_, specE := createE.createSpec()
+		edge.Target.Fields = specE.Fields
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedAllowedGroupsIDs(); len(nodes) > 0 && !_u.mutation.AllowedGroupsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   user.AllowedGroupsTable,
+			Columns: user.AllowedGroupsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		createE := &UserAllowedGroupCreate{config: _u.config, mutation: newUserAllowedGroupMutation(_u.config, OpCreate)}
+		createE.defaults()
+		_, specE := createE.createSpec()
+		edge.Target.Fields = specE.Fields
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AllowedGroupsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   user.AllowedGroupsTable,
+			Columns: user.AllowedGroupsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		createE := &UserAllowedGroupCreate{config: _u.config, mutation: newUserAllowedGroupMutation(_u.config, OpCreate)}
+		createE.defaults()
+		_, specE := createE.createSpec()
+		edge.Target.Fields = specE.Fields
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.UsageLogsCleared() {
@@ -1066,48 +1106,6 @@ func (_u *UserUpdateOne) ClearTotpEnabledAt() *UserUpdateOne {
 	return _u
 }
 
-// SetSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field.
-func (_u *UserUpdateOne) SetSoraStorageQuotaBytes(v int64) *UserUpdateOne {
-	_u.mutation.ResetSoraStorageQuotaBytes()
-	_u.mutation.SetSoraStorageQuotaBytes(v)
-	return _u
-}
-
-// SetNillableSoraStorageQuotaBytes sets the "sora_storage_quota_bytes" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableSoraStorageQuotaBytes(v *int64) *UserUpdateOne {
-	if v != nil {
-		_u.SetSoraStorageQuotaBytes(*v)
-	}
-	return _u
-}
-
-// AddSoraStorageQuotaBytes adds value to the "sora_storage_quota_bytes" field.
-func (_u *UserUpdateOne) AddSoraStorageQuotaBytes(v int64) *UserUpdateOne {
-	_u.mutation.AddSoraStorageQuotaBytes(v)
-	return _u
-}
-
-// SetSoraStorageUsedBytes sets the "sora_storage_used_bytes" field.
-func (_u *UserUpdateOne) SetSoraStorageUsedBytes(v int64) *UserUpdateOne {
-	_u.mutation.ResetSoraStorageUsedBytes()
-	_u.mutation.SetSoraStorageUsedBytes(v)
-	return _u
-}
-
-// SetNillableSoraStorageUsedBytes sets the "sora_storage_used_bytes" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableSoraStorageUsedBytes(v *int64) *UserUpdateOne {
-	if v != nil {
-		_u.SetSoraStorageUsedBytes(*v)
-	}
-	return _u
-}
-
-// AddSoraStorageUsedBytes adds value to the "sora_storage_used_bytes" field.
-func (_u *UserUpdateOne) AddSoraStorageUsedBytes(v int64) *UserUpdateOne {
-	_u.mutation.AddSoraStorageUsedBytes(v)
-	return _u
-}
-
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdateOne) AddAPIKeyIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -1166,6 +1164,21 @@ func (_u *UserUpdateOne) AddAnnouncementReads(v ...*AnnouncementRead) *UserUpdat
 		ids[i] = v[i].ID
 	}
 	return _u.AddAnnouncementReadIDs(ids...)
+}
+
+// AddAllowedGroupIDs adds the "allowed_groups" edge to the Group entity by IDs.
+func (_u *UserUpdateOne) AddAllowedGroupIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddAllowedGroupIDs(ids...)
+	return _u
+}
+
+// AddAllowedGroups adds the "allowed_groups" edges to the Group entity.
+func (_u *UserUpdateOne) AddAllowedGroups(v ...*Group) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddAllowedGroupIDs(ids...)
 }
 
 // AddUsageLogIDs adds the "usage_logs" edge to the UsageLog entity by IDs.
@@ -1270,6 +1283,27 @@ func (_u *UserUpdateOne) RemoveAnnouncementReads(v ...*AnnouncementRead) *UserUp
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveAnnouncementReadIDs(ids...)
+}
+
+// ClearAllowedGroups clears all "allowed_groups" edges to the Group entity.
+func (_u *UserUpdateOne) ClearAllowedGroups() *UserUpdateOne {
+	_u.mutation.ClearAllowedGroups()
+	return _u
+}
+
+// RemoveAllowedGroupIDs removes the "allowed_groups" edge to Group entities by IDs.
+func (_u *UserUpdateOne) RemoveAllowedGroupIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveAllowedGroupIDs(ids...)
+	return _u
+}
+
+// RemoveAllowedGroups removes "allowed_groups" edges to Group entities.
+func (_u *UserUpdateOne) RemoveAllowedGroups(v ...*Group) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveAllowedGroupIDs(ids...)
 }
 
 // ClearUsageLogs clears all "usage_logs" edges to the UsageLog entity.
@@ -1461,18 +1495,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if _u.mutation.TotpEnabledAtCleared() {
 		_spec.ClearField(user.FieldTotpEnabledAt, field.TypeTime)
 	}
-	if value, ok := _u.mutation.SoraStorageQuotaBytes(); ok {
-		_spec.SetField(user.FieldSoraStorageQuotaBytes, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedSoraStorageQuotaBytes(); ok {
-		_spec.AddField(user.FieldSoraStorageQuotaBytes, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.SoraStorageUsedBytes(); ok {
-		_spec.SetField(user.FieldSoraStorageUsedBytes, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedSoraStorageUsedBytes(); ok {
-		_spec.AddField(user.FieldSoraStorageUsedBytes, field.TypeInt64, value)
-	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1651,6 +1673,63 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.AllowedGroupsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   user.AllowedGroupsTable,
+			Columns: user.AllowedGroupsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		createE := &UserAllowedGroupCreate{config: _u.config, mutation: newUserAllowedGroupMutation(_u.config, OpCreate)}
+		createE.defaults()
+		_, specE := createE.createSpec()
+		edge.Target.Fields = specE.Fields
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedAllowedGroupsIDs(); len(nodes) > 0 && !_u.mutation.AllowedGroupsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   user.AllowedGroupsTable,
+			Columns: user.AllowedGroupsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		createE := &UserAllowedGroupCreate{config: _u.config, mutation: newUserAllowedGroupMutation(_u.config, OpCreate)}
+		createE.defaults()
+		_, specE := createE.createSpec()
+		edge.Target.Fields = specE.Fields
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AllowedGroupsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   user.AllowedGroupsTable,
+			Columns: user.AllowedGroupsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		createE := &UserAllowedGroupCreate{config: _u.config, mutation: newUserAllowedGroupMutation(_u.config, OpCreate)}
+		createE.defaults()
+		_, specE := createE.createSpec()
+		edge.Target.Fields = specE.Fields
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.UsageLogsCleared() {

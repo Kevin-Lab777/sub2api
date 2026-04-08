@@ -87,27 +87,7 @@ func (Group) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
 
-		// Sora 按次计费配置（阶段 1）
-		field.Float("sora_image_price_360").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
-		field.Float("sora_image_price_540").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
-		field.Float("sora_video_price_per_request").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
-		field.Float("sora_video_price_per_request_hd").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
 
-		// Sora 存储配额
-		field.Int64("sora_storage_quota_bytes").
-			Default(0),
 
 		// Claude Code 客户端限制 (added by migration 029)
 		field.Bool("claude_code_only").
@@ -157,6 +137,14 @@ func (Group) Fields() []ent.Field {
 			MaxLen(100).
 			Default("").
 			Comment("默认映射模型 ID，当账号级映射找不到时使用此值"),
+
+			// [LITE:KEPT] upstream v0.1.109 new fields
+			field.Bool("require_oauth_only").
+				Default(false).
+				Comment("仅允许非 apikey 类型账号关联到此分组"),
+			field.Bool("require_privacy_set").
+				Default(false).
+				Comment("调度时仅允许 privacy 已成功设置的账号"),
 	}
 }
 
@@ -169,7 +157,10 @@ func (Group) Edges() []ent.Edge {
 		edge.From("accounts", Account.Type).
 			Ref("groups").
 			Through("account_groups", AccountGroup.Type),
-		// [LITE:DELETED] allowed_users edge
+		// [LITE:KEPT] allowed_users - v0.1.88 core feature
+			edge.From("allowed_users", User.Type).
+				Ref("allowed_groups").
+				Through("user_allowed_groups", UserAllowedGroup.Type),
 		// 注意：fallback_group_id 直接作为字段使用，不定义 edge
 		// 这样允许多个分组指向同一个降级分组（M2O 关系）
 	}

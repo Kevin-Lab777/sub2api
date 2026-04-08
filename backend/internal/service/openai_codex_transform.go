@@ -7,6 +7,8 @@ import (
 
 var codexModelMap = map[string]string{
 	"gpt-5.4":                    "gpt-5.4",
+	"gpt-5.4-mini":               "gpt-5.4-mini",
+	"gpt-5.4-nano":               "gpt-5.4-nano",
 	"gpt-5.4-none":               "gpt-5.4",
 	"gpt-5.4-low":                "gpt-5.4",
 	"gpt-5.4-medium":             "gpt-5.4",
@@ -83,7 +85,7 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 	if v, ok := reqBody["model"].(string); ok {
 		model = v
 	}
-	normalizedModel := normalizeCodexModel(model)
+	normalizedModel := strings.TrimSpace(model)
 	if normalizedModel != "" {
 		if model != normalizedModel {
 			reqBody["model"] = normalizedModel
@@ -225,6 +227,12 @@ func normalizeCodexModel(model string) string {
 
 	normalized := strings.ToLower(modelID)
 
+	if strings.Contains(normalized, "gpt-5.4-mini") || strings.Contains(normalized, "gpt 5.4 mini") {
+		return "gpt-5.4-mini"
+	}
+	if strings.Contains(normalized, "gpt-5.4-nano") || strings.Contains(normalized, "gpt 5.4 nano") {
+		return "gpt-5.4-nano"
+	}
 	if strings.Contains(normalized, "gpt-5.4") || strings.Contains(normalized, "gpt 5.4") {
 		return "gpt-5.4"
 	}
@@ -265,6 +273,13 @@ func normalizeCodexModel(model string) string {
 	}
 
 	return "gpt-5.1"
+}
+
+func normalizeOpenAIModelForUpstream(account *Account, model string) string {
+	if account == nil || account.Type == AccountTypeOAuth {
+		return normalizeCodexModel(model)
+	}
+	return strings.TrimSpace(model)
 }
 
 func SupportsVerbosity(model string) bool {
