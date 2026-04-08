@@ -2043,8 +2043,14 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 		return filtered, useMixed, nil
 	}
 
-	// [LITE] 忽略分组限制，查询所有可用账号
-	accounts, err := s.accountRepo.ListSchedulableByPlatform(ctx, platform)
+	// [LITE] 有 groupID 时查分组内账号，否则查所有
+	var accounts []Account
+	var err error
+	if groupID != nil && *groupID > 0 {
+		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
+	} else {
+		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
+	}
 	if err != nil {
 		slog.Debug("account_scheduling_list_failed",
 			"group_id", derefGroupID(groupID),

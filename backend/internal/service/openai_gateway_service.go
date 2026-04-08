@@ -1643,12 +1643,21 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 }
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64) ([]Account, error) {
-	// [LITE] 使用 schedulerSnapshot（如果可用），但忽略分组限制
+	// [LITE] 传递真实 groupID 给 snapshot，让它查询分组内的账号
+	// 之前传 nil 会导致 snapshot 走 ListSchedulableUngroupedByPlatform，
+	// 排除所有已分配分组的账号
 	if s.schedulerSnapshot != nil {
-		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, nil, PlatformOpenAI, false)
+		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, PlatformOpenAI, false)
 		return accounts, err
 	}
-	// [LITE] 忽略分组限制，查询所有可用账号
+	// [LITE] 有 groupID 时查分组内账号，否则查所有
+	if groupID != nil && *groupID > 0 {
+		accounts, err := s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, PlatformOpenAI)
+		if err != nil {
+			return nil, fmt.Errorf("query accounts failed: %w", err)
+		}
+		return accounts, nil
+	}
 	accounts, err := s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
