@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-04-17)
 Phase: 10 of 10 (规划系统迁移)
 Plan: 1 of 1 in current phase
 Status: Ready to execute
-Last activity: 2026-04-17 - Bootstrapped `.planning` baseline from legacy BMAD artifacts
+Last activity: 2026-04-17 - Completed quick task 260417-hm3: migrate legacy BMAD planning docs into .planning
 
 Progress: [#########-] 90%
 
@@ -57,9 +57,10 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260417-hm3 | migrate legacy BMAD planning docs into `.planning` | 2026-04-17 | b0e84501 | [260417-hm3-migrate-legacy-bmad-planning-docs-into-p](./quick/260417-hm3-migrate-legacy-bmad-planning-docs-into-p/) |
 
 ## Session Continuity
 
 Last session: 2026-04-17 12:39 AEST
-Stopped at: Bootstrapped `.planning` core docs from existing Lite planning artifacts
+Stopped at: Imported legacy BMAD planning docs into repo-owned `.planning` storage
 Resume file: None
