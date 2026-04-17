@@ -20,9 +20,13 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/errorpassthroughrule"
 	"github.com/Kevin-Lab777/sub2api/ent/group"
 	"github.com/Kevin-Lab777/sub2api/ent/idempotencyrecord"
+	"github.com/Kevin-Lab777/sub2api/ent/paymentauditlog"
+	"github.com/Kevin-Lab777/sub2api/ent/paymentorder"
+	"github.com/Kevin-Lab777/sub2api/ent/paymentproviderinstance"
 	"github.com/Kevin-Lab777/sub2api/ent/proxy"
 	"github.com/Kevin-Lab777/sub2api/ent/securitysecret"
 	"github.com/Kevin-Lab777/sub2api/ent/setting"
+	"github.com/Kevin-Lab777/sub2api/ent/subscriptionplan"
 	"github.com/Kevin-Lab777/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Kevin-Lab777/sub2api/ent/usagecleanuptask"
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
@@ -89,23 +93,27 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			apikey.Table:                apikey.ValidColumn,
-			account.Table:               account.ValidColumn,
-			accountgroup.Table:          accountgroup.ValidColumn,
-			announcement.Table:          announcement.ValidColumn,
-			announcementread.Table:      announcementread.ValidColumn,
-			errorpassthroughrule.Table:  errorpassthroughrule.ValidColumn,
-			group.Table:                 group.ValidColumn,
-			idempotencyrecord.Table:     idempotencyrecord.ValidColumn,
-			proxy.Table:                 proxy.ValidColumn,
-			securitysecret.Table:        securitysecret.ValidColumn,
-			setting.Table:               setting.ValidColumn,
-			tlsfingerprintprofile.Table: tlsfingerprintprofile.ValidColumn,
-			usagecleanuptask.Table:      usagecleanuptask.ValidColumn,
-			usagelog.Table:              usagelog.ValidColumn,
-			user.Table:                  user.ValidColumn,
-			userallowedgroup.Table:      userallowedgroup.ValidColumn,
-			usersubscription.Table:      usersubscription.ValidColumn,
+			apikey.Table:                  apikey.ValidColumn,
+			account.Table:                 account.ValidColumn,
+			accountgroup.Table:            accountgroup.ValidColumn,
+			announcement.Table:            announcement.ValidColumn,
+			announcementread.Table:        announcementread.ValidColumn,
+			errorpassthroughrule.Table:    errorpassthroughrule.ValidColumn,
+			group.Table:                   group.ValidColumn,
+			idempotencyrecord.Table:       idempotencyrecord.ValidColumn,
+			paymentauditlog.Table:         paymentauditlog.ValidColumn,
+			paymentorder.Table:            paymentorder.ValidColumn,
+			paymentproviderinstance.Table: paymentproviderinstance.ValidColumn,
+			proxy.Table:                   proxy.ValidColumn,
+			securitysecret.Table:          securitysecret.ValidColumn,
+			setting.Table:                 setting.ValidColumn,
+			subscriptionplan.Table:        subscriptionplan.ValidColumn,
+			tlsfingerprintprofile.Table:   tlsfingerprintprofile.ValidColumn,
+			usagecleanuptask.Table:        usagecleanuptask.ValidColumn,
+			usagelog.Table:                usagelog.ValidColumn,
+			user.Table:                    user.ValidColumn,
+			userallowedgroup.Table:        userallowedgroup.ValidColumn,
+			usersubscription.Table:        usersubscription.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

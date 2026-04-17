@@ -17,6 +17,7 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
 	"github.com/Kevin-Lab777/sub2api/ent/usersubscription"
+	"github.com/Kevin-Lab777/sub2api/internal/domain"
 )
 
 // GroupCreate is the builder for creating a Group entity.
@@ -405,6 +406,20 @@ func (_c *GroupCreate) SetRequirePrivacySet(v bool) *GroupCreate {
 func (_c *GroupCreate) SetNillableRequirePrivacySet(v *bool) *GroupCreate {
 	if v != nil {
 		_c.SetRequirePrivacySet(*v)
+	}
+	return _c
+}
+
+// SetMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field.
+func (_c *GroupCreate) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDispatchModelConfig) *GroupCreate {
+	_c.mutation.SetMessagesDispatchModelConfig(v)
+	return _c
+}
+
+// SetNillableMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableMessagesDispatchModelConfig(v *domain.OpenAIMessagesDispatchModelConfig) *GroupCreate {
+	if v != nil {
+		_c.SetMessagesDispatchModelConfig(*v)
 	}
 	return _c
 }
@@ -821,6 +836,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RequirePrivacySet(); ok {
 		_spec.SetField(group.FieldRequirePrivacySet, field.TypeBool, value)
 		_node.RequirePrivacySet = value
+	}
+	if value, ok := _c.mutation.MessagesDispatchModelConfig(); ok {
+		_spec.SetField(group.FieldMessagesDispatchModelConfig, field.TypeJSON, value)
+		_node.MessagesDispatchModelConfig = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1430,6 +1449,24 @@ func (u *GroupUpsert) UpdateRequirePrivacySet() *GroupUpsert {
 	return u
 }
 
+// SetMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field.
+func (u *GroupUpsert) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDispatchModelConfig) *GroupUpsert {
+	u.Set(group.FieldMessagesDispatchModelConfig, v)
+	return u
+}
+
+// UpdateMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateMessagesDispatchModelConfig() *GroupUpsert {
+	u.SetExcluded(group.FieldMessagesDispatchModelConfig)
+	return u
+}
+
+// ClearMessagesDispatchModelConfig clears the value of the "messages_dispatch_model_config" field.
+func (u *GroupUpsert) ClearMessagesDispatchModelConfig() *GroupUpsert {
+	u.SetNull(group.FieldMessagesDispatchModelConfig)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -2018,6 +2055,27 @@ func (u *GroupUpsertOne) SetRequirePrivacySet(v bool) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRequirePrivacySet() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRequirePrivacySet()
+	})
+}
+
+// SetMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field.
+func (u *GroupUpsertOne) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDispatchModelConfig) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetMessagesDispatchModelConfig(v)
+	})
+}
+
+// UpdateMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateMessagesDispatchModelConfig() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateMessagesDispatchModelConfig()
+	})
+}
+
+// ClearMessagesDispatchModelConfig clears the value of the "messages_dispatch_model_config" field.
+func (u *GroupUpsertOne) ClearMessagesDispatchModelConfig() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearMessagesDispatchModelConfig()
 	})
 }
 
@@ -2775,6 +2833,27 @@ func (u *GroupUpsertBulk) SetRequirePrivacySet(v bool) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRequirePrivacySet() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRequirePrivacySet()
+	})
+}
+
+// SetMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field.
+func (u *GroupUpsertBulk) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDispatchModelConfig) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetMessagesDispatchModelConfig(v)
+	})
+}
+
+// UpdateMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateMessagesDispatchModelConfig() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateMessagesDispatchModelConfig()
+	})
+}
+
+// ClearMessagesDispatchModelConfig clears the value of the "messages_dispatch_model_config" field.
+func (u *GroupUpsertBulk) ClearMessagesDispatchModelConfig() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearMessagesDispatchModelConfig()
 	})
 }
 

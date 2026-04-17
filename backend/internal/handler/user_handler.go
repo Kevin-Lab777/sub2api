@@ -10,6 +10,7 @@ import (
 )
 
 // UserHandler handles user-related requests
+// [LITE] 移除 emailService 和 emailCache（依赖已删除的 EmailService）
 type UserHandler struct {
 	userService *service.UserService
 }
@@ -29,7 +30,9 @@ type ChangePasswordRequest struct {
 
 // UpdateProfileRequest represents the update profile request payload
 type UpdateProfileRequest struct {
-	Username *string `json:"username"`
+	Username               *string  `json:"username"`
+	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
 }
 
 // GetProfile handles getting user profile
@@ -94,7 +97,9 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	svcReq := service.UpdateProfileRequest{
-		Username: req.Username,
+		Username:               req.Username,
+		BalanceNotifyEnabled:   req.BalanceNotifyEnabled,
+		BalanceNotifyThreshold: req.BalanceNotifyThreshold,
 	}
 	updatedUser, err := h.userService.UpdateProfile(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {
@@ -104,3 +109,4 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 
 	response.Success(c, dto.UserFromService(updatedUser))
 }
+

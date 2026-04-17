@@ -145,6 +145,11 @@ func (Group) Fields() []ent.Field {
 			field.Bool("require_privacy_set").
 				Default(false).
 				Comment("调度时仅允许 privacy 已成功设置的账号"),
+
+			// [LITE:KEPT] upstream v0.1.114 — per-model dispatch overrides
+			field.JSON("messages_dispatch_model_config", domain.OpenAIMessagesDispatchModelConfig{}).
+				Optional().
+				Comment("OpenAI /v1/messages 调度时的按模型配置（启用/跳过）"),
 	}
 }
 

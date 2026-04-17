@@ -23,6 +23,7 @@ func RegisterAuthRoutes(
 		// [LITE:DELETED] auth.POST("/send-verify-code", ...)
 		// [LITE:DELETED] auth.POST("/validate-promo-code", ...)
 		// [LITE:DELETED] auth.GET("/oauth/linuxdo/*", ...)
+		// [LITE:DELETED] OIDC OAuth routes — handler removed (depends on UserService registration flow)
 	}
 
 	// 公开设置（无需认证）

@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	infraerrors "github.com/Kevin-Lab777/sub2api/internal/pkg/errors"
@@ -61,9 +61,11 @@ type UserRepository interface {
 
 // UpdateProfileRequest 更新用户资料请求
 type UpdateProfileRequest struct {
-	Email       *string `json:"email"`
-	Username    *string `json:"username"`
-	Concurrency *int    `json:"concurrency"`
+	Email                  *string  `json:"email"`
+	Username               *string  `json:"username"`
+	Concurrency            *int     `json:"concurrency"`
+	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
 }
 
 // ChangePasswordRequest 修改密码请求
@@ -75,14 +77,16 @@ type ChangePasswordRequest struct {
 // UserService 用户服务
 type UserService struct {
 	userRepo             UserRepository
+	settingRepo          SettingRepository
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	billingCache         BillingCache
 }
 
 // NewUserService 创建用户服务实例
-func NewUserService(userRepo UserRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache) *UserService {
+func NewUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache) *UserService {
 	return &UserService{
 		userRepo:             userRepo,
+		settingRepo:          settingRepo,
 		authCacheInvalidator: authCacheInvalidator,
 		billingCache:         billingCache,
 	}
@@ -133,6 +137,17 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 
 	if req.Concurrency != nil {
 		user.Concurrency = *req.Concurrency
+	}
+
+	if req.BalanceNotifyEnabled != nil {
+		user.BalanceNotifyEnabled = *req.BalanceNotifyEnabled
+	}
+	if req.BalanceNotifyThreshold != nil {
+		if *req.BalanceNotifyThreshold <= 0 {
+			user.BalanceNotifyThreshold = nil // clear to system default
+		} else {
+			user.BalanceNotifyThreshold = req.BalanceNotifyThreshold
+		}
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
@@ -201,10 +216,15 @@ func (s *UserService) UpdateBalance(ctx context.Context, userID int64, amount fl
 	}
 	if s.billingCache != nil {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("panic in balance cache invalidation", "user_id", userID, "recover", r)
+				}
+			}()
 			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err := s.billingCache.InvalidateUserBalance(cacheCtx, userID); err != nil {
-				log.Printf("invalidate user balance cache failed: user_id=%d err=%v", userID, err)
+				slog.Error("invalidate user balance cache failed", "user_id", userID, "error", err)
 			}
 		}()
 	}

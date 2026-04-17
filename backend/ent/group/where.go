@@ -1320,6 +1320,16 @@ func RequirePrivacySetNEQ(v bool) predicate.Group {
 	return predicate.Group(sql.FieldNEQ(FieldRequirePrivacySet, v))
 }
 
+// MessagesDispatchModelConfigIsNil applies the IsNil predicate on the "messages_dispatch_model_config" field.
+func MessagesDispatchModelConfigIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldMessagesDispatchModelConfig))
+}
+
+// MessagesDispatchModelConfigNotNil applies the NotNil predicate on the "messages_dispatch_model_config" field.
+func MessagesDispatchModelConfigNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldMessagesDispatchModelConfig))
+}
+
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.
 func HasAPIKeys() predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {

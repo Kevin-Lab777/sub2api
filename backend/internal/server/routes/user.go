@@ -24,6 +24,8 @@ func RegisterUserRoutes(
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
 
+			// [LITE:DELETED] 通知邮箱管理（依赖 EmailService）
+
 			// TOTP 2FA
 			totp := user.Group("/totp")
 			{

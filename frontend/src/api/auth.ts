@@ -61,6 +61,25 @@ export function isTotp2FARequired(response: any): boolean {
   return response?.requires_2fa === true
 }
 
+/**
+ * Complete OIDC OAuth registration by supplying an invitation code
+ */
+export async function completeOIDCOAuthRegistration(
+  pendingOAuthToken: string,
+  invitationCode: string
+): Promise<{ access_token: string; refresh_token: string; expires_in: number; token_type: string }> {
+  const { data } = await apiClient.post<{
+    access_token: string
+    refresh_token: string
+    expires_in: number
+    token_type: string
+  }>('/auth/oauth/oidc/complete-registration', {
+    pending_oauth_token: pendingOAuthToken,
+    invitation_code: invitationCode
+  })
+  return data
+}
+
 export const authAPI = {
   login,
   getCurrentUser,
@@ -68,7 +87,8 @@ export const authAPI = {
   logout,
   refreshToken,
   login2FA,
-  isTotp2FARequired
+  isTotp2FARequired,
+  completeOIDCOAuthRegistration
 }
 
 export default authAPI

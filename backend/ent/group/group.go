@@ -73,6 +73,8 @@ const (
 	FieldRequireOauthOnly = "require_oauth_only"
 	// FieldRequirePrivacySet holds the string denoting the require_privacy_set field in the database.
 	FieldRequirePrivacySet = "require_privacy_set"
+	// FieldMessagesDispatchModelConfig holds the string denoting the messages_dispatch_model_config field in the database.
+	FieldMessagesDispatchModelConfig = "messages_dispatch_model_config"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeSubscriptions holds the string denoting the subscriptions edge name in mutations.
@@ -168,6 +170,7 @@ var Columns = []string{
 	FieldDefaultMappedModel,
 	FieldRequireOauthOnly,
 	FieldRequirePrivacySet,
+	FieldMessagesDispatchModelConfig,
 }
 
 var (

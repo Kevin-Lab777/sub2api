@@ -6,8 +6,11 @@
 // Re-export the HTTP client
 export { apiClient } from './client'
 
-// Auth API (Admin login only)
-export { authAPI } from './auth'
+// Auth API
+export { authAPI, isTotp2FARequired } from './auth'
+
+// Payment API (kept in Lite)
+export { paymentAPI } from './payment'
 
 // Admin APIs
 export { adminAPI } from './admin'

@@ -184,12 +184,10 @@ func TestUsageCleanupRepositoryEntInvalidStatus(t *testing.T) {
 }
 
 func TestUsageCleanupRepositoryEntListInvalidFilters(t *testing.T) {
-	repo, client := newUsageCleanupEntRepo(t)
+	repo, _ := newUsageCleanupEntRepo(t)
 
 	now := time.Now().UTC()
-	driver, ok := client.Driver().(*entsql.Driver)
-	require.True(t, ok)
-	_, err := driver.DB().ExecContext(
+	_, err := repo.sql.ExecContext(
 		context.Background(),
 		`INSERT INTO usage_cleanup_tasks (status, filters, created_by, deleted_rows, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)`,

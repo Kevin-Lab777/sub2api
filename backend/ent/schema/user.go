@@ -73,6 +73,21 @@ func (User) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
+		// 余额不足通知 (upstream v0.1.114)
+		field.Bool("balance_notify_enabled").
+			Default(true),
+		field.String("balance_notify_threshold_type").
+			Default("fixed"),
+		field.Float("balance_notify_threshold").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Optional().
+			Nillable(),
+		field.String("balance_notify_extra_emails").
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Default("[]"),
+		field.Float("total_recharged").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0),
 	}
 }
 
@@ -87,6 +102,7 @@ func (User) Edges() []ent.Edge {
 			edge.To("allowed_groups", Group.Type).
 				Through("user_allowed_groups", UserAllowedGroup.Type),
 		edge.To("usage_logs", UsageLog.Type),
+		edge.To("payment_orders", PaymentOrder.Type),
 		// [LITE:DELETED] attribute_values edge
 		// [LITE:DELETED] promo_code_usages edge
 	}

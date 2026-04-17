@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/Kevin-Lab777/sub2api/internal/config"
@@ -136,7 +139,25 @@ func (s *AuthService) ValidateToken(tokenString string) (*JWTClaims, error) {
 	return nil, ErrInvalidToken
 }
 
-// GenerateToken 生成JWT token
+func randomHexString(byteLength int) (string, error) {
+	if byteLength <= 0 {
+		byteLength = 16
+	}
+	buf := make([]byte, byteLength)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+func isReservedEmail(email string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	return strings.HasSuffix(normalized, LinuxDoConnectSyntheticEmailDomain) ||
+		strings.HasSuffix(normalized, OIDCConnectSyntheticEmailDomain)
+}
+
+// GenerateToken 生成JWT access token
+// 使用新的access_token_expire_minutes配置项（如果配置了），否则回退到expire_hour
 func (s *AuthService) GenerateToken(user *User) (string, error) {
 	now := time.Now()
 	expiresAt := now.Add(time.Duration(s.cfg.JWT.ExpireHour) * time.Hour)

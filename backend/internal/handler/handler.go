@@ -28,22 +28,26 @@ type AdminHandlers struct {
 	APIKey                *admin.AdminAPIKeyHandler
 	ScheduledTest         *admin.ScheduledTestHandler
 	Channel               *admin.ChannelHandler
+	Payment               *admin.PaymentHandler
 }
 
 // Handlers contains all HTTP handlers
 // [LITE] 保留 User, APIKey, Usage 给 Admin 使用
 type Handlers struct {
-	Auth          *AuthHandler
-	User          *UserHandler
-	APIKey        *APIKeyHandler
-	Usage         *UsageHandler
-	Announcement  *AnnouncementHandler
-	Admin         *AdminHandlers
-	Gateway       *GatewayHandler
-	OpenAIGateway *OpenAIGatewayHandler
-	Setting       *SettingHandler
-	Public        *PublicHandler
-	Totp          *TotpHandler
+	Auth           *AuthHandler
+	User           *UserHandler
+	APIKey         *APIKeyHandler
+	Usage          *UsageHandler
+	// [LITE:DELETED] Redeem, Subscription
+	Announcement   *AnnouncementHandler
+	Admin          *AdminHandlers
+	Gateway        *GatewayHandler
+	OpenAIGateway  *OpenAIGatewayHandler
+	Setting        *SettingHandler
+	Public         *PublicHandler
+	Totp           *TotpHandler
+	Payment        *PaymentHandler
+	PaymentWebhook *PaymentWebhookHandler
 }
 
 // BuildInfo contains build-time information
