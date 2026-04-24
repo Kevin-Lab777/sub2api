@@ -6,8 +6,8 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { authAPI } from '@/api'
-import type { User, LoginRequest, AuthResponse } from '@/types'
+import { authAPI, isTotp2FARequired } from '@/api'
+import type { User, LoginRequest, AuthResponse, TotpLoginResponse } from '@/types'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 const AUTH_USER_KEY = 'auth_user'
@@ -15,6 +15,8 @@ const REFRESH_TOKEN_KEY = 'refresh_token'
 const TOKEN_EXPIRES_AT_KEY = 'token_expires_at' // 存储过期时间戳而非有效期
 const AUTO_REFRESH_INTERVAL = 60 * 1000 // 60 seconds for user data refresh
 const TOKEN_REFRESH_BUFFER = 120 * 1000 // 120 seconds before expiry to refresh token
+
+type LoginResponse = AuthResponse | TotpLoginResponse
 
 export const useAuthStore = defineStore('auth', () => {
   // ==================== State ====================
@@ -182,17 +184,21 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * [LITE] Admin login
    * @param credentials - Login credentials (email and password)
-   * @returns Promise resolving to the authenticated user
+   * @returns Promise resolving to the login response
    * @throws Error if login fails
    */
-  async function login(credentials: LoginRequest): Promise<User> {
+  async function login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
       const response = await authAPI.login(credentials)
+
+      if (isTotp2FARequired(response)) {
+        return response
+      }
 
       // Set auth state from the response
       setAuthFromResponse(response)
 
-      return user.value!
+      return response
     } catch (error) {
       // Clear any partial state on error
       clearAuth()

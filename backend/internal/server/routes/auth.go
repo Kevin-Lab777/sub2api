@@ -19,6 +19,7 @@ func RegisterAuthRoutes(
 	auth := v1.Group("/auth")
 	{
 		auth.POST("/login", h.Auth.Login)
+		auth.POST("/login/2fa", h.Auth.Login2FA)
 		// [LITE:DELETED] auth.POST("/register", ...)
 		// [LITE:DELETED] auth.POST("/send-verify-code", ...)
 		// [LITE:DELETED] auth.POST("/validate-promo-code", ...)

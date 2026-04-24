@@ -17,12 +17,20 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/announcement"
 	"github.com/Kevin-Lab777/sub2api/ent/announcementread"
 	"github.com/Kevin-Lab777/sub2api/ent/apikey"
+	"github.com/Kevin-Lab777/sub2api/ent/authidentity"
+	"github.com/Kevin-Lab777/sub2api/ent/authidentitychannel"
+	"github.com/Kevin-Lab777/sub2api/ent/channelmonitor"
+	"github.com/Kevin-Lab777/sub2api/ent/channelmonitordailyrollup"
+	"github.com/Kevin-Lab777/sub2api/ent/channelmonitorhistory"
+	"github.com/Kevin-Lab777/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Kevin-Lab777/sub2api/ent/errorpassthroughrule"
 	"github.com/Kevin-Lab777/sub2api/ent/group"
 	"github.com/Kevin-Lab777/sub2api/ent/idempotencyrecord"
+	"github.com/Kevin-Lab777/sub2api/ent/identityadoptiondecision"
 	"github.com/Kevin-Lab777/sub2api/ent/paymentauditlog"
 	"github.com/Kevin-Lab777/sub2api/ent/paymentorder"
 	"github.com/Kevin-Lab777/sub2api/ent/paymentproviderinstance"
+	"github.com/Kevin-Lab777/sub2api/ent/pendingauthsession"
 	"github.com/Kevin-Lab777/sub2api/ent/proxy"
 	"github.com/Kevin-Lab777/sub2api/ent/securitysecret"
 	"github.com/Kevin-Lab777/sub2api/ent/setting"
@@ -93,27 +101,35 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			apikey.Table:                  apikey.ValidColumn,
-			account.Table:                 account.ValidColumn,
-			accountgroup.Table:            accountgroup.ValidColumn,
-			announcement.Table:            announcement.ValidColumn,
-			announcementread.Table:        announcementread.ValidColumn,
-			errorpassthroughrule.Table:    errorpassthroughrule.ValidColumn,
-			group.Table:                   group.ValidColumn,
-			idempotencyrecord.Table:       idempotencyrecord.ValidColumn,
-			paymentauditlog.Table:         paymentauditlog.ValidColumn,
-			paymentorder.Table:            paymentorder.ValidColumn,
-			paymentproviderinstance.Table: paymentproviderinstance.ValidColumn,
-			proxy.Table:                   proxy.ValidColumn,
-			securitysecret.Table:          securitysecret.ValidColumn,
-			setting.Table:                 setting.ValidColumn,
-			subscriptionplan.Table:        subscriptionplan.ValidColumn,
-			tlsfingerprintprofile.Table:   tlsfingerprintprofile.ValidColumn,
-			usagecleanuptask.Table:        usagecleanuptask.ValidColumn,
-			usagelog.Table:                usagelog.ValidColumn,
-			user.Table:                    user.ValidColumn,
-			userallowedgroup.Table:        userallowedgroup.ValidColumn,
-			usersubscription.Table:        usersubscription.ValidColumn,
+			apikey.Table:                        apikey.ValidColumn,
+			account.Table:                       account.ValidColumn,
+			accountgroup.Table:                  accountgroup.ValidColumn,
+			announcement.Table:                  announcement.ValidColumn,
+			announcementread.Table:              announcementread.ValidColumn,
+			authidentity.Table:                  authidentity.ValidColumn,
+			authidentitychannel.Table:           authidentitychannel.ValidColumn,
+			channelmonitor.Table:                channelmonitor.ValidColumn,
+			channelmonitordailyrollup.Table:     channelmonitordailyrollup.ValidColumn,
+			channelmonitorhistory.Table:         channelmonitorhistory.ValidColumn,
+			channelmonitorrequesttemplate.Table: channelmonitorrequesttemplate.ValidColumn,
+			errorpassthroughrule.Table:          errorpassthroughrule.ValidColumn,
+			group.Table:                         group.ValidColumn,
+			idempotencyrecord.Table:             idempotencyrecord.ValidColumn,
+			identityadoptiondecision.Table:      identityadoptiondecision.ValidColumn,
+			paymentauditlog.Table:               paymentauditlog.ValidColumn,
+			paymentorder.Table:                  paymentorder.ValidColumn,
+			paymentproviderinstance.Table:       paymentproviderinstance.ValidColumn,
+			pendingauthsession.Table:            pendingauthsession.ValidColumn,
+			proxy.Table:                         proxy.ValidColumn,
+			securitysecret.Table:                securitysecret.ValidColumn,
+			setting.Table:                       setting.ValidColumn,
+			subscriptionplan.Table:              subscriptionplan.ValidColumn,
+			tlsfingerprintprofile.Table:         tlsfingerprintprofile.ValidColumn,
+			usagecleanuptask.Table:              usagecleanuptask.ValidColumn,
+			usagelog.Table:                      usagelog.ValidColumn,
+			user.Table:                          user.ValidColumn,
+			userallowedgroup.Table:              userallowedgroup.ValidColumn,
+			usersubscription.Table:              usersubscription.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

@@ -354,6 +354,10 @@ type VerifyOrderRequest struct {
 	OutTradeNo string `json:"out_trade_no" binding:"required"`
 }
 
+type ResolveOrderByResumeTokenRequest struct {
+	ResumeToken string `json:"resume_token" binding:"required"`
+}
+
 // VerifyOrder actively queries the upstream payment provider to check
 // if payment was made, and processes it if so.
 // POST /api/v1/payment/orders/verify
@@ -403,6 +407,32 @@ func (h *PaymentHandler) VerifyOrderPublic(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	response.Success(c, PublicOrderResult{
+		ID:          order.ID,
+		OutTradeNo:  order.OutTradeNo,
+		Amount:      order.Amount,
+		PayAmount:   order.PayAmount,
+		PaymentType: order.PaymentType,
+		OrderType:   order.OrderType,
+		Status:      order.Status,
+	})
+}
+
+// ResolveOrderPublicByResumeToken resolves a payment order from a signed resume token.
+// POST /api/v1/payment/public/orders/resolve
+func (h *PaymentHandler) ResolveOrderPublicByResumeToken(c *gin.Context) {
+	var req ResolveOrderByResumeTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	order, err := h.paymentService.GetPublicOrderByResumeToken(c.Request.Context(), req.ResumeToken)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
 	response.Success(c, PublicOrderResult{
 		ID:          order.ID,
 		OutTradeNo:  order.OutTradeNo,

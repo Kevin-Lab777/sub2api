@@ -7,9 +7,9 @@ import (
 	"math/rand/v2"
 	"sync"
 	"time"
+	"strings"
 
 	dbent "github.com/Kevin-Lab777/sub2api/ent"
-	"github.com/Kevin-Lab777/sub2api/ent/paymentorder"
 	"github.com/Kevin-Lab777/sub2api/ent/paymentproviderinstance"
 	"github.com/Kevin-Lab777/sub2api/internal/payment"
 	"github.com/Kevin-Lab777/sub2api/internal/payment/provider"
@@ -64,30 +64,47 @@ func generateRandomString(n int) string {
 	return string(b)
 }
 
+func resolveWxpayJSAPIAppID(config map[string]string) string {
+	if appID := strings.TrimSpace(config["mpAppId"]); appID != "" {
+		return appID
+	}
+	return strings.TrimSpace(config["appId"])
+}
+
 type CreateOrderRequest struct {
-	UserID      int64
-	Amount      float64
-	PaymentType string
-	ClientIP    string
-	IsMobile    bool
-	SrcHost     string
-	SrcURL      string
-	OrderType   string
-	PlanID      int64
+	UserID           int64
+	Amount           float64
+	PaymentType      string
+	PaymentSource    string
+	ClientIP         string
+	IsMobile         bool
+	IsWeChatBrowser  bool
+	OpenID           string
+	ReturnURL        string
+	SrcHost          string
+	SrcURL           string
+	OrderType        string
+	PlanID           int64
 }
 
 type CreateOrderResponse struct {
-	OrderID      int64     `json:"order_id"`
-	Amount       float64   `json:"amount"`
-	PayAmount    float64   `json:"pay_amount"`
-	FeeRate      float64   `json:"fee_rate"`
-	Status       string    `json:"status"`
-	PaymentType  string    `json:"payment_type"`
-	PayURL       string    `json:"pay_url,omitempty"`
-	QRCode       string    `json:"qr_code,omitempty"`
-	ClientSecret string    `json:"client_secret,omitempty"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	PaymentMode  string    `json:"payment_mode,omitempty"`
+	OrderID      int64                          `json:"order_id"`
+	Amount       float64                        `json:"amount"`
+	PayAmount    float64                        `json:"pay_amount"`
+	FeeRate      float64                        `json:"fee_rate"`
+	Status       string                         `json:"status"`
+	ResultType   payment.CreatePaymentResultType `json:"result_type,omitempty"`
+	PaymentType  string                         `json:"payment_type"`
+	OutTradeNo   string                         `json:"out_trade_no,omitempty"`
+	PayURL       string                         `json:"pay_url,omitempty"`
+	QRCode       string                         `json:"qr_code,omitempty"`
+	ClientSecret string                         `json:"client_secret,omitempty"`
+	ResumeToken  string                         `json:"resume_token,omitempty"`
+	OAuth        *payment.WechatOAuthInfo       `json:"oauth,omitempty"`
+	JSAPI        *payment.WechatJSAPIPayload    `json:"jsapi,omitempty"`
+	JSAPIPayload *payment.WechatJSAPIPayload    `json:"jsapi_payload,omitempty"`
+	ExpiresAt    time.Time                      `json:"expires_at"`
+	PaymentMode  string                         `json:"payment_mode,omitempty"`
 }
 
 type OrderListParams struct {
@@ -217,25 +234,6 @@ func (s *PaymentService) loadProviders(ctx context.Context) {
 		}
 		s.registry.Register(p)
 	}
-}
-
-// GetWebhookProvider returns the provider instance that should verify a webhook.
-// It extracts out_trade_no from the raw body, looks up the order to find the
-// original provider instance, and creates a provider with that instance's credentials.
-// Falls back to the registry provider when the order cannot be found.
-func (s *PaymentService) GetWebhookProvider(ctx context.Context, providerKey, outTradeNo string) (payment.Provider, error) {
-	if outTradeNo != "" {
-		order, err := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(outTradeNo)).Only(ctx)
-		if err == nil {
-			p, pErr := s.getOrderProvider(ctx, order)
-			if pErr == nil {
-				return p, nil
-			}
-			slog.Warn("[Webhook] order provider creation failed, falling back to registry", "outTradeNo", outTradeNo, "error", pErr)
-		}
-	}
-	s.EnsureProviders(ctx)
-	return s.registry.GetProviderByKey(providerKey)
 }
 
 // --- Helpers ---

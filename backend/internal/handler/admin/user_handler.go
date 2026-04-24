@@ -40,6 +40,7 @@ type CreateUserRequest struct {
 	Notes         string  `json:"notes"`
 	Balance       float64 `json:"balance"`
 	Concurrency   int     `json:"concurrency"`
+	RPMLimit      int     `json:"rpm_limit"`
 	AllowedGroups []int64 `json:"allowed_groups"`
 }
 
@@ -52,6 +53,7 @@ type UpdateUserRequest struct {
 	Notes         *string  `json:"notes"`
 	Balance       *float64 `json:"balance"`
 	Concurrency   *int     `json:"concurrency"`
+	RPMLimit      *int     `json:"rpm_limit"`
 	Status        string   `json:"status" binding:"omitempty,oneof=active disabled"`
 	AllowedGroups *[]int64 `json:"allowed_groups"`
 	// GroupRates 用户专属分组倍率配置
@@ -64,6 +66,22 @@ type UpdateBalanceRequest struct {
 	Balance   float64 `json:"balance" binding:"required,gt=0"`
 	Operation string  `json:"operation" binding:"required,oneof=set add subtract"`
 	Notes     string  `json:"notes"`
+}
+
+type BindUserAuthIdentityRequest struct {
+	ProviderType    string                              `json:"provider_type"`
+	ProviderKey     string                              `json:"provider_key"`
+	ProviderSubject string                              `json:"provider_subject"`
+	Issuer          *string                             `json:"issuer"`
+	Metadata        map[string]any                      `json:"metadata"`
+	Channel         *BindUserAuthIdentityChannelRequest `json:"channel"`
+}
+
+type BindUserAuthIdentityChannelRequest struct {
+	Channel        string         `json:"channel"`
+	ChannelAppID   string         `json:"channel_app_id"`
+	ChannelSubject string         `json:"channel_subject"`
+	Metadata       map[string]any `json:"metadata"`
 }
 
 // List handles listing all users with pagination

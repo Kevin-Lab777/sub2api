@@ -4,13 +4,20 @@
  */
 
 import { apiClient } from './client'
-import type { LoginRequest, AuthResponse, PublicSettings } from '@/types'
+import type {
+  LoginRequest,
+  AuthResponse,
+  PublicSettings,
+  TotpLoginResponse
+} from '@/types'
+
+export type LoginResponse = AuthResponse | TotpLoginResponse
 
 /**
  * Login with email and password
  */
-export async function login(credentials: LoginRequest): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>('/auth/login', credentials)
+export async function login(credentials: LoginRequest): Promise<LoginResponse> {
+  const { data } = await apiClient.post<LoginResponse>('/auth/login', credentials)
   return data
 }
 
@@ -47,9 +54,9 @@ export async function refreshToken(): Promise<AuthResponse> {
  * [LITE] 2FA Login - verify TOTP code
  */
 export async function login2FA(tempToken: string, code: string): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>('/auth/2fa/verify', {
+  const { data } = await apiClient.post<AuthResponse>('/auth/login/2fa', {
     temp_token: tempToken,
-    code
+    totp_code: code
   })
   return data
 }
@@ -57,27 +64,8 @@ export async function login2FA(tempToken: string, code: string): Promise<AuthRes
 /**
  * [LITE] Check if TOTP 2FA is required from login response
  */
-export function isTotp2FARequired(response: any): boolean {
-  return response?.requires_2fa === true
-}
-
-/**
- * Complete OIDC OAuth registration by supplying an invitation code
- */
-export async function completeOIDCOAuthRegistration(
-  pendingOAuthToken: string,
-  invitationCode: string
-): Promise<{ access_token: string; refresh_token: string; expires_in: number; token_type: string }> {
-  const { data } = await apiClient.post<{
-    access_token: string
-    refresh_token: string
-    expires_in: number
-    token_type: string
-  }>('/auth/oauth/oidc/complete-registration', {
-    pending_oauth_token: pendingOAuthToken,
-    invitation_code: invitationCode
-  })
-  return data
+export function isTotp2FARequired(response: LoginResponse): response is TotpLoginResponse {
+  return 'requires_2fa' in response && response.requires_2fa === true
 }
 
 export const authAPI = {
@@ -87,8 +75,7 @@ export const authAPI = {
   logout,
   refreshToken,
   login2FA,
-  isTotp2FARequired,
-  completeOIDCOAuthRegistration
+  isTotp2FARequired
 }
 
 export default authAPI

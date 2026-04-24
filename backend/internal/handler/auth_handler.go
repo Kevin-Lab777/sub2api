@@ -18,6 +18,7 @@ type AuthHandler struct {
 	authService *service.AuthService
 	userService *service.UserService
 	settingSvc  *service.SettingService
+	totpService *service.TotpService
 }
 
 // NewAuthHandler creates a new AuthHandler [LITE] 简化版
@@ -26,12 +27,14 @@ func NewAuthHandler(
 	authService *service.AuthService,
 	userService *service.UserService,
 	settingService *service.SettingService,
+	totpService *service.TotpService,
 ) *AuthHandler {
 	return &AuthHandler{
 		cfg:         cfg,
 		authService: authService,
 		userService: userService,
 		settingSvc:  settingService,
+		totpService: totpService,
 	}
 }
 
@@ -47,6 +50,17 @@ type AuthResponse struct {
 	AccessToken string    `json:"access_token"`
 	TokenType   string    `json:"token_type"`
 	User        *dto.User `json:"user"`
+}
+
+type TotpLoginResponse struct {
+	Requires2FA     bool   `json:"requires_2fa"`
+	TempToken       string `json:"temp_token,omitempty"`
+	UserEmailMasked string `json:"user_email_masked,omitempty"`
+}
+
+type Login2FARequest struct {
+	TempToken string `json:"temp_token" binding:"required"`
+	TotpCode  string `json:"totp_code" binding:"required,len=6"`
 }
 
 // Login handles user login [LITE] 只允许 admin 登录
@@ -66,6 +80,75 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+
+	if h.totpService != nil && h.settingSvc != nil && h.settingSvc.IsTotpEnabled(c.Request.Context()) && user.TotpEnabled {
+		tempToken, err := h.totpService.CreateLoginSession(c.Request.Context(), user.ID, user.Email)
+		if err != nil {
+			response.InternalError(c, "Failed to create 2FA session")
+			return
+		}
+
+		response.Success(c, TotpLoginResponse{
+			Requires2FA:     true,
+			TempToken:       tempToken,
+			UserEmailMasked: service.MaskEmail(user.Email),
+		})
+		return
+	}
+
+	response.Success(c, AuthResponse{
+		AccessToken: token,
+		TokenType:   "Bearer",
+		User:        dto.UserFromService(user),
+	})
+}
+
+// Login2FA completes admin login after TOTP verification.
+// POST /api/v1/auth/login/2fa
+func (h *AuthHandler) Login2FA(c *gin.Context) {
+	var req Login2FARequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if h.totpService == nil {
+		response.InternalError(c, "TOTP service unavailable")
+		return
+	}
+
+	session, err := h.totpService.GetLoginSession(c.Request.Context(), req.TempToken)
+	if err != nil || session == nil {
+		response.BadRequest(c, "Invalid or expired 2FA session")
+		return
+	}
+
+	if err := h.totpService.VerifyCode(c.Request.Context(), session.UserID, req.TotpCode); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	user, err := h.userService.GetByID(c.Request.Context(), session.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if !user.IsActive() {
+		response.ErrorFrom(c, service.ErrUserNotActive)
+		return
+	}
+	if user.Role != service.RoleAdmin {
+		response.ErrorFrom(c, service.ErrAdminOnly)
+		return
+	}
+
+	token, err := h.authService.GenerateToken(user)
+	if err != nil {
+		response.InternalError(c, "Failed to generate token")
+		return
+	}
+
+	_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
 
 	response.Success(c, AuthResponse{
 		AccessToken: token,

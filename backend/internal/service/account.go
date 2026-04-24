@@ -186,6 +186,9 @@ func (a *Account) IsSchedulable() bool {
 	if rules := a.GetActiveHours(); len(rules) > 0 && !a.isInActiveWindow(timezone.Now()) {
 		return false
 	}
+	if a.IsAPIKeyOrBedrock() && a.IsQuotaExceeded() {
+		return false
+	}
 	return true
 }
 
@@ -255,6 +258,20 @@ func (a *Account) IsGeminiCodeAssist() bool {
 
 func (a *Account) CanGetUsage() bool {
 	return a.Type == AccountTypeOAuth
+}
+
+func (a *Account) SupportsOpenAIImageCapability(capability OpenAIImagesCapability) bool {
+	if a == nil || a.Platform != PlatformOpenAI {
+		return false
+	}
+	switch capability {
+	case "", OpenAIImagesCapabilityBasic:
+		return true
+	case OpenAIImagesCapabilityNative:
+		return a.IsOAuth()
+	default:
+		return false
+	}
 }
 
 func (a *Account) GetCredential(key string) string {

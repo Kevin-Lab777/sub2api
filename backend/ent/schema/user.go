@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"fmt"
+
 	"github.com/Kevin-Lab777/sub2api/ent/schema/mixins"
 	"github.com/Kevin-Lab777/sub2api/internal/domain"
 
@@ -72,6 +74,24 @@ func (User) Fields() []ent.Field {
 		field.Time("totp_enabled_at").
 			Optional().
 			Nillable(),
+		field.String("signup_source").
+			Validate(func(value string) error {
+				switch value {
+				case "email", "linuxdo", "wechat", "oidc":
+					return nil
+				default:
+					return fmt.Errorf("must be one of email, linuxdo, wechat, oidc")
+				}
+			}).
+			Default("email"),
+		field.Time("last_login_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Time("last_active_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
 		// 余额不足通知 (upstream v0.1.114)
 		field.Bool("balance_notify_enabled").
@@ -88,6 +108,10 @@ func (User) Fields() []ent.Field {
 		field.Float("total_recharged").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+
+		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
+		field.Int("rpm_limit").
+			Default(0),
 	}
 }
 
@@ -95,14 +119,16 @@ func (User) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("api_keys", APIKey.Type),
 		// [LITE:DELETED] redeem_codes edge
+		edge.To("auth_identities", AuthIdentity.Type),
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("assigned_subscriptions", UserSubscription.Type),
 		edge.To("announcement_reads", AnnouncementRead.Type),
 		// [LITE:KEPT] allowed_groups - v0.1.88 core feature
-			edge.To("allowed_groups", Group.Type).
-				Through("user_allowed_groups", UserAllowedGroup.Type),
+		edge.To("allowed_groups", Group.Type).
+			Through("user_allowed_groups", UserAllowedGroup.Type),
 		edge.To("usage_logs", UsageLog.Type),
 		edge.To("payment_orders", PaymentOrder.Type),
+		edge.To("pending_auth_sessions", PendingAuthSession.Type),
 		// [LITE:DELETED] attribute_values edge
 		// [LITE:DELETED] promo_code_usages edge
 	}

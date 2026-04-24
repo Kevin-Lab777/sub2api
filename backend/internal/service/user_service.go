@@ -197,6 +197,18 @@ func (s *UserService) GetByID(ctx context.Context, id int64) (*User, error) {
 	return user, nil
 }
 
+func (s *UserService) TouchLastActiveForUser(ctx context.Context, user *User) {
+	if s == nil || s.userRepo == nil || user == nil || user.ID <= 0 {
+		return
+	}
+
+	now := time.Now().UTC()
+	user.LastActiveAt = &now
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		slog.Debug("touch last active failed", "user_id", user.ID, "error", err)
+	}
+}
+
 // List 获取用户列表（管理员功能）
 func (s *UserService) List(ctx context.Context, params pagination.PaginationParams) ([]User, *pagination.PaginationResult, error) {
 	users, pagination, err := s.userRepo.List(ctx, params)

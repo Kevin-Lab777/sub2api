@@ -137,19 +137,19 @@ func (Group) Fields() []ent.Field {
 			MaxLen(100).
 			Default("").
 			Comment("默认映射模型 ID，当账号级映射找不到时使用此值"),
-
-			// [LITE:KEPT] upstream v0.1.109 new fields
-			field.Bool("require_oauth_only").
-				Default(false).
-				Comment("仅允许非 apikey 类型账号关联到此分组"),
-			field.Bool("require_privacy_set").
-				Default(false).
-				Comment("调度时仅允许 privacy 已成功设置的账号"),
-
-			// [LITE:KEPT] upstream v0.1.114 — per-model dispatch overrides
-			field.JSON("messages_dispatch_model_config", domain.OpenAIMessagesDispatchModelConfig{}).
-				Optional().
-				Comment("OpenAI /v1/messages 调度时的按模型配置（启用/跳过）"),
+		field.Bool("require_oauth_only").
+			Default(false).
+			Comment("仅允许非 apikey 类型账号关联到此分组"),
+		field.Bool("require_privacy_set").
+			Default(false).
+			Comment("调度时仅允许 privacy 已成功设置的账号"),
+		field.JSON("messages_dispatch_model_config", domain.OpenAIMessagesDispatchModelConfig{}).
+			Default(domain.OpenAIMessagesDispatchModelConfig{}).
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
+			Comment("OpenAI Messages 调度模型配置：按 Claude 系列/精确模型映射到目标 GPT 模型"),
+		field.Int("rpm_limit").
+			Default(0).
+			Comment("分组 RPM 上限，0 表示不限制；设置后接管该分组用户的限流"),
 	}
 }
 
@@ -163,9 +163,9 @@ func (Group) Edges() []ent.Edge {
 			Ref("groups").
 			Through("account_groups", AccountGroup.Type),
 		// [LITE:KEPT] allowed_users - v0.1.88 core feature
-			edge.From("allowed_users", User.Type).
-				Ref("allowed_groups").
-				Through("user_allowed_groups", UserAllowedGroup.Type),
+		edge.From("allowed_users", User.Type).
+			Ref("allowed_groups").
+			Through("user_allowed_groups", UserAllowedGroup.Type),
 		// 注意：fallback_group_id 直接作为字段使用，不定义 edge
 		// 这样允许多个分组指向同一个降级分组（M2O 关系）
 	}

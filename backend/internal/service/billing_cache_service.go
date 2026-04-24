@@ -27,6 +27,8 @@ var (
 	ErrAPIKeyWeeklyLimitExceeded  = infraerrors.Forbidden("API_KEY_WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
 	ErrAPIKeyMonthlyLimitExceeded = infraerrors.Forbidden("API_KEY_MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
 	ErrAPIKeyTotalLimitExceeded   = infraerrors.Forbidden("API_KEY_TOTAL_LIMIT_EXCEEDED", "total usage limit exceeded")
+	ErrGroupRPMExceeded           = infraerrors.TooManyRequests("GROUP_RPM_EXCEEDED", "group rpm limit exceeded")
+	ErrUserRPMExceeded            = infraerrors.TooManyRequests("USER_RPM_EXCEEDED", "user rpm limit exceeded")
 )
 
 // subscriptionCacheData 订阅缓存数据结构（内部使用）

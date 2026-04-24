@@ -96,6 +96,7 @@ func provideCleanup(
 	scheduledTestRunner *service.ScheduledTestRunnerService,
 	backupSvc *service.BackupService,
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
+	channelMonitorRunner *service.ChannelMonitorRunner,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -227,6 +228,12 @@ func provideCleanup(
 				}
 				return nil
 			}},
+			{"ChannelMonitorRunner", func() error {
+				if channelMonitorRunner != nil {
+					channelMonitorRunner.Stop()
+				}
+				return nil
+			}},
 		}
 
 		infraSteps := []cleanupStep{
@@ -237,7 +244,10 @@ func provideCleanup(
 				return rdb.Close()
 			}},
 			{"Ent", func() error {
-				return entAndDB.Client.Close()
+				if entAndDB.DB == nil {
+					return nil
+				}
+				return entAndDB.DB.Close()
 			}},
 		}
 
