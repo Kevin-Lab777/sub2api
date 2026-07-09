@@ -234,7 +234,10 @@ const providerLabels = computed<Record<UserAuthProvider, string>>(() => ({
   email: t('profile.authBindings.providers.email'),
   linuxdo: t('profile.authBindings.providers.linuxdo'),
   oidc: t('profile.authBindings.providers.oidc', { providerName: 'OIDC' }),
-  wechat: t('profile.authBindings.providers.wechat')
+  wechat: t('profile.authBindings.providers.wechat'),
+  github: 'GitHub',
+  google: 'Google',
+  dingtalk: 'DingTalk'
 }))
 
 function formatCurrency(value: number): string {

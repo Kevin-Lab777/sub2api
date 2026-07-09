@@ -94,11 +94,10 @@ const (
 
 // TotpService handles TOTP operations
 type TotpService struct {
-	userRepo          UserRepository
-	encryptor         SecretEncryptor
-	cache             TotpCache
-	settingService    *SettingService
-	// [LITE] 移除 emailService 和 emailQueueService
+	userRepo       UserRepository
+	encryptor      SecretEncryptor
+	cache          TotpCache
+	settingService *SettingService
 }
 
 // NewTotpService creates a new TOTP service
@@ -107,13 +106,12 @@ func NewTotpService(
 	encryptor SecretEncryptor,
 	cache TotpCache,
 	settingService *SettingService,
-	// [LITE] 移除 emailService 和 emailQueueService 参数
 ) *TotpService {
 	return &TotpService{
-		userRepo:          userRepo,
-		encryptor:         encryptor,
-		cache:             cache,
-		settingService:    settingService,
+		userRepo:       userRepo,
+		encryptor:      encryptor,
+		cache:          cache,
+		settingService: settingService,
 	}
 }
 
@@ -151,7 +149,8 @@ func (s *TotpService) InitiateSetup(ctx context.Context, userID int64, emailCode
 		return nil, ErrTotpAlreadyEnabled
 	}
 
-	// [LITE] 只使用密码验证，不使用邮件验证
+	// [LITE:DELETED] EmailService/EmailQueueService were removed; TOTP identity
+	// verification always uses the account password in Lite.
 	if password == "" {
 		return nil, ErrPasswordRequired
 	}
@@ -287,7 +286,8 @@ func (s *TotpService) Disable(ctx context.Context, userID int64, emailCode, pass
 		return ErrTotpNotSetup
 	}
 
-	// [LITE] 只使用密码验证
+	// [LITE:DELETED] EmailService/EmailQueueService were removed; TOTP identity
+	// verification always uses the account password in Lite.
 	if password == "" {
 		return ErrPasswordRequired
 	}
@@ -484,14 +484,10 @@ type VerificationMethod struct {
 
 // GetVerificationMethod returns the verification method for TOTP operations
 func (s *TotpService) GetVerificationMethod(ctx context.Context) *VerificationMethod {
-	if s.settingService.IsEmailVerifyEnabled(ctx) {
-		return &VerificationMethod{Method: "email"}
-	}
 	return &VerificationMethod{Method: "password"}
 }
 
 // SendVerifyCode sends an email verification code for TOTP operations
-// [LITE] 邮件服务已移除，返回不支持错误
-func (s *TotpService) SendVerifyCode(ctx context.Context, userID int64) error {
-	return infraerrors.BadRequest("EMAIL_VERIFY_NOT_ENABLED", "email verification is not available in Lite mode")
+func (s *TotpService) SendVerifyCode(ctx context.Context, userID int64, locale ...string) error {
+	return infraerrors.BadRequest("EMAIL_VERIFY_NOT_AVAILABLE", "email verification is not available in Lite")
 }

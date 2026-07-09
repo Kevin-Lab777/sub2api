@@ -1,31 +1,28 @@
 /**
  * API Client for Sub2API Backend
- * [LITE] Simplified - Admin only
+ * Central export point for all API modules
  */
 
 // Re-export the HTTP client
 export { apiClient } from './client'
 
 // Auth API
-export { authAPI, isTotp2FARequired } from './auth'
+export { authAPI, isTotp2FARequired, type LoginResponse } from './auth'
 
-// Payment API (kept in Lite)
+// User APIs
+export { keysAPI } from './keys'
+export { usageAPI } from './usage'
+export { userAPI } from './user'
 export { paymentAPI } from './payment'
+export { userGroupsAPI } from './groups'
+export { userChannelsAPI } from './channels'
+export * as batchImageAPI from './batchImage'
+export { totpAPI } from './totp'
+export { default as announcementsAPI } from './announcements'
+export { channelMonitorUserAPI } from './channelMonitor'
 
 // Admin APIs
 export { adminAPI } from './admin'
-
-// [LITE] User profile API (for password change)
-export { userAPI } from './user'
-
-// [LITE] API Keys management for Admin
-export { keysAPI } from './keys'
-export { usageAPI } from './usage'
-export { userGroupsAPI } from './groups'
-
-// Upstream APIs (compatible with Lite)
-export { totpAPI } from './totp'
-export { default as announcementsAPI } from './announcements'
 
 // Default export
 export { default } from './client'

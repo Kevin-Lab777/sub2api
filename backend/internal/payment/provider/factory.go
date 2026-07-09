@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Kevin-Lab777/sub2api/internal/payment"
 )
@@ -17,7 +18,16 @@ func CreateProvider(providerKey string, instanceID string, config map[string]str
 		return NewWxpay(instanceID, config)
 	case payment.TypeStripe:
 		return NewStripe(instanceID, config)
+	case payment.TypeAirwallex:
+		return NewAirwallex(instanceID, config)
 	default:
 		return nil, fmt.Errorf("unknown provider key: %s", providerKey)
 	}
+}
+
+func ResolveWxpayJSAPIAppID(config map[string]string) string {
+	if appID := strings.TrimSpace(config["mpAppId"]); appID != "" {
+		return appID
+	}
+	return strings.TrimSpace(config["appId"])
 }

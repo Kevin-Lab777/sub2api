@@ -19,6 +19,9 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/apikey"
 	"github.com/Kevin-Lab777/sub2api/ent/authidentity"
 	"github.com/Kevin-Lab777/sub2api/ent/authidentitychannel"
+	"github.com/Kevin-Lab777/sub2api/ent/batchimageevent"
+	"github.com/Kevin-Lab777/sub2api/ent/batchimageitem"
+	"github.com/Kevin-Lab777/sub2api/ent/batchimagejob"
 	"github.com/Kevin-Lab777/sub2api/ent/channelmonitor"
 	"github.com/Kevin-Lab777/sub2api/ent/channelmonitordailyrollup"
 	"github.com/Kevin-Lab777/sub2api/ent/channelmonitorhistory"
@@ -40,6 +43,7 @@ import (
 	"github.com/Kevin-Lab777/sub2api/ent/usagelog"
 	"github.com/Kevin-Lab777/sub2api/ent/user"
 	"github.com/Kevin-Lab777/sub2api/ent/userallowedgroup"
+	"github.com/Kevin-Lab777/sub2api/ent/userplatformquota"
 	"github.com/Kevin-Lab777/sub2api/ent/usersubscription"
 )
 
@@ -108,6 +112,9 @@ func checkColumn(t, c string) error {
 			announcementread.Table:              announcementread.ValidColumn,
 			authidentity.Table:                  authidentity.ValidColumn,
 			authidentitychannel.Table:           authidentitychannel.ValidColumn,
+			batchimageevent.Table:               batchimageevent.ValidColumn,
+			batchimageitem.Table:                batchimageitem.ValidColumn,
+			batchimagejob.Table:                 batchimagejob.ValidColumn,
 			channelmonitor.Table:                channelmonitor.ValidColumn,
 			channelmonitordailyrollup.Table:     channelmonitordailyrollup.ValidColumn,
 			channelmonitorhistory.Table:         channelmonitorhistory.ValidColumn,
@@ -129,6 +136,7 @@ func checkColumn(t, c string) error {
 			usagelog.Table:                      usagelog.ValidColumn,
 			user.Table:                          user.ValidColumn,
 			userallowedgroup.Table:              userallowedgroup.ValidColumn,
+			userplatformquota.Table:             userplatformquota.ValidColumn,
 			usersubscription.Table:              usersubscription.ValidColumn,
 		})
 	})

@@ -41,6 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // [LITE] Always Lite mode - hide user management, redeem, promo
   const isLiteMode = computed(() => true)
+  const isSimpleMode = computed(() => true)
 
   // ==================== Actions ====================
 
@@ -323,6 +324,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     isLiteMode,
+    isSimpleMode,
 
     // Actions
     login,

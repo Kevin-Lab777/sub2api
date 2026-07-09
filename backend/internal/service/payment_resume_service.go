@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -101,21 +100,6 @@ func NewPaymentResumeService(signingKey []byte, verifyFallbacks ...[]byte) *Paym
 		}
 	}
 	return svc
-}
-
-func newLegacyAwarePaymentResumeService(legacyKey []byte) *PaymentResumeService {
-	explicitKey := strings.TrimSpace(os.Getenv("PAYMENT_RESUME_SIGNING_KEY"))
-	if explicitKey != "" {
-		return NewPaymentResumeService([]byte(explicitKey), legacyKey)
-	}
-	return NewPaymentResumeService(legacyKey)
-}
-
-func (s *PaymentService) paymentResume() *PaymentResumeService {
-	if s == nil || s.configService == nil {
-		return NewPaymentResumeService(nil)
-	}
-	return newLegacyAwarePaymentResumeService(s.configService.encryptionKey)
 }
 
 func (s *PaymentResumeService) isSigningConfigured() bool {

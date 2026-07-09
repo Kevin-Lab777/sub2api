@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dbent "github.com/Kevin-Lab777/sub2api/ent"
+	dbaccount "github.com/Kevin-Lab777/sub2api/ent/account"
 	"github.com/Kevin-Lab777/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
@@ -54,6 +55,16 @@ func mustCreateUser(t *testing.T, client *dbent.Client, u *service.User) *servic
 	u.ID = created.ID
 	u.CreatedAt = created.CreatedAt
 	u.UpdatedAt = created.UpdatedAt
+
+	if len(u.AllowedGroups) > 0 {
+		for _, groupID := range u.AllowedGroups {
+			_, err := client.UserAllowedGroup.Create().
+				SetUserID(u.ID).
+				SetGroupID(groupID).
+				Save(ctx)
+			require.NoError(t, err, "create user_allowed_groups row")
+		}
+	}
 
 	return u
 }
@@ -222,6 +233,12 @@ func mustCreateAccount(t *testing.T, client *dbent.Client, a *service.Account) *
 	}
 	if !a.UpdatedAt.IsZero() {
 		create.SetUpdatedAt(a.UpdatedAt)
+	}
+	if a.ParentAccountID != nil {
+		create.SetParentAccountID(*a.ParentAccountID)
+	}
+	if a.QuotaDimension != "" {
+		create.SetQuotaDimension(dbaccount.QuotaDimension(a.QuotaDimension))
 	}
 
 	created, err := create.Save(ctx)

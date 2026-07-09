@@ -1,13 +1,16 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"os"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 
 	dbent "github.com/Kevin-Lab777/sub2api/ent"
 	"github.com/Kevin-Lab777/sub2api/ent/paymentproviderinstance"
@@ -27,6 +30,7 @@ const (
 	OrderStatusFailed            = payment.OrderStatusFailed
 	OrderStatusRefundRequested   = payment.OrderStatusRefundRequested
 	OrderStatusRefunding         = payment.OrderStatusRefunding
+	OrderStatusRefundPending     = payment.OrderStatusRefundPending
 	OrderStatusPartiallyRefunded = payment.OrderStatusPartiallyRefunded
 	OrderStatusRefunded          = payment.OrderStatusRefunded
 	OrderStatusRefundFailed      = payment.OrderStatusRefundFailed
@@ -44,6 +48,8 @@ const (
 
 	orderIDPrefix = "sub2_"
 )
+
+const paymentResumeSigningKeyEnv = "PAYMENT_RESUME_SIGNING_KEY"
 
 // --- Types ---
 
@@ -64,47 +70,45 @@ func generateRandomString(n int) string {
 	return string(b)
 }
 
-func resolveWxpayJSAPIAppID(config map[string]string) string {
-	if appID := strings.TrimSpace(config["mpAppId"]); appID != "" {
-		return appID
-	}
-	return strings.TrimSpace(config["appId"])
-}
-
 type CreateOrderRequest struct {
-	UserID           int64
-	Amount           float64
-	PaymentType      string
-	PaymentSource    string
-	ClientIP         string
-	IsMobile         bool
-	IsWeChatBrowser  bool
-	OpenID           string
-	ReturnURL        string
-	SrcHost          string
-	SrcURL           string
-	OrderType        string
-	PlanID           int64
+	UserID          int64
+	Amount          float64
+	PaymentType     string
+	OpenID          string
+	ClientIP        string
+	IsMobile        bool
+	IsWeChatBrowser bool
+	SrcHost         string
+	SrcURL          string
+	ReturnURL       string
+	PaymentSource   string
+	OrderType       string
+	PlanID          int64
+	Locale          string
 }
 
 type CreateOrderResponse struct {
-	OrderID      int64                          `json:"order_id"`
-	Amount       float64                        `json:"amount"`
-	PayAmount    float64                        `json:"pay_amount"`
-	FeeRate      float64                        `json:"fee_rate"`
-	Status       string                         `json:"status"`
+	OrderID      int64                           `json:"order_id"`
+	Amount       float64                         `json:"amount"`
+	PayAmount    float64                         `json:"pay_amount"`
+	FeeRate      float64                         `json:"fee_rate"`
+	Status       string                          `json:"status"`
 	ResultType   payment.CreatePaymentResultType `json:"result_type,omitempty"`
-	PaymentType  string                         `json:"payment_type"`
-	OutTradeNo   string                         `json:"out_trade_no,omitempty"`
-	PayURL       string                         `json:"pay_url,omitempty"`
-	QRCode       string                         `json:"qr_code,omitempty"`
-	ClientSecret string                         `json:"client_secret,omitempty"`
-	ResumeToken  string                         `json:"resume_token,omitempty"`
-	OAuth        *payment.WechatOAuthInfo       `json:"oauth,omitempty"`
-	JSAPI        *payment.WechatJSAPIPayload    `json:"jsapi,omitempty"`
-	JSAPIPayload *payment.WechatJSAPIPayload    `json:"jsapi_payload,omitempty"`
-	ExpiresAt    time.Time                      `json:"expires_at"`
-	PaymentMode  string                         `json:"payment_mode,omitempty"`
+	PaymentType  string                          `json:"payment_type"`
+	OutTradeNo   string                          `json:"out_trade_no,omitempty"`
+	PayURL       string                          `json:"pay_url,omitempty"`
+	QRCode       string                          `json:"qr_code,omitempty"`
+	ClientSecret string                          `json:"client_secret,omitempty"`
+	IntentID     string                          `json:"intent_id,omitempty"`
+	Currency     string                          `json:"currency,omitempty"`
+	CountryCode  string                          `json:"country_code,omitempty"`
+	PaymentEnv   string                          `json:"payment_env,omitempty"`
+	OAuth        *payment.WechatOAuthInfo        `json:"oauth,omitempty"`
+	JSAPI        *payment.WechatJSAPIPayload     `json:"jsapi,omitempty"`
+	JSAPIPayload *payment.WechatJSAPIPayload     `json:"jsapi_payload,omitempty"`
+	ExpiresAt    time.Time                       `json:"expires_at"`
+	PaymentMode  string                          `json:"payment_mode,omitempty"`
+	ResumeToken  string                          `json:"resume_token,omitempty"`
 }
 
 type OrderListParams struct {
@@ -172,20 +176,28 @@ type TopUserStat struct {
 // --- Service ---
 
 type PaymentService struct {
-	providerMu      sync.Mutex
-	providersLoaded bool
-	entClient       *dbent.Client
-	registry        *payment.Registry
-	loadBalancer    payment.LoadBalancer
-	// [LITE:DELETED] redeemService — RedeemService removed; balance credited directly via userRepo
-	subscriptionSvc *SubscriptionService
-	configService   *PaymentConfigService
-	userRepo        UserRepository
-	groupRepo       GroupRepository
+	providerMu               sync.Mutex
+	providersLoaded          bool
+	entClient                *dbent.Client
+	registry                 *payment.Registry
+	loadBalancer             payment.LoadBalancer
+	subscriptionSvc          *SubscriptionService
+	configService            *PaymentConfigService
+	userRepo                 UserRepository
+	groupRepo                GroupRepository
+	resumeService            *PaymentResumeService
+	affiliateService         *AffiliateService
+	notificationEmailService *NotificationEmailService
 }
 
-func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository) *PaymentService {
-	return &PaymentService{entClient: entClient, registry: registry, loadBalancer: loadBalancer, subscriptionSvc: subscriptionSvc, configService: configService, userRepo: userRepo, groupRepo: groupRepo}
+func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService) *PaymentService {
+	svc := &PaymentService{entClient: entClient, registry: registry, loadBalancer: newVisibleMethodLoadBalancer(loadBalancer, configService), subscriptionSvc: subscriptionSvc, configService: configService, userRepo: userRepo, groupRepo: groupRepo, affiliateService: affiliateService}
+	svc.resumeService = psNewPaymentResumeService(configService)
+	return svc
+}
+
+func (s *PaymentService) SetNotificationEmailService(notificationEmailService *NotificationEmailService) {
+	s.notificationEmailService = notificationEmailService
 }
 
 // --- Provider Registry ---
@@ -240,7 +252,7 @@ func (s *PaymentService) loadProviders(ctx context.Context) {
 
 func psIsRefundStatus(s string) bool {
 	switch s {
-	case OrderStatusRefundRequested, OrderStatusRefunding, OrderStatusPartiallyRefunded, OrderStatusRefunded, OrderStatusRefundFailed:
+	case OrderStatusRefundRequested, OrderStatusRefunding, OrderStatusRefundPending, OrderStatusPartiallyRefunded, OrderStatusRefunded, OrderStatusRefundFailed:
 		return true
 	}
 	return false
@@ -260,6 +272,60 @@ func psNilIfEmpty(s string) *string {
 	return &s
 }
 
+func (s *PaymentService) paymentResume() *PaymentResumeService {
+	if s.resumeService != nil {
+		return s.resumeService
+	}
+	return psNewPaymentResumeService(s.configService)
+}
+
+func NewLegacyAwarePaymentResumeService(legacyKey []byte) *PaymentResumeService {
+	return newLegacyAwarePaymentResumeService(legacyKey)
+}
+
+func psNewPaymentResumeService(configService *PaymentConfigService) *PaymentResumeService {
+	return newLegacyAwarePaymentResumeService(psResumeLegacyVerificationKey(configService))
+}
+
+func newLegacyAwarePaymentResumeService(legacyKey []byte) *PaymentResumeService {
+	signingKey, verifyFallbacks := resolvePaymentResumeSigningKeys(legacyKey)
+	return NewPaymentResumeService(signingKey, verifyFallbacks...)
+}
+
+func psResumeLegacyVerificationKey(configService *PaymentConfigService) []byte {
+	if configService == nil {
+		return nil
+	}
+	return configService.encryptionKey
+}
+
+func resolvePaymentResumeSigningKeys(legacyKey []byte) ([]byte, [][]byte) {
+	signingKey := parsePaymentResumeSigningKey(os.Getenv(paymentResumeSigningKeyEnv))
+	if len(signingKey) == 0 {
+		if len(legacyKey) == 0 {
+			return nil, nil
+		}
+		return legacyKey, nil
+	}
+	if len(legacyKey) == 0 || bytes.Equal(legacyKey, signingKey) {
+		return signingKey, nil
+	}
+	return signingKey, [][]byte{legacyKey}
+}
+
+func parsePaymentResumeSigningKey(raw string) []byte {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if len(raw) >= 64 && len(raw)%2 == 0 {
+		if decoded, err := hex.DecodeString(raw); err == nil && len(decoded) > 0 {
+			return decoded
+		}
+	}
+	return []byte(raw)
+}
+
 func psSliceContains(sl []string, s string) bool {
 	for _, v := range sl {
 		if v == s {
@@ -271,15 +337,17 @@ func psSliceContains(sl []string, s string) bool {
 
 // Subscription validity period unit constants.
 const (
-	validityUnitWeek  = "week"
-	validityUnitMonth = "month"
+	validityUnitWeek   = "week"
+	validityUnitWeeks  = "weeks"
+	validityUnitMonth  = "month"
+	validityUnitMonths = "months"
 )
 
 func psComputeValidityDays(days int, unit string) int {
 	switch unit {
-	case validityUnitWeek:
+	case validityUnitWeek, validityUnitWeeks:
 		return days * 7
-	case validityUnitMonth:
+	case validityUnitMonth, validityUnitMonths:
 		return days * 30
 	default:
 		return days

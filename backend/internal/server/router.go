@@ -12,9 +12,9 @@ import (
 	"github.com/Kevin-Lab777/sub2api/internal/server/routes"
 	"github.com/Kevin-Lab777/sub2api/internal/service"
 	"github.com/Kevin-Lab777/sub2api/internal/web"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 const frameSrcRefreshTimeout = 5 * time.Second
@@ -106,12 +106,12 @@ func registerRoutes(
 	// API v1
 	v1 := r.Group("/api/v1")
 
-	// [LITE] 注册认证路由 (登录、/auth/me) - 不传 redisClient，Lite 版本不需要速率限制
+	// 注册各模块路由
 	routes.RegisterAuthRoutes(v1, h, jwtAuth)
-
-	// [LITE] 注册用户路由 (API Key 管理等，Admin 使用)
 	routes.RegisterUserRoutes(v1, h, jwtAuth)
-	routes.RegisterAdminRoutes(v1, h, adminAuth)
+	routes.RegisterAdminRoutes(v1, h, adminAuth, settingService)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
 	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, settingService)
+
+	handler.RegisterPageRoutes(v1, cfg.Pricing.DataDir, gin.HandlerFunc(jwtAuth), gin.HandlerFunc(adminAuth), settingService)
 }

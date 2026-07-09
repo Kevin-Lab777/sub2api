@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	dbent "github.com/Kevin-Lab777/sub2api/ent"
 	"github.com/Kevin-Lab777/sub2api/internal/config"
 	infraerrors "github.com/Kevin-Lab777/sub2api/internal/pkg/errors"
 
@@ -20,14 +21,40 @@ import (
 // [LITE] 简化版 AuthService - 只支持 Admin 登录，移除注册和多用户功能
 
 var (
-	ErrInvalidCredentials = infraerrors.Unauthorized("INVALID_CREDENTIALS", "invalid email or password")
-	ErrInvalidToken       = infraerrors.Unauthorized("INVALID_TOKEN", "invalid token")
-	ErrTokenExpired       = infraerrors.Unauthorized("TOKEN_EXPIRED", "token has expired")
-	ErrTokenTooLarge      = infraerrors.BadRequest("TOKEN_TOO_LARGE", "token too large")
-	ErrTokenRevoked       = infraerrors.Unauthorized("TOKEN_REVOKED", "token has been revoked")
-	ErrRegDisabled        = infraerrors.Forbidden("REGISTRATION_DISABLED", "registration is disabled in Lite mode")
-	ErrServiceUnavailable = infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
-	ErrAdminOnly          = infraerrors.Forbidden("ADMIN_ONLY", "only admin users can login in Lite mode")
+	ErrInvalidCredentials  = infraerrors.Unauthorized("INVALID_CREDENTIALS", "invalid email or password")
+	ErrInvalidToken        = infraerrors.Unauthorized("INVALID_TOKEN", "invalid token")
+	ErrTokenExpired        = infraerrors.Unauthorized("TOKEN_EXPIRED", "token has expired")
+	ErrTokenTooLarge       = infraerrors.BadRequest("TOKEN_TOO_LARGE", "token too large")
+	ErrTokenRevoked        = infraerrors.Unauthorized("TOKEN_REVOKED", "token has been revoked")
+	ErrRegDisabled         = infraerrors.Forbidden("REGISTRATION_DISABLED", "registration is disabled in Lite mode")
+	ErrServiceUnavailable  = infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
+	ErrAdminOnly           = infraerrors.Forbidden("ADMIN_ONLY", "only admin users can login in Lite mode")
+	ErrUserNotActive       = infraerrors.Forbidden("USER_NOT_ACTIVE", "user is not active")
+	ErrEmailExists         = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
+	ErrEmailReserved       = infraerrors.BadRequest("EMAIL_RESERVED", "email is reserved")
+	ErrEmailVerifyRequired = infraerrors.BadRequest(
+		"EMAIL_VERIFY_REQUIRED",
+		"email verification is required",
+	)
+	ErrInvalidVerifyCode     = infraerrors.BadRequest("INVALID_VERIFY_CODE", "invalid verification code")
+	ErrVerifyCodeTooFrequent = infraerrors.TooManyRequests(
+		"VERIFY_CODE_TOO_FREQUENT",
+		"verification code requested too frequently",
+	)
+	ErrVerifyCodeMaxAttempts = infraerrors.TooManyRequests(
+		"VERIFY_CODE_MAX_ATTEMPTS",
+		"verification code max attempts exceeded",
+	)
+	ErrEmailSuffixNotAllowed = infraerrors.Forbidden(
+		"EMAIL_SUFFIX_NOT_ALLOWED",
+		"email suffix is not allowed",
+	)
+	ErrInvitationCodeRequired  = infraerrors.BadRequest("INVITATION_CODE_REQUIRED", "invitation code is required")
+	ErrOAuthInvitationRequired = infraerrors.Forbidden(
+		"OAUTH_INVITATION_REQUIRED",
+		"invitation code is required for oauth signup",
+	)
+	ErrInvitationCodeInvalid = infraerrors.BadRequest("INVITATION_CODE_INVALID", "invitation code is invalid")
 )
 
 // maxTokenLength 限制 token 大小，避免超长 header 触发解析时的异常内存分配
@@ -44,9 +71,15 @@ type JWTClaims struct {
 
 // AuthService 认证服务 [LITE] 简化版
 type AuthService struct {
-	userRepo       UserRepository
-	cfg            *config.Config
-	settingService *SettingService
+	userRepo                    UserRepository
+	cfg                         *config.Config
+	settingService              *SettingService
+	entClient                   *dbent.Client
+	refreshTokenCache           RefreshTokenCache
+	emailService                *EmailService
+	defaultSubscriptionAssigner DefaultSubscriptionAssigner
+	affiliateService            *AffiliateService
+	userPlatformQuotaRepo       UserPlatformQuotaRepository
 }
 
 // NewAuthService 创建认证服务实例 [LITE] 简化版
@@ -160,7 +193,7 @@ func isReservedEmail(email string) bool {
 // 使用新的access_token_expire_minutes配置项（如果配置了），否则回退到expire_hour
 func (s *AuthService) GenerateToken(user *User) (string, error) {
 	now := time.Now()
-	expiresAt := now.Add(time.Duration(s.cfg.JWT.ExpireHour) * time.Hour)
+	expiresAt := now.Add(time.Duration(s.GetAccessTokenExpiresIn()) * time.Second)
 
 	claims := &JWTClaims{
 		UserID:       user.ID,
