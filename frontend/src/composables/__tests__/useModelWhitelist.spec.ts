@@ -7,16 +7,17 @@ vi.mock('@/api/admin/accounts', () => ({
 import { buildModelMappingObject, getModelsByPlatform, splitModelMappingObject } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
-  it('openai 模型列表包含 GPT-5.4 官方快照', () => {
+  it('openai 模型列表与 Lite 默认模型保持一致', () => {
     const models = getModelsByPlatform('openai')
 
+    expect(models).toContain('gpt-5.6-sol')
     expect(models).toContain('gpt-5.4')
     expect(models).toContain('gpt-5.4-mini')
-    expect(models).toContain('gpt-5.4-2026-03-05')
+    expect(models).toContain('gpt-5.2')
     expect(models).toContain('codex-auto-review')
   })
 
-  it('openai 模型列表不再暴露已下线的 ChatGPT 登录 Codex 模型', () => {
+  it('openai 模型列表不再暴露旧版或未采用的 OpenAI 模型', () => {
     const models = getModelsByPlatform('openai')
 
     expect(models).not.toContain('gpt-5')
@@ -25,6 +26,16 @@ describe('useModelWhitelist', () => {
     expect(models).not.toContain('gpt-5.1-codex-max')
     expect(models).not.toContain('gpt-5.1-codex-mini')
     expect(models).not.toContain('gpt-5.2-codex')
+    expect(models).not.toContain('gpt-5.2-2025-12-11')
+    expect(models).not.toContain('gpt-5.2-pro')
+    expect(models).not.toContain('gpt-5.4-2026-03-05')
+    expect(models).not.toContain('gpt-4o')
+    expect(models).not.toContain('gpt-4o-mini')
+    expect(models).not.toContain('gpt-4o-audio-preview')
+    expect(models).not.toContain('gpt-4o-realtime-preview')
+    expect(models).not.toContain('gpt-4.1')
+    expect(models).not.toContain('o1')
+    expect(models).not.toContain('o3')
   })
 
   it('antigravity 模型列表包含图片模型兼容项', () => {
@@ -71,11 +82,11 @@ describe('useModelWhitelist', () => {
     })
   })
 
-  it('whitelist 模式会保留 GPT-5.4 官方快照的精确映射', () => {
-    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-2026-03-05'], [])
+  it('whitelist 模式会保留 GPT-5.6 精确映射', () => {
+    const mapping = buildModelMappingObject('whitelist', ['gpt-5.6-sol'], [])
 
     expect(mapping).toEqual({
-      'gpt-5.4-2026-03-05': 'gpt-5.4-2026-03-05'
+      'gpt-5.6-sol': 'gpt-5.6-sol'
     })
   })
 

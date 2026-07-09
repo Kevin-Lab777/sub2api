@@ -514,7 +514,7 @@ export default {
         selectKeyHint: '仅显示当前账号下处于「启用」状态且未过期的 Key。',
         noActiveKey: '没有可用的启用状态 Key',
         primaryModel: '主模型',
-        primaryModelPlaceholder: 'gpt-4o-mini',
+        primaryModelPlaceholder: 'gpt-5.4-mini',
         extraModels: '附加模型',
         extraModelsPlaceholder: '回车添加附加模型',
         groupName: '分组名称',

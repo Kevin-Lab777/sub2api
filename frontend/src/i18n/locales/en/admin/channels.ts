@@ -514,7 +514,7 @@ export default {
         selectKeyHint: 'Only your active, non-expired keys are listed.',
         noActiveKey: 'No active API keys available',
         primaryModel: 'Primary Model',
-        primaryModelPlaceholder: 'gpt-4o-mini',
+        primaryModelPlaceholder: 'gpt-5.4-mini',
         extraModels: 'Extra Models',
         extraModelsPlaceholder: 'Press Enter to add extra model',
         groupName: 'Group Name',

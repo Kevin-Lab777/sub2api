@@ -13,7 +13,7 @@ function makeDetail(overrides: Partial<OpsErrorDetail>): OpsErrorDetail {
     severity: 'P2',
     status_code: 502,
     platform: 'openai',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.4-mini',
     resolved: false,
     client_request_id: 'crid-1',
     request_id: 'rid-1',

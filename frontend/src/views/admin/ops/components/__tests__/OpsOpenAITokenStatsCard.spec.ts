@@ -55,7 +55,7 @@ const sampleResponse = {
   group_id: 7,
   items: [
     {
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4-mini',
       request_count: 12,
       avg_tokens_per_sec: 22.5,
       avg_first_token_ms: 123.45,

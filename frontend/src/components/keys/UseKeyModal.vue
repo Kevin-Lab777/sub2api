@@ -748,8 +748,8 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         xhigh: {}
       }
     },
-    'codex-mini-latest': {
-      name: 'Codex Mini',
+    'codex-auto-review': {
+      name: 'Codex Auto Review',
       limit: {
         context: 200000,
         output: 100000

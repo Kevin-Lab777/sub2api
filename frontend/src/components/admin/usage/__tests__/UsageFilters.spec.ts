@@ -181,7 +181,7 @@ describe('UsageFilters — model options come from prop (no dup request)', () =>
         startDate: '2026-05-01',
         endDate: '2026-05-28',
         showActions: false,
-        modelOptions: ['claude-3', 'gpt-4o'],
+        modelOptions: ['claude-3', 'gpt-5.4'],
       },
       global: { stubs: { Select: true, Teleport: true } },
     })
@@ -190,6 +190,6 @@ describe('UsageFilters — model options come from prop (no dup request)', () =>
     expect(mockGetModelStats).not.toHaveBeenCalled()
 
     const opts = (wrapper.vm as any).modelOptions as Array<{ value: string | null; label: string }>
-    expect(opts.map((o) => o.value)).toEqual([null, 'claude-3', 'gpt-4o'])
+    expect(opts.map((o) => o.value)).toEqual([null, 'claude-3', 'gpt-5.4'])
   })
 })

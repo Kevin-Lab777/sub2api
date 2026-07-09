@@ -80,8 +80,8 @@ const ModelWhitelistSelectorStub = defineComponent({
     <div>
       <button
         type="button"
-        data-testid="rewrite-to-snapshot"
-        @click="$emit('update:modelValue', ['gpt-5.2-2025-12-11'])"
+        data-testid="rewrite-to-alt-model"
+        @click="$emit('update:modelValue', ['gpt-5.4-mini'])"
       >
         rewrite
       </button>
@@ -315,8 +315,8 @@ describe('EditAccountModal', () => {
 
     expect(wrapper.get('[data-testid="model-whitelist-value"]').text()).toBe('gpt-5.2')
 
-    await wrapper.get('[data-testid="rewrite-to-snapshot"]').trigger('click')
-    expect(wrapper.get('[data-testid="model-whitelist-value"]').text()).toBe('gpt-5.2-2025-12-11')
+    await wrapper.get('[data-testid="rewrite-to-alt-model"]').trigger('click')
+    expect(wrapper.get('[data-testid="model-whitelist-value"]').text()).toBe('gpt-5.4-mini')
 
     await wrapper.setProps({ show: false })
     await wrapper.setProps({ show: true })
@@ -346,12 +346,12 @@ describe('EditAccountModal', () => {
 
     expect(wrapper.get('[data-testid="model-whitelist-value"]').text()).toBe('gpt-5.2')
 
-    await wrapper.get('[data-testid="rewrite-to-snapshot"]').trigger('click')
+    await wrapper.get('[data-testid="rewrite-to-alt-model"]').trigger('click')
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
 
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.model_mapping).toEqual({
-      'gpt-5.2-2025-12-11': 'gpt-5.2-2025-12-11',
+      'gpt-5.4-mini': 'gpt-5.4-mini',
       'gpt-latest': 'gpt-5.2'
     })
   })
