@@ -199,4 +199,3 @@ var ProviderSet = wire.NewSet(
 func ProvideRedis(cfg *config.Config) *redis.Client {
 	return InitRedis(cfg)
 }
-

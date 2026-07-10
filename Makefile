@@ -1,12 +1,11 @@
 .PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan
 
 FRONTEND_CRITICAL_VITEST := \
-	src/views/auth/__tests__/LinuxDoCallbackView.spec.ts \
-	src/views/auth/__tests__/WechatCallbackView.spec.ts \
-	src/views/user/__tests__/PaymentView.spec.ts \
-	src/views/user/__tests__/PaymentResultView.spec.ts \
-	src/components/user/profile/__tests__/ProfileInfoCard.spec.ts \
-	src/views/admin/__tests__/SettingsView.spec.ts
+	src/composables/__tests__/useModelWhitelist.spec.ts \
+	src/components/account/__tests__/EditAccountModal.spec.ts \
+	src/views/admin/ops/utils/__tests__/errorDetailResponse.spec.ts \
+	src/views/admin/ops/components/__tests__/OpsOpenAITokenStatsCard.spec.ts \
+	src/components/admin/usage/__tests__/UsageFilters.spec.ts
 
 # 一键编译前后端
 build: build-backend build-frontend

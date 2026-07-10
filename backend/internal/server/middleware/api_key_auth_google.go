@@ -103,8 +103,6 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				maintenanceCopy := *subscription
 				subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 			}
-		} else {
-			// [LITE] 非订阅模式：不检查余额，限额检查在 handler 中进行
 		}
 		// [LITE] 标准模式不在中间件检查余额，限额检查在 handler 中进行
 

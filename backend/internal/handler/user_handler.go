@@ -109,4 +109,3 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 
 	response.Success(c, dto.UserFromService(updatedUser))
 }
-

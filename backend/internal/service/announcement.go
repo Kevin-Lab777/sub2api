@@ -35,14 +35,14 @@ const (
 )
 
 var (
-	ErrAnnouncementNotFound         = domain.ErrAnnouncementNotFound
-	ErrAnnouncementInvalidTarget    = domain.ErrAnnouncementInvalidTarget
-	ErrAnnouncementNilInput         = infraerrors.BadRequest("ANNOUNCEMENT_NIL_INPUT", "announcement input is required")
-	ErrAnnouncementInvalidTitle     = infraerrors.BadRequest("ANNOUNCEMENT_INVALID_TITLE", "announcement title is invalid")
-	ErrAnnouncementContentRequired  = infraerrors.BadRequest("ANNOUNCEMENT_CONTENT_REQUIRED", "announcement content is required")
-	ErrAnnouncementInvalidStatus    = infraerrors.BadRequest("ANNOUNCEMENT_INVALID_STATUS", "announcement status is invalid")
+	ErrAnnouncementNotFound          = domain.ErrAnnouncementNotFound
+	ErrAnnouncementInvalidTarget     = domain.ErrAnnouncementInvalidTarget
+	ErrAnnouncementNilInput          = infraerrors.BadRequest("ANNOUNCEMENT_NIL_INPUT", "announcement input is required")
+	ErrAnnouncementInvalidTitle      = infraerrors.BadRequest("ANNOUNCEMENT_INVALID_TITLE", "announcement title is invalid")
+	ErrAnnouncementContentRequired   = infraerrors.BadRequest("ANNOUNCEMENT_CONTENT_REQUIRED", "announcement content is required")
+	ErrAnnouncementInvalidStatus     = infraerrors.BadRequest("ANNOUNCEMENT_INVALID_STATUS", "announcement status is invalid")
 	ErrAnnouncementInvalidNotifyMode = infraerrors.BadRequest("ANNOUNCEMENT_INVALID_NOTIFY_MODE", "announcement notify mode is invalid")
-	ErrAnnouncementInvalidSchedule  = infraerrors.BadRequest("ANNOUNCEMENT_INVALID_SCHEDULE", "announcement schedule is invalid")
+	ErrAnnouncementInvalidSchedule   = infraerrors.BadRequest("ANNOUNCEMENT_INVALID_SCHEDULE", "announcement schedule is invalid")
 )
 
 type AnnouncementTargeting = domain.AnnouncementTargeting

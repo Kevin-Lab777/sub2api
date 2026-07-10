@@ -206,10 +206,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 					maintenanceCopy := *subscription
 					subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 				}
-			} else {
-				// [LITE] 非订阅模式：不检查余额，限额检查在 handler 中进行
 			}
 		}
+		// [LITE] 非订阅模式：不检查余额，限额检查在 handler 中进行
 
 		// ── 7. 设置上下文 → Next ─────────────────────────────────────
 

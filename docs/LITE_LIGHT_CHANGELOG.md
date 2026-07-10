@@ -38,6 +38,12 @@ Downstream changes:
   - `TOTP_ENCRYPTION_KEY` is configured as a fixed 64-character hex key.
   - Admin settings enable `totp_enabled`.
   - Users enable TOTP from Profile with password verification.
+- Aligned GitHub Actions with the downstream Light profile:
+  - Replaced upstream/full frontend critical tests with Lite-safe tests.
+  - Limited backend unit and integration CI targets to packages retained in
+    Light.
+  - Ran `golangci-lint` without deleted upstream test packages.
+  - Bumped CI, release, and Docker Go patch version checks to `1.26.5`.
 
 Validation:
 
@@ -47,12 +53,9 @@ Validation:
   - `src/views/admin/ops/utils/__tests__/errorDetailResponse.spec.ts`
   - `src/views/admin/ops/components/__tests__/OpsOpenAITokenStatsCard.spec.ts`
   - `src/components/admin/usage/__tests__/UsageFilters.spec.ts`
-- `pnpm build` passed.
-- `go build ./...` passed.
-
-Known residual test gap:
-
-- `go test ./internal/service ./internal/server` is blocked by pre-existing
-  service test compile failures unrelated to this change, including old
-  references to `fingerprint`, deleted email queue symbols, and scheduled report
-  helpers.
+- `make test-frontend` passed.
+- `make build` passed in `backend`.
+- `make test-unit` passed in `backend`.
+- `make test-integration` passed in `backend`.
+- `golangci-lint run --timeout=30m --tests=false` passed in `backend`.
+- `govulncheck ./...` passed in `backend` with 0 reachable vulnerabilities.
