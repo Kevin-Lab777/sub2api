@@ -304,6 +304,12 @@ describe('EditAccountModal', () => {
     authIsSimpleMode.value = true
   })
 
+  it('shows group selector even when simple mode is enabled', () => {
+    const wrapper = mountModal(buildAccount())
+
+    expect(wrapper.find('[data-testid="group-selector"]').exists()).toBe(true)
+  })
+
   it('reopening the same account rehydrates the OpenAI whitelist from props', async () => {
     const account = buildAccount()
     updateAccountMock.mockReset()

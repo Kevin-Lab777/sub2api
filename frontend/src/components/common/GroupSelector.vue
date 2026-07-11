@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from './GroupBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -87,8 +87,7 @@ const isSearchable = computed(() => {
   return props.searchable
 })
 
-// Filter groups by platform if specified
-const filteredGroups = computed(() => {
+const platformFilteredGroups = computed(() => {
   let result: AdminGroup[] = props.groups
   if (props.platform) {
     // antigravity 账户启用混合调度后，可选择 anthropic/gemini 分组
@@ -101,6 +100,12 @@ const filteredGroups = computed(() => {
       result = result.filter((g) => g.platform === props.platform)
     }
   }
+  return result
+})
+
+// Filter groups by platform if specified
+const filteredGroups = computed(() => {
+  let result: AdminGroup[] = platformFilteredGroups.value
   if (isSearchable.value && searchText.value) {
     const q = searchText.value.toLowerCase()
     result = result.filter(
@@ -109,6 +114,23 @@ const filteredGroups = computed(() => {
   }
   return result
 })
+
+const pruneHiddenGroupSelections = () => {
+  if (!props.platform || props.groups.length === 0) return
+
+  const visibleGroupIds = new Set(platformFilteredGroups.value.map((group) => group.id))
+  const nextValue = props.modelValue.filter((groupId) => visibleGroupIds.has(groupId))
+
+  if (nextValue.length !== props.modelValue.length) {
+    emit('update:modelValue', nextValue)
+  }
+}
+
+watch(
+  [platformFilteredGroups, () => props.modelValue],
+  pruneHiddenGroupSelections,
+  { immediate: true, flush: 'post' }
+)
 
 const handleChange = (groupId: number, checked: boolean) => {
   const newValue = checked
