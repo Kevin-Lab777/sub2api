@@ -41,6 +41,7 @@ dockers:
   - id: ghcr-amd64
     goos: linux
     goarch: amd64
+    skip_push: '{{ if eq .Env.GHCR_PUSH_ENABLED "true" }}false{{ else }}true{{ end }}'
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/sub2api:{{ .Version }}-amd64"
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/sub2api:{{ .Version }}"
@@ -78,10 +79,12 @@ release:
 
     ## 📥 Installation
 
+    {{ if eq .Env.GHCR_PUSH_ENABLED "true" -}}
     **Docker (x86_64 only):**
     ```bash
     docker pull ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/sub2api:{{ .Version }}
     ```
+    {{ end }}
 
     ## 📚 Documentation
 

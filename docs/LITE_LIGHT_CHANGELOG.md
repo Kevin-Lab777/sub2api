@@ -52,6 +52,9 @@ Validation:
 - `make test-frontend` passed: 5 files, 62 tests.
 - golangci-lint v2.9 passed with `--tests=false`: 0 issues.
 - GoReleaser's before hook and five-target snapshot build passed.
+- GHCR publishing is now explicit opt-in through the repository variable
+  `GHCR_PUSH_ENABLED=true`; GitHub binary releases remain available when the
+  existing container package has not granted this repository write access.
 - Conflict marker, deleted-module, and Lite balance invariant scans passed.
 
 ## 2026-07-10 - OpenAI Model Cleanup and 2FA Readiness Check
