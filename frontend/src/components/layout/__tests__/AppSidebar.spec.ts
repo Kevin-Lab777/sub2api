@@ -42,6 +42,15 @@ describe('AppSidebar scroll position persistence', () => {
   })
 })
 
+describe('AppSidebar Lite group management', () => {
+  it('keeps the admin group management item visible in simple mode', () => {
+    const groupItem = componentSource.match(/\{ path: '\/admin\/groups'[^\n]+\}/)?.[0]
+
+    expect(groupItem).toBeDefined()
+    expect(groupItem).not.toContain('hideInSimpleMode')
+  })
+})
+
 describe('AppSidebar header styles', () => {
   it('does not clip the version badge dropdown', () => {
     const sidebarHeaderBlockMatch = styleSource.match(/\.sidebar-header\s*\{[\s\S]*?\n {2}\}/)
