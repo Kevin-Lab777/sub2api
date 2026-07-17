@@ -66,6 +66,8 @@ type JWTClaims struct {
 	Email        string `json:"email"`
 	Role         string `json:"role"`
 	TokenVersion int64  `json:"token_version"`
+	SessionID    string `json:"sid,omitempty"`
+	BindingHash  string `json:"bnd,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -186,7 +188,9 @@ func randomHexString(byteLength int) (string, error) {
 func isReservedEmail(email string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(email))
 	return strings.HasSuffix(normalized, LinuxDoConnectSyntheticEmailDomain) ||
-		strings.HasSuffix(normalized, OIDCConnectSyntheticEmailDomain)
+		strings.HasSuffix(normalized, OIDCConnectSyntheticEmailDomain) ||
+		strings.HasSuffix(normalized, WeChatConnectSyntheticEmailDomain) ||
+		strings.HasSuffix(normalized, DingTalkConnectSyntheticEmailDomain)
 }
 
 // GenerateToken 生成JWT access token

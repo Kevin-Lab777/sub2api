@@ -1,3 +1,6 @@
+//go:build full
+// +build full
+
 package handler
 
 import (

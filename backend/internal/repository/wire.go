@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/Kevin-Lab777/sub2api/ent"
@@ -98,7 +99,9 @@ var ProviderSet = wire.NewSet(
 	// [LITE] Provide APIKeyUsageRepository from the same implementation
 	ProvideAPIKeyUsageRepository,
 	NewGroupRepository,
+	NewAdminGroupRepository,
 	NewAccountRepository,
+	NewAdminAccountRepository,
 	NewScheduledTestPlanRepository,   // 定时测试计划仓储
 	NewScheduledTestResultRepository, // 定时测试结果仓储
 	NewProxyRepository,
@@ -114,6 +117,7 @@ var ProviderSet = wire.NewSet(
 	NewDashboardAggregationRepository,
 	NewSettingRepository,
 	NewOpsRepository,
+	NewAuditLogRepository,
 	NewUserSubscriptionRepository,
 	// [LITE:DELETED] NewUserAttributeDefinitionRepository
 	// [LITE:DELETED] NewUserAttributeValueRepository
@@ -147,6 +151,7 @@ var ProviderSet = wire.NewSet(
 	// [LITE:DELETED] NewRedeemCache
 	NewUpdateCache,
 	NewGeminiTokenCache,
+	NewImageTaskStore,
 	NewBatchImageQueue,
 	NewBatchImageDownloadLimiter,
 	NewLeaderLockCache,
@@ -165,6 +170,9 @@ var ProviderSet = wire.NewSet(
 	// Backup infrastructure
 	NewPgDumper,
 	NewS3BackupStoreFactory,
+
+	// Image storage (async image task result offload)
+	ProvideImageStorage,
 
 	// HTTP service ports (DI Strategy A: return interface directly)
 	// [LITE:DELETED] NewTurnstileVerifier
@@ -185,6 +193,18 @@ var ProviderSet = wire.NewSet(
 	ProvideSQLDB,
 	ProvideRedis,
 )
+
+// ProvideImageStorage provides optional object storage for async image task results.
+func ProvideImageStorage(cfg *config.Config) (service.ImageStorage, error) {
+	if !cfg.ImageStorage.Active() {
+		return nil, nil
+	}
+	store, err := NewS3ImageStorage(context.Background(), &cfg.ImageStorage)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
 
 // ProvideRedis 为依赖注入提供 Redis 客户端。
 //

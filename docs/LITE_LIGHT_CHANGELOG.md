@@ -3,6 +3,53 @@
 This document records downstream-only maintenance on the `Light` branch after
 syncing from upstream `Wei-Shaw/sub2api`.
 
+## 2026-07-17 - Upstream Sync to v0.1.159-lite
+
+Base state:
+
+- Branch: `Light`
+- Previous downstream head: `cfda0a82`
+- Previous upstream baseline: `upstream/main@6f43986c`
+- Merge target: `upstream/main@c2c19a7c` (`v0.1.159-1-gc2c19a7cb`)
+- Upstream release tag: `v0.1.159` (`2a2b5826`)
+- Merge delta: 535 commits, 875 files, 97 conflicts
+- Lite version file: `backend/cmd/server/VERSION` = `0.1.159-Lite`
+
+Retained upstream capabilities:
+
+- Admin audit logs and step-up TOTP for sensitive operations.
+- Async image tasks, Grok import/quota/video improvements, and upstream billing probes.
+- Channel monitor, scheduler snapshot, usage metadata, static cache, deployment,
+  and security middleware updates.
+- Curated model additions: `gpt-5.6`, `grok-4.5`, `grok-4.5-latest`,
+  `grok-build-latest`, and `composer-2.5`.
+
+Lite preservation work:
+
+- Kept registration, redeem, promo, user attributes, user management UI,
+  normal-user payment UI, SMTP tests, and full user OAuth flows disabled or
+  deleted.
+- Kept email and DingTalk OAuth handlers and dependent tests behind the
+  `full` build tag.
+- Kept standard mode quota-based: non-subscription gateway usage records cost
+  and quota without deducting user balance.
+- Added AuthService compatibility session claims and no-op session-family
+  revocation without restoring the removed identity domain.
+- Kept email queue wiring nil and made balance recharge fulfillment return
+  `BALANCE_RECHARGE_DISABLED` without restoring `RedeemService`.
+- Preserved downstream Active Hours and the account Group Selector behavior.
+- Restored repository scoped-key locking for normalized-email concurrency and
+  recognized all synthetic OAuth email domains as reserved.
+
+Validation:
+
+- `go generate ./ent` and `go generate ./cmd/server` passed.
+- `go build ./...` and `go test ./...` passed.
+- `make test-unit` and `make test-integration` passed in `backend`.
+- `pnpm build` passed in `frontend`.
+- `make test-frontend` passed: 5 files, 62 tests.
+- Conflict marker, deleted-module, and Lite balance invariant scans passed.
+
 ## 2026-07-10 - OpenAI Model Cleanup and 2FA Readiness Check
 
 Base state:

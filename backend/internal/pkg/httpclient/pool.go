@@ -25,6 +25,7 @@ import (
 
 	"github.com/Kevin-Lab777/sub2api/internal/pkg/proxyurl"
 	"github.com/Kevin-Lab777/sub2api/internal/pkg/proxyutil"
+	"github.com/Kevin-Lab777/sub2api/internal/pkg/servertiming"
 	"github.com/Kevin-Lab777/sub2api/internal/util/urlvalidator"
 )
 
@@ -92,6 +93,7 @@ func buildClient(opts Options) (*http.Client, error) {
 	if opts.ValidateResolvedIP && !opts.AllowPrivateHosts {
 		rt = newValidatedTransport(transport)
 	}
+	rt = servertiming.WrapRoundTripper(rt)
 	return &http.Client{
 		Transport: rt,
 		Timeout:   opts.Timeout,

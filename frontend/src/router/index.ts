@@ -126,8 +126,8 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'admin.dashboard.description'
     }
   },
-  {
-    path: '/admin/ops',
+	{
+		path: '/admin/ops',
     name: 'AdminOps',
     component: () => import('@/views/admin/ops/OpsDashboard.vue'),
     meta: {
@@ -136,10 +136,21 @@ const routes: RouteRecordRaw[] = [
       title: 'Ops Monitoring',
       titleKey: 'admin.ops.title',
       descriptionKey: 'admin.ops.description'
-    }
-  },
-  {
-    path: '/admin/groups',
+		}
+	},
+	{
+		path: '/admin/audit-logs',
+		name: 'AdminAuditLogs',
+		component: () => import('@/views/admin/AuditLogView.vue'),
+		meta: {
+			requiresAuth: true,
+			requiresAdmin: true,
+			title: 'Audit Logs',
+			titleKey: 'admin.audit.title'
+		}
+	},
+	{
+		path: '/admin/groups',
     name: 'AdminGroups',
     component: () => import('@/views/admin/GroupsView.vue'),
     meta: {

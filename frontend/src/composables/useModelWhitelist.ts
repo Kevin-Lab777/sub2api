@@ -4,8 +4,8 @@
 
 // OpenAI
 const openaiModels = [
-  // Keep in sync with backend/internal/pkg/openai/constants.go DefaultModels.
-  'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
+	// Keep in sync with backend/internal/pkg/openai/constants.go DefaultModels.
+	'gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
   'gpt-5.5',
   'gpt-5.4', 'gpt-5.4-mini',
   'gpt-5.3-codex-spark', 'codex-auto-review',
@@ -128,16 +128,20 @@ const metaModels = [
 
 // xAI Grok
 const xaiModels = [
-  'grok-4.3',
+	'grok-4.5',
+	'grok-4.3',
   'grok-build-0.1',
   'grok-composer-2.5-fast',
   'grok-4.20-0309-reasoning',
   'grok-4.20-0309-non-reasoning',
   'grok-4.20-multi-agent-0309',
-  'grok',
-  'grok-latest',
-  'grok-build',
-  'grok-composer',
+	'grok',
+	'grok-latest',
+	'grok-4.5-latest',
+	'grok-build',
+	'grok-build-latest',
+	'grok-composer',
+	'composer-2.5',
   'grok-4.20-reasoning',
   'grok-4.20-non-reasoning',
   'grok-imagine',

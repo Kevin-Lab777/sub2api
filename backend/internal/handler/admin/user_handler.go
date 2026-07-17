@@ -13,6 +13,7 @@ import (
 	"github.com/Kevin-Lab777/sub2api/internal/handler/dto"
 	"github.com/Kevin-Lab777/sub2api/internal/handler/quotaview"
 	"github.com/Kevin-Lab777/sub2api/internal/pkg/response"
+	"github.com/Kevin-Lab777/sub2api/internal/server/middleware"
 	"github.com/Kevin-Lab777/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,8 @@ type UserHandler struct {
 	concurrencyService    *service.ConcurrencyService
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository // T13 admin quota view
 	billingCache          service.BillingCache                // T17/T18 缓存失效（PUT/POST 路径）
+	totpService           *service.TotpService                // 角色提升为管理员的 step-up 门控
+	userService           *service.UserService
 }
 
 // NewUserHandler creates a new admin user handler
@@ -38,12 +41,16 @@ func NewUserHandler(
 	concurrencyService *service.ConcurrencyService,
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository,
 	billingCache service.BillingCache,
+	totpService *service.TotpService,
+	userService *service.UserService,
 ) *UserHandler {
 	return &UserHandler{
 		adminService:          adminService,
 		concurrencyService:    concurrencyService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
 		billingCache:          billingCache,
+		totpService:           totpService,
+		userService:           userService,
 	}
 }
 
@@ -53,6 +60,7 @@ type CreateUserRequest struct {
 	Password      string   `json:"password" binding:"required,min=6"`
 	Username      string   `json:"username"`
 	Notes         string   `json:"notes"`
+	Role          string   `json:"role" binding:"omitempty,oneof=admin user"`
 	Balance       *float64 `json:"balance"`
 	Concurrency   int      `json:"concurrency"`
 	RPMLimit      int      `json:"rpm_limit"`
@@ -66,6 +74,7 @@ type UpdateUserRequest struct {
 	Password      string   `json:"password" binding:"omitempty,min=6"`
 	Username      *string  `json:"username"`
 	Notes         *string  `json:"notes"`
+	Role          string   `json:"role" binding:"omitempty,oneof=admin user"`
 	Balance       *float64 `json:"balance"`
 	Concurrency   *int     `json:"concurrency"`
 	RPMLimit      *int     `json:"rpm_limit"`
@@ -216,6 +225,45 @@ func (h *UserHandler) GetByID(c *gin.Context) {
 	response.Success(c, dto.UserFromServiceAdmin(user))
 }
 
+// BindAuthIdentity manually binds a canonical auth identity to a user.
+// POST /api/v1/admin/users/:id/auth-identities
+func (h *UserHandler) BindAuthIdentity(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid user ID")
+		return
+	}
+
+	var req BindUserAuthIdentityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	input := service.AdminBindAuthIdentityInput{
+		ProviderType:    req.ProviderType,
+		ProviderKey:     req.ProviderKey,
+		ProviderSubject: req.ProviderSubject,
+		Issuer:          req.Issuer,
+		Metadata:        req.Metadata,
+	}
+	if req.Channel != nil {
+		input.Channel = &service.AdminBindAuthIdentityChannelInput{
+			Channel:        req.Channel.Channel,
+			ChannelAppID:   req.Channel.ChannelAppID,
+			ChannelSubject: req.Channel.ChannelSubject,
+			Metadata:       req.Channel.Metadata,
+		}
+	}
+
+	result, err := h.adminService.BindUserAuthIdentity(c.Request.Context(), userID, input)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
 // Create handles creating a new user
 // POST /api/v1/admin/users
 func (h *UserHandler) Create(c *gin.Context) {
@@ -225,14 +273,24 @@ func (h *UserHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// 创建管理员账号属权限敏感操作：需最近完成 step-up 2FA 验证。
+	if req.Role == service.RoleAdmin {
+		if !middleware.EnforceStepUp(c, h.totpService, h.userService) {
+			return
+		}
+	}
+
 	user, err := h.adminService.CreateUser(c.Request.Context(), &service.CreateUserInput{
 		Email:         req.Email,
 		Password:      req.Password,
 		Username:      req.Username,
 		Notes:         req.Notes,
+		Role:          req.Role,
 		Balance:       req.Balance,
 		Concurrency:   req.Concurrency,
+		RPMLimit:      req.RPMLimit,
 		AllowedGroups: req.AllowedGroups,
+		ActorAdminID:  getAdminIDFromContext(c),
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -257,17 +315,42 @@ func (h *UserHandler) Update(c *gin.Context) {
 		return
 	}
 
+	// 防锁死保护：管理员不能把自己降级为普通用户(单管理员场景下会失去后台访问权)。
+	// 与既有"不能禁用/删除 admin"保护一致。降级其他管理员仍然允许。
+	if req.Role == service.RoleUser && userID == getAdminIDFromContext(c) {
+		response.BadRequest(c, "cannot demote yourself from admin")
+		return
+	}
+
+	// 把普通用户提升为管理员属权限敏感操作：需最近完成 step-up 2FA 验证。
+	// 目标已是管理员时（前端编辑表单总是携带 role）不触发，避免日常编辑被打断。
+	if req.Role == service.RoleAdmin {
+		target, err := h.adminService.GetUser(c.Request.Context(), userID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if target.Role != service.RoleAdmin {
+			if !middleware.EnforceStepUp(c, h.totpService, h.userService) {
+				return
+			}
+		}
+	}
+
 	// 使用指针类型直接传递，nil 表示未提供该字段
 	user, err := h.adminService.UpdateUser(c.Request.Context(), userID, &service.UpdateUserInput{
 		Email:         req.Email,
 		Password:      req.Password,
 		Username:      req.Username,
 		Notes:         req.Notes,
+		Role:          req.Role,
 		Balance:       req.Balance,
 		Concurrency:   req.Concurrency,
+		RPMLimit:      req.RPMLimit,
 		Status:        req.Status,
 		AllowedGroups: req.AllowedGroups,
 		GroupRates:    req.GroupRates,
+		ActorAdminID:  getAdminIDFromContext(c),
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -392,8 +475,11 @@ func (h *UserHandler) GetBalanceHistory(c *gin.Context) {
 		return
 	}
 
-	// [LITE] Redeem service removed - return records directly
-	out := codes
+	// Convert to admin DTO (includes notes field for admin visibility)
+	out := make([]dto.AdminRedeemCode, 0, len(codes))
+	for i := range codes {
+		out = append(out, *dto.RedeemCodeFromServiceAdmin(&codes[i]))
+	}
 
 	// Custom response with total_recharged alongside pagination
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
@@ -513,6 +599,73 @@ func (h *UserHandler) BatchUpdateConcurrency(c *gin.Context) {
 	}
 
 	affected, err := h.adminService.BatchUpdateConcurrency(c.Request.Context(), userIDs, req.Concurrency, req.Mode)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"affected": affected})
+}
+
+// BatchUpdateLimits overwrites concurrency and/or RPM limits for multiple users.
+// POST /api/v1/admin/users/batch-limits
+type BatchUpdateLimitsRequest struct {
+	UserIDs     []int64 `json:"user_ids"`
+	All         bool    `json:"all"`
+	Concurrency *int    `json:"concurrency" binding:"omitempty,min=0"`
+	RPMLimit    *int    `json:"rpm_limit" binding:"omitempty,min=0"`
+}
+
+func (h *UserHandler) BatchUpdateLimits(c *gin.Context) {
+	var req BatchUpdateLimitsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if req.Concurrency == nil && req.RPMLimit == nil {
+		response.BadRequest(c, "at least one of concurrency or rpm_limit is required")
+		return
+	}
+	if !req.All && len(req.UserIDs) == 0 {
+		response.BadRequest(c, "user_ids is required unless all=true")
+		return
+	}
+	if !req.All && len(req.UserIDs) > 500 {
+		response.BadRequest(c, "user_ids cannot exceed 500")
+		return
+	}
+
+	userIDs := req.UserIDs
+	if req.All {
+		userIDs = nil
+		page := 1
+		const pageSize = 500
+		for {
+			users, _, err := h.adminService.ListUsers(c.Request.Context(), page, pageSize, service.UserListFilters{}, "id", "asc")
+			if err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+			for _, user := range users {
+				userIDs = append(userIDs, user.ID)
+			}
+			if len(users) < pageSize {
+				break
+			}
+			page++
+		}
+	}
+
+	if len(userIDs) == 0 {
+		response.Success(c, gin.H{"affected": 0})
+		return
+	}
+
+	affected, err := h.adminService.BatchUpdateLimits(
+		c.Request.Context(),
+		userIDs,
+		req.Concurrency,
+		req.RPMLimit,
+	)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

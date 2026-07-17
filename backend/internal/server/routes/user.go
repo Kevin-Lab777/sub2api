@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/Kevin-Lab777/sub2api/internal/handler"
 	"github.com/Kevin-Lab777/sub2api/internal/server/middleware"
+	"github.com/Kevin-Lab777/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,9 +14,13 @@ func RegisterUserRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
 	jwtAuth middleware.JWTAuthMiddleware,
+	auditLog middleware.AuditLogMiddleware,
+	settingService *service.SettingService,
 ) {
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
+	authenticated.Use(middleware.BackendModeUserGuard(settingService))
+	authenticated.Use(gin.HandlerFunc(auditLog))
 	{
 		// 用户接口
 		user := authenticated.Group("/user")
@@ -35,6 +40,7 @@ func RegisterUserRoutes(
 				totp.POST("/setup", h.Totp.InitiateSetup)
 				totp.POST("/enable", h.Totp.Enable)
 				totp.POST("/disable", h.Totp.Disable)
+				totp.POST("/step-up", h.Totp.StepUp)
 			}
 		}
 
@@ -52,18 +58,28 @@ func RegisterUserRoutes(
 		groups := authenticated.Group("/groups")
 		{
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
+			groups.GET("/rates", h.APIKey.GetUserGroupRates)
+		}
+
+		channels := authenticated.Group("/channels")
+		{
+			channels.GET("/available", h.AvailableChannel.List)
 		}
 
 		// 使用记录
 		usage := authenticated.Group("/usage")
 		{
 			usage.GET("", h.Usage.List)
+			usage.GET("/errors", h.Usage.ListErrors)
+			usage.GET("/errors/:id", h.Usage.GetErrorDetail)
+			usage.GET("/api-keys/:id/daily", h.Usage.GetMyAPIKeyDailyUsage)
 			usage.GET("/:id", h.Usage.GetByID)
 			usage.GET("/stats", h.Usage.Stats)
 			// User dashboard endpoints
 			usage.GET("/dashboard/stats", h.Usage.DashboardStats)
 			usage.GET("/dashboard/trend", h.Usage.DashboardTrend)
 			usage.GET("/dashboard/models", h.Usage.DashboardModels)
+			usage.GET("/dashboard/snapshot-v2", h.Usage.DashboardSnapshotV2)
 			usage.POST("/dashboard/api-keys-usage", h.Usage.DashboardAPIKeysUsage)
 		}
 

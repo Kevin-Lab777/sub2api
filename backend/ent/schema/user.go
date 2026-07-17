@@ -122,7 +122,8 @@ func (User) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("api_keys", APIKey.Type),
 		// [LITE:DELETED] redeem_codes edge
-		edge.To("auth_identities", AuthIdentity.Type),
+		edge.To("auth_identities", AuthIdentity.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("assigned_subscriptions", UserSubscription.Type),
 		edge.To("announcement_reads", AnnouncementRead.Type),

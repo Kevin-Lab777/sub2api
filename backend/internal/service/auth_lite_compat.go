@@ -67,6 +67,11 @@ func (s *AuthService) GenerateTokenPair(ctx context.Context, user *User, refresh
 	}, nil
 }
 
+// RevokeSessionFamily is a no-op because Lite does not issue refresh-token families.
+func (s *AuthService) RevokeSessionFamily(ctx context.Context, familyID string) error {
+	return nil
+}
+
 func (s *AuthService) GetAccessTokenExpiresIn() int {
 	if s == nil || s.cfg == nil {
 		return 0
