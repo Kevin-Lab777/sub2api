@@ -31,6 +31,8 @@ Lite preservation work:
   deleted.
 - Kept email and DingTalk OAuth handlers and dependent tests behind the
   `full` build tag.
+- Removed the orphaned Full-profile OAuth invitation test that imported the
+  deleted RedeemCode schema, restoring `go mod tidy` and GoReleaser hooks.
 - Kept standard mode quota-based: non-subscription gateway usage records cost
   and quota without deducting user balance.
 - Added AuthService compatibility session claims and no-op session-family
@@ -48,6 +50,8 @@ Validation:
 - `make test-unit` and `make test-integration` passed in `backend`.
 - `pnpm build` passed in `frontend`.
 - `make test-frontend` passed: 5 files, 62 tests.
+- golangci-lint v2.9 passed with `--tests=false`: 0 issues.
+- GoReleaser's before hook and five-target snapshot build passed.
 - Conflict marker, deleted-module, and Lite balance invariant scans passed.
 
 ## 2026-07-10 - OpenAI Model Cleanup and 2FA Readiness Check

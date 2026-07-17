@@ -13,7 +13,6 @@ import (
 
 	dbent "github.com/Kevin-Lab777/sub2api/ent"
 	"github.com/Kevin-Lab777/sub2api/ent/authidentity"
-	"github.com/Kevin-Lab777/sub2api/ent/redeemcode"
 	dbuser "github.com/Kevin-Lab777/sub2api/ent/user"
 	"github.com/Kevin-Lab777/sub2api/internal/config"
 	"github.com/Kevin-Lab777/sub2api/internal/service"
@@ -227,77 +226,6 @@ func TestEmailOAuthStartPreservesPromoCodeInPendingSession(t *testing.T) {
 	session, err := client.PendingAuthSession.Query().Only(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "WELCOME2024", pendingOAuthPromoCode(session))
-}
-
-func TestCompleteEmailOAuthRegistrationUsesAffiliateCodeFromPendingSession(t *testing.T) {
-	affiliateRepo := newOAuthEmailAffiliateRepoStub(map[string]int64{"AFF456": 2002})
-	handler, client := newOAuthPendingFlowTestHandlerWithDependencies(t, oauthPendingFlowTestHandlerOptions{
-		invitationEnabled: true,
-		settingValues: map[string]string{
-			service.SettingKeyAffiliateEnabled: "true",
-		},
-		affiliateFactory: func(_ *dbent.Client, settingSvc *service.SettingService) *service.AffiliateService {
-			return service.NewAffiliateService(affiliateRepo, settingSvc, nil, nil)
-		},
-	})
-	ctx := context.Background()
-	invitation, err := client.RedeemCode.Create().
-		SetCode("INVITE456").
-		SetType(service.RedeemTypeInvitation).
-		SetStatus(service.StatusUnused).
-		SetValue(0).
-		Save(ctx)
-	require.NoError(t, err)
-
-	session, err := client.PendingAuthSession.Create().
-		SetSessionToken("email-oauth-aff-session-token").
-		SetIntent(oauthIntentLogin).
-		SetProviderType("google").
-		SetProviderKey("google").
-		SetProviderSubject("google-aff-user").
-		SetResolvedEmail("pending-aff@example.com").
-		SetRedirectTo("/dashboard").
-		SetBrowserSessionKey("browser-aff-key").
-		SetUpstreamIdentityClaims(map[string]any{
-			"email":            "pending-aff@example.com",
-			"email_verified":   true,
-			"username":         "pending-aff",
-			"provider":         "google",
-			"provider_key":     "google",
-			"provider_subject": "google-aff-user",
-			"aff_code":         "AFF456",
-		}).
-		SetLocalFlowState(map[string]any{
-			"step":  oauthPendingChoiceStep,
-			"error": "invitation_required",
-		}).
-		SetExpiresAt(time.Now().UTC().Add(10 * time.Minute)).
-		Save(ctx)
-	require.NoError(t, err)
-
-	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oauth/google/complete-registration", strings.NewReader(`{"password":"secret-123","invitation_code":"INVITE456","email":"tampered@example.com"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(&http.Cookie{Name: oauthPendingSessionCookieName, Value: encodeCookieValue(session.SessionToken)})
-	req.AddCookie(&http.Cookie{Name: oauthPendingBrowserCookieName, Value: encodeCookieValue("browser-aff-key")})
-	c.Request = req
-
-	handler.completeEmailOAuthRegistration(c, "google")
-
-	require.Equal(t, http.StatusOK, recorder.Code)
-	user, err := client.User.Query().Where(dbuser.EmailEQ("pending-aff@example.com")).Only(ctx)
-	require.NoError(t, err)
-	require.NotEmpty(t, user.PasswordHash)
-	require.NotEqual(t, "secret-123", user.PasswordHash)
-	tamperedCount, err := client.User.Query().Where(dbuser.EmailEQ("tampered@example.com")).Count(ctx)
-	require.NoError(t, err)
-	require.Zero(t, tamperedCount)
-	require.Equal(t, []oauthEmailAffiliateBindCall{{userID: user.ID, inviterID: 2002}}, affiliateRepo.bindCalls)
-	storedInvitation, err := client.RedeemCode.Query().Where(redeemcode.IDEQ(invitation.ID)).Only(ctx)
-	require.NoError(t, err)
-	require.NotNil(t, storedInvitation.UsedBy)
-	require.Equal(t, user.ID, *storedInvitation.UsedBy)
 }
 
 func TestCompleteEmailOAuthRegistrationRequiresPassword(t *testing.T) {

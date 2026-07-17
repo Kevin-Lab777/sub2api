@@ -7,5 +7,5 @@ func (c *Client) Driver() dialect.Driver {
 	if c == nil {
 		return nil
 	}
-	return c.config.driver
+	return c.driver
 }
