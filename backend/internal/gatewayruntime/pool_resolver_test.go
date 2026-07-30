@@ -12,11 +12,12 @@ import (
 
 func TestPoolResolverBindsAuthoritativeGroupForSchedulerReuse(t *testing.T) {
 	group := &service.Group{
-		ID:       17,
-		Name:     "Codex Pool",
-		Platform: service.PlatformOpenAI,
-		Status:   service.StatusActive,
-		Hydrated: true,
+		ID:        17,
+		Name:      "Codex Pool",
+		Platform:  service.PlatformOpenAI,
+		Status:    service.StatusActive,
+		Hydrated:  true,
+		AllowLive: true,
 	}
 	resolver := &PoolResolver{loadGroup: func(_ context.Context, poolID int64) (*service.Group, error) {
 		if poolID != group.ID {
@@ -29,7 +30,7 @@ func TestPoolResolverBindsAuthoritativeGroupForSchedulerReuse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePool() error = %v", err)
 	}
-	if pool.ID != group.ID || pool.Platform != group.Platform || !pool.Active {
+	if pool.ID != group.ID || pool.Platform != group.Platform || !pool.Active || !pool.AllowLive {
 		t.Fatalf("pool = %#v", pool)
 	}
 	if got := resolvedCtx.Value(ctxkey.Group); got != group {

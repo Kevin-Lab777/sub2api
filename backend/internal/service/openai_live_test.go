@@ -1,11 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	coderws "github.com/coder/websocket"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 type liveHTTPUpstreamStub struct {
@@ -24,6 +28,17 @@ type liveHTTPUpstreamStub struct {
 type liveAttestationStub struct {
 	header string
 	err    error
+}
+
+type technicalLiveCreateStore struct {
+	*liveTestStore
+}
+
+func (s *technicalLiveCreateStore) ClaimLiveController(_ context.Context, _ string, controller, _ string) (bool, error) {
+	if controller == LiveControllerObserver {
+		return false, nil
+	}
+	return false, nil
 }
 
 func (s liveAttestationStub) Check(context.Context) error {
@@ -140,6 +155,100 @@ func TestCreateUpstreamLiveCallPreservesSession(t *testing.T) {
 	require.Empty(t, upstream.request.Header.Get("OpenAI-Beta"))
 	require.Equal(t, HTTPUpstreamProfileOpenAI, HTTPUpstreamProfileFromContext(upstream.request.Context()))
 	require.True(t, HTTPUpstreamRedirectsDisabled(upstream.request.Context()))
+}
+
+func TestCreateTechnicalLiveCallPersistsOnlyTechnicalIdentityAndExactMapping(t *testing.T) {
+	upstream := &liveHTTPUpstreamStub{}
+	store := &technicalLiveCreateStore{liveTestStore: &liveTestStore{}}
+	concurrency := &liveTestConcurrencyCache{}
+	cfg := &config.Config{
+		JWT: config.JWTConfig{Secret: "technical-live-secret"},
+		Gateway: config.GatewayConfig{
+			Live: config.GatewayLiveConfig{MaxSessionDurationSeconds: 60},
+		},
+	}
+	service := &OpenAIGatewayService{
+		cfg:                   cfg,
+		httpUpstream:          upstream,
+		cache:                 store,
+		concurrencyService:    NewConcurrencyService(concurrency),
+		liveAttestation:       liveAttestationStub{header: `{"v":1,"s":0,"t":"v1.technical"}`},
+		liveAttestationCipher: newLiveAttestationCipher(cfg),
+	}
+	account := &Account{
+		ID:          17,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Concurrency: 2,
+		Credentials: map[string]any{
+			"access_token":       "technical-access-token",
+			"chatgpt_account_id": "technical-account",
+			"model_mapping": map[string]any{
+				"live-alias": "gpt-live-upstream",
+			},
+		},
+	}
+	identity := TechnicalLiveCallIdentity{
+		PoolID:          44,
+		RequestID:       "request-live-1",
+		SessionID:       "session-live-1",
+		InboundEndpoint: "/v1/live",
+	}
+	require.NoError(t, service.AcquireTechnicalLiveLease(context.Background(), account, identity.RequestID))
+	created, err := service.CreateTechnicalLiveCall(context.Background(), &LiveCallRequest{
+		SDP:     "v=offer\r\n",
+		Session: json.RawMessage(`{"model":"live-alias","instructions":"preserve"}`),
+	}, identity, account)
+	require.NoError(t, err)
+	require.Equal(t, "call_test", created.CallID)
+	require.Equal(t, account, created.Account)
+	require.Equal(t, "gpt-live-upstream", gjson.GetBytes(upstream.body, "session.model").String())
+	require.Equal(t, "preserve", gjson.GetBytes(upstream.body, "session.instructions").String())
+
+	record, err := service.GetTechnicalLiveCall(context.Background(), created.CallID, identity.PoolID, identity.SessionID)
+	require.NoError(t, err)
+	require.True(t, record.Technical)
+	require.Equal(t, identity.RequestID, record.TechnicalRequest)
+	require.Equal(t, "live-alias", record.Model)
+	require.Zero(t, record.UserID)
+	require.Zero(t, record.APIKeyID)
+	require.Zero(t, record.SubscriptionID)
+
+	_, err = service.GetTechnicalLiveCall(context.Background(), created.CallID, identity.PoolID, "other-session")
+	require.ErrorIs(t, err, ErrLiveIdentityMismatch)
+	require.NoError(t, service.ReleaseTechnicalLiveLease(context.Background(), account.ID, identity.RequestID))
+}
+
+func TestTechnicalLiveRequestRequiresExactModel(t *testing.T) {
+	for _, session := range []string{
+		`{}`,
+		`{"model":null}`,
+		`{"model":" live-alias"}`,
+	} {
+		_, err := technicalLiveRequestModel(&LiveCallRequest{SDP: "v=0", Session: json.RawMessage(session)})
+		require.Error(t, err)
+	}
+}
+
+func TestParseTechnicalLiveCallRequestIsStrictForJSONAndMultipart(t *testing.T) {
+	jsonBody := []byte(`{"sdp":"v=offer","session":{"model":"live-alias"},"user_id":1}`)
+	jsonReq := httptest.NewRequest(http.MethodPost, "/v1/live", bytes.NewReader(jsonBody))
+	jsonReq.Header.Set("Content-Type", "application/json")
+	_, err := ParseTechnicalLiveCallRequest(jsonReq, jsonBody)
+	require.ErrorContains(t, err, "unsupported fields")
+
+	var multipartBody bytes.Buffer
+	writer := multipart.NewWriter(&multipartBody)
+	require.NoError(t, writer.WriteField("sdp", "v=offer\r\n"))
+	require.NoError(t, writer.WriteField("session", `{"model":"live-alias","voice":"alloy"}`))
+	require.NoError(t, writer.Close())
+	multipartReq := httptest.NewRequest(http.MethodPost, "/backend-api/codex/realtime/calls", bytes.NewReader(multipartBody.Bytes()))
+	multipartReq.Header.Set("Content-Type", writer.FormDataContentType())
+	parsed, err := ParseTechnicalLiveCallRequest(multipartReq, multipartBody.Bytes())
+	require.NoError(t, err)
+	require.Equal(t, "v=offer\r\n", parsed.SDP)
+	require.Equal(t, "live-alias", gjson.GetBytes(parsed.Session, "model").String())
+	require.Equal(t, "alloy", gjson.GetBytes(parsed.Session, "voice").String())
 }
 
 func TestLiveAttestationCipherRoundTripAndRejectsOtherInstanceKey(t *testing.T) {

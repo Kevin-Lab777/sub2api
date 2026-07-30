@@ -89,7 +89,7 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | Embeddings | Implemented and tested |
 | Direct API-key Images generations/edits | Implemented and tested |
 | Subscription-account Images adapter | Implemented and tested |
-| Live/realtime and sideband | Pending |
+| Frameless Live create and sideband | Implemented and tested |
 
 The native Responses path performs only protocol validation, exact model
 mapping, provider authentication, HTTP/SSE transport, terminal SSE collection
@@ -177,6 +177,23 @@ upstream provides them. It does not use `response.output_item.done` as a
 missing-terminal fallback, synthesize
 timestamps or completion events, deduplicate image content, finalize truncated
 streams, download client assets, or create sticky-session cache entries.
+
+Frameless Live preserves both `POST /v1/live` and
+`POST /backend-api/codex/realtime/calls`, plus their call-specific WebSocket
+sideband routes. The resolved technical pool carries the administrator's Live
+switch, and only exact-model OAuth accounts with explicit Live eligibility may
+be scheduled. A short request account slot transitions into an account-only
+Redis Live lease; no user or API-key ID is fabricated. The persisted call
+mapping contains technical pool, request, and session identity so a sideband
+connection cannot cross pools or New API sessions. The observer keeps the
+provider-account lease alive while no client controls the sideband and releases
+it exactly once when the upstream session ends.
+
+Live still requires a real ChatGPT DeviceCheck attestation. The retained
+provider currently obtains that proof from the official ChatGPT.app runtime on
+Apple Silicon macOS. Missing platform support, app resources, or attestation
+keys remain explicit availability errors; Next API does not bypass or emulate
+the proof for Linux containers.
 
 Antigravity accounts participating in Gemini mixed scheduling also retain a
 separate Gin-bound forwarder and are not silently routed through the native
@@ -281,6 +298,10 @@ therefore remain transitional code rather than the final in-process path.
   Images-to-Responses adapter with exact request-shape eligibility, real
   lifecycle conversion, exact tool-usage telemetry, and direct-account-only
   routing for unrepresentable public Images semantics.
+- Native Frameless Live create and call-specific sideband forwarding now use
+  exact-pool OAuth scheduling, the group Live switch, account-only long-lived
+  concurrency leases, technical session ownership, real DeviceCheck
+  attestation reuse, and raw text/binary WebSocket relay.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

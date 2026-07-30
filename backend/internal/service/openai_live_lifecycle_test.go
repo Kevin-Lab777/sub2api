@@ -194,8 +194,9 @@ func (s *liveTestStore) MarkLiveCallClosed(_ context.Context, callHash string, _
 
 type liveTestConcurrencyCache struct {
 	ConcurrencyCache
-	mu       sync.Mutex
-	releases int
+	mu                sync.Mutex
+	releases          int
+	technicalReleases int
 }
 
 func (c *liveTestConcurrencyCache) AcquireLiveLease(
@@ -230,6 +231,21 @@ func (c *liveTestConcurrencyCache) ReleaseLiveLease(
 ) error {
 	c.mu.Lock()
 	c.releases++
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *liveTestConcurrencyCache) AcquireTechnicalLiveLease(context.Context, int64, int, string, bool) (bool, error) {
+	return true, nil
+}
+
+func (c *liveTestConcurrencyCache) RefreshTechnicalLiveLease(context.Context, int64, string) (bool, error) {
+	return true, nil
+}
+
+func (c *liveTestConcurrencyCache) ReleaseTechnicalLiveLease(context.Context, int64, string) error {
+	c.mu.Lock()
+	c.technicalReleases++
 	c.mu.Unlock()
 	return nil
 }
@@ -308,6 +324,43 @@ func TestFinalizeLiveCallIsIdempotentAndWritesZeroUsage(t *testing.T) {
 	require.Zero(t, log.OutputTokens)
 	require.Zero(t, log.TotalCost)
 	require.Zero(t, log.ActualCost)
+}
+
+func TestFinalizeTechnicalLiveCallReleasesOnlyAccountLease(t *testing.T) {
+	record := &LiveCallRecord{
+		CallID:           "call_technical",
+		CallHash:         hashLiveCallID("call_technical"),
+		AccountID:        11,
+		LeaseID:          "technical-lease",
+		Model:            "gpt-live-test",
+		CreatedAt:        time.Now().Add(-time.Second),
+		ExpiresAt:        time.Now().Add(time.Hour),
+		Controller:       LiveControllerPending,
+		Technical:        true,
+		TechnicalPoolID:  44,
+		TechnicalRequest: "request-1",
+		TechnicalSession: "session-1",
+	}
+	store := &liveTestStore{}
+	require.NoError(t, store.SaveLiveCall(context.Background(), record, time.Hour))
+	concurrencyCache := &liveTestConcurrencyCache{}
+	usageRepo := &liveTestUsageRepo{}
+	service := &OpenAIGatewayService{
+		cache:              store,
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+		usageLogRepo:       usageRepo,
+	}
+
+	service.finalizeLiveCall(record)
+	service.finalizeLiveCall(record)
+
+	concurrencyCache.mu.Lock()
+	require.Equal(t, 1, concurrencyCache.technicalReleases)
+	require.Zero(t, concurrencyCache.releases)
+	concurrencyCache.mu.Unlock()
+	usageRepo.mu.Lock()
+	require.Empty(t, usageRepo.logs)
+	usageRepo.mu.Unlock()
 }
 
 func TestGetLiveCallForIdentityRejectsMismatchedCaller(t *testing.T) {

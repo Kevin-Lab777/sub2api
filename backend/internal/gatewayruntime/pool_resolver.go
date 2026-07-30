@@ -36,10 +36,11 @@ func (r *PoolResolver) ResolvePool(ctx context.Context, poolID int64) (context.C
 
 	resolvedCtx := context.WithValue(ctx, ctxkey.Group, group)
 	return resolvedCtx, gatewaycore.Pool{
-		ID:       group.ID,
-		Name:     group.Name,
-		Platform: group.Platform,
-		Active:   group.IsActive(),
+		ID:        group.ID,
+		Name:      group.Name,
+		Platform:  group.Platform,
+		Active:    group.IsActive(),
+		AllowLive: group.AllowLive,
 	}, nil
 }
 

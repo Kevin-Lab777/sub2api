@@ -301,6 +301,16 @@ var technicalOpenAIImagesSelectionPolicy = openAISelectionPolicy{
 	requireOAuthImageModel:  true,
 }
 
+var technicalOpenAILiveSelectionPolicy = openAISelectionPolicy{
+	enforceChannelPricing: false,
+	useUpstreamTokenCost:  false,
+	strictState:           true,
+	bindStickyOnSelection: false,
+	requireExactModel:     true,
+	requireKnownCompact:   false,
+	requiredAccountType:   AccountTypeOAuth,
+}
+
 func (p openAISelectionPolicy) acceptsAccount(account *Account, requestedModel string) bool {
 	if account == nil || (p.requiredAccountType != "" && account.Type != p.requiredAccountType) {
 		return false
@@ -1080,6 +1090,12 @@ func (s *OpenAIGatewayService) SelectTechnicalImagesDirectAccountWithLoadAwarene
 // has already proved representable.
 func (s *OpenAIGatewayService) SelectTechnicalImagesAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "", technicalOpenAIImagesSelectionPolicy)
+}
+
+// SelectTechnicalLiveAccountWithLoadAwareness selects an exact-pool OAuth
+// account with the explicit Live endpoint capability.
+func (s *OpenAIGatewayService) SelectTechnicalLiveAccountWithLoadAwareness(ctx context.Context, groupID *int64, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, "", requestedModel, excludedIDs, false, OpenAIEndpointCapabilityLive, technicalOpenAILiveSelectionPolicy)
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, policy openAISelectionPolicy) (*AccountSelectionResult, error) {

@@ -71,3 +71,39 @@ func TestLiveLeaseExpiresWithoutRefresh(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, refreshed)
 }
+
+func TestTechnicalLiveLeaseUsesOnlyAccountConcurrency(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	regular := NewConcurrencyCache(client, 15, 900)
+	live, ok := regular.(service.TechnicalLiveConcurrencyCache)
+	require.True(t, ok)
+	ctx := context.Background()
+
+	accountAcquired, err := regular.AcquireAccountSlot(ctx, 10, 1, "technical-create")
+	require.NoError(t, err)
+	require.True(t, accountAcquired)
+	acquired, err := live.AcquireTechnicalLiveLease(ctx, 10, 1, "technical-live", true)
+	require.NoError(t, err)
+	require.True(t, acquired)
+	require.NoError(t, regular.ReleaseAccountSlot(ctx, 10, "technical-create"))
+
+	accountCount, err := regular.GetAccountConcurrency(ctx, 10)
+	require.NoError(t, err)
+	require.Equal(t, 1, accountCount)
+	accountAcquired, err = regular.AcquireAccountSlot(ctx, 10, 1, "blocked-by-technical-live")
+	require.NoError(t, err)
+	require.False(t, accountAcquired)
+
+	refreshed, err := live.RefreshTechnicalLiveLease(ctx, 10, "technical-live")
+	require.NoError(t, err)
+	require.True(t, refreshed)
+	require.NoError(t, live.ReleaseTechnicalLiveLease(ctx, 10, "technical-live"))
+	accountAcquired, err = regular.AcquireAccountSlot(ctx, 10, 1, "allowed-after-technical-live")
+	require.NoError(t, err)
+	require.True(t, accountAcquired)
+
+	userCount, err := regular.GetUserConcurrency(ctx, 10)
+	require.NoError(t, err)
+	require.Zero(t, userCount)
+}

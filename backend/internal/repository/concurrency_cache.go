@@ -163,6 +163,29 @@ var (
 		return 1
 	`)
 
+	acquireTechnicalLiveLeaseScript = redis.NewScript(`
+		redis.replicate_commands()
+		local accountRegular = KEYS[1]
+		local accountLive = KEYS[2]
+		local accountMax = tonumber(ARGV[1])
+		local ttl = tonumber(ARGV[2])
+		local leaseID = ARGV[3]
+		local replacing = tonumber(ARGV[4])
+		local now = tonumber(redis.call('TIME')[1])
+		local liveExpireBefore = now - ttl
+		redis.call('ZREMRANGEBYSCORE', accountLive, '-inf', liveExpireBefore)
+		if redis.call('ZSCORE', accountLive, leaseID) ~= false then
+			return 1
+		end
+		local accountCount = redis.call('ZCARD', accountRegular) + redis.call('ZCARD', accountLive)
+		local allowance = 0
+		if replacing == 1 then allowance = 1 end
+		if accountMax > 0 and accountCount >= accountMax + allowance then return 0 end
+		redis.call('ZADD', accountLive, now, leaseID)
+		redis.call('EXPIRE', accountLive, ttl)
+		return 1
+	`)
+
 	refreshLiveLeaseScript = redis.NewScript(`
 		redis.replicate_commands()
 		local ttl = tonumber(ARGV[1])
@@ -841,6 +864,38 @@ func (c *concurrencyCache) ReleaseLiveLease(ctx context.Context, accountID, user
 	pipe.ZRem(ctx, liveAPIKeySlotKey(apiKeyID), leaseID)
 	_, err := pipe.Exec(ctx)
 	return err
+}
+
+func (c *concurrencyCache) AcquireTechnicalLiveLease(ctx context.Context, accountID int64, accountMax int, leaseID string, replacingRegularSlot bool) (bool, error) {
+	if c == nil || c.rdb == nil || accountID <= 0 || leaseID == "" {
+		return false, nil
+	}
+	replacing := 0
+	if replacingRegularSlot {
+		replacing = 1
+	}
+	result, err := acquireTechnicalLiveLeaseScript.Run(ctx, c.rdb, []string{
+		accountSlotKey(accountID),
+		liveAccountSlotKey(accountID),
+	}, accountMax, liveLeaseTTLSeconds, leaseID, replacing).Int()
+	return result == 1, err
+}
+
+func (c *concurrencyCache) RefreshTechnicalLiveLease(ctx context.Context, accountID int64, leaseID string) (bool, error) {
+	if c == nil || c.rdb == nil || accountID <= 0 || leaseID == "" {
+		return false, nil
+	}
+	result, err := refreshLiveLeaseScript.Run(ctx, c.rdb, []string{
+		liveAccountSlotKey(accountID),
+	}, liveLeaseTTLSeconds, leaseID).Int()
+	return result == 1, err
+}
+
+func (c *concurrencyCache) ReleaseTechnicalLiveLease(ctx context.Context, accountID int64, leaseID string) error {
+	if c == nil || c.rdb == nil || accountID <= 0 || leaseID == "" {
+		return nil
+	}
+	return c.rdb.ZRem(ctx, liveAccountSlotKey(accountID), leaseID).Err()
 }
 
 func (c *concurrencyCache) GetAPIKeyConcurrencyBatch(ctx context.Context, apiKeyIDs []int64) (map[int64]int, error) {

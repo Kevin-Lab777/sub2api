@@ -95,6 +95,46 @@ func (s *OpenAIGatewayService) liveConcurrencyCache() (LiveConcurrencyCache, err
 	return cache, nil
 }
 
+func (s *OpenAIGatewayService) technicalLiveConcurrencyCache() (TechnicalLiveConcurrencyCache, error) {
+	if s == nil || s.concurrencyService == nil || s.concurrencyService.cache == nil {
+		return nil, ErrLiveUnavailable
+	}
+	cache, ok := s.concurrencyService.cache.(TechnicalLiveConcurrencyCache)
+	if !ok {
+		return nil, ErrLiveUnavailable
+	}
+	return cache, nil
+}
+
+// AcquireTechnicalLiveLease converts the dispatcher's short request lease into
+// an account-only Live lease. New API remains responsible for customer
+// concurrency and must not be represented by placeholder IDs here.
+func (s *OpenAIGatewayService) AcquireTechnicalLiveLease(ctx context.Context, account *Account, leaseID string) error {
+	if account == nil || account.ID <= 0 || leaseID == "" || leaseID != strings.TrimSpace(leaseID) {
+		return errors.New("technical Live lease identity is invalid")
+	}
+	cache, err := s.technicalLiveConcurrencyCache()
+	if err != nil {
+		return err
+	}
+	acquired, err := cache.AcquireTechnicalLiveLease(ctx, account.ID, account.Concurrency, leaseID, true)
+	if err != nil {
+		return err
+	}
+	if !acquired {
+		return ErrLiveConcurrencyFull
+	}
+	return nil
+}
+
+func (s *OpenAIGatewayService) ReleaseTechnicalLiveLease(ctx context.Context, accountID int64, leaseID string) error {
+	cache, err := s.technicalLiveConcurrencyCache()
+	if err != nil {
+		return err
+	}
+	return cache.ReleaseTechnicalLiveLease(ctx, accountID, leaseID)
+}
+
 func (s *OpenAIGatewayService) liveMaxSessionDuration() time.Duration {
 	if s != nil && s.cfg != nil && s.cfg.Gateway.Live.MaxSessionDurationSeconds > 0 {
 		return time.Duration(s.cfg.Gateway.Live.MaxSessionDurationSeconds) * time.Second
@@ -771,6 +811,16 @@ func (s *OpenAIGatewayService) finalizeLiveCallAfterExpiry(record *LiveCallRecor
 }
 
 func (s *OpenAIGatewayService) refreshLiveLease(record *LiveCallRecord) bool {
+	if record != nil && record.Technical {
+		cache, err := s.technicalLiveConcurrencyCache()
+		if err != nil {
+			return false
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), liveRedisOperationTimeout)
+		defer cancel()
+		refreshed, err := cache.RefreshTechnicalLiveLease(ctx, record.AccountID, record.LeaseID)
+		return err == nil && refreshed
+	}
 	cache, err := s.liveConcurrencyCache()
 	if err != nil {
 		return false
@@ -803,6 +853,12 @@ func (s *OpenAIGatewayService) finalizeLiveCall(record *LiveCallRecord) {
 	first, err := store.MarkLiveCallClosed(ctx, record.CallHash, liveClosedRecordTTL)
 	cancel()
 	if err != nil || !first {
+		return
+	}
+	if record.Technical {
+		ctx, releaseCancel := context.WithTimeout(context.Background(), liveRedisOperationTimeout)
+		_ = s.ReleaseTechnicalLiveLease(ctx, record.AccountID, record.LeaseID)
+		releaseCancel()
 		return
 	}
 	s.releaseLiveLease(record.AccountID, record.UserID, record.APIKeyID, record.LeaseID)

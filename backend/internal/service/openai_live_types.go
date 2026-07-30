@@ -49,6 +49,13 @@ type LiveCallIdentity struct {
 	InboundEndpoint string
 }
 
+type TechnicalLiveCallIdentity struct {
+	PoolID          int64
+	RequestID       string
+	SessionID       string
+	InboundEndpoint string
+}
+
 type LiveCallRecord struct {
 	CallID          string
 	CallHash        string
@@ -59,6 +66,7 @@ type LiveCallRecord struct {
 	SubscriptionID  int64
 	LeaseID         string
 	Model           string
+	UpstreamModel   string
 	CreatedAt       time.Time
 	ExpiresAt       time.Time
 	Controller      string
@@ -66,15 +74,23 @@ type LiveCallRecord struct {
 	UserAgent       string
 	IPAddress       string
 	InboundEndpoint string
+	// Technical marks a New API-owned invocation. These records carry only
+	// technical pool/request/session identity; the legacy customer identity
+	// fields above remain zero and are never synthesized.
+	Technical        bool
+	TechnicalPoolID  int64
+	TechnicalRequest string
+	TechnicalSession string
 	// AttestationCiphertext 仅用于让同一会话的 Sideband 复用创建时的证明。
 	AttestationCiphertext string
 }
 
 type LiveCallCreated struct {
-	SDP      []byte
-	CallID   string
-	Location string
-	Account  *Account
+	SDP           []byte
+	CallID        string
+	Location      string
+	Account       *Account
+	UpstreamModel string
 }
 
 // LiveCallStore 由 GatewayCache 的 Redis 实现可选提供，避免扩大旧缓存接口。
@@ -100,4 +116,13 @@ type LiveConcurrencyCache interface {
 	) (bool, error)
 	RefreshLiveLease(ctx context.Context, accountID, userID, apiKeyID int64, leaseID string) (bool, error)
 	ReleaseLiveLease(ctx context.Context, accountID, userID, apiKeyID int64, leaseID string) error
+}
+
+// TechnicalLiveConcurrencyCache owns only the provider-account lease used by
+// New API's in-process runtime. Customer and API-key concurrency remain New
+// API concerns and are intentionally absent from this interface.
+type TechnicalLiveConcurrencyCache interface {
+	AcquireTechnicalLiveLease(ctx context.Context, accountID int64, accountMax int, leaseID string, replacingRegularSlot bool) (bool, error)
+	RefreshTechnicalLiveLease(ctx context.Context, accountID int64, leaseID string) (bool, error)
+	ReleaseTechnicalLiveLease(ctx context.Context, accountID int64, leaseID string) error
 }

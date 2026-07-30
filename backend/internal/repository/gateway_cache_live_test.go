@@ -60,3 +60,35 @@ func TestGatewayCacheLiveCallIdentityAndController(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, closed)
 }
+
+func TestGatewayCacheLiveCallPersistsTechnicalIdentityWithoutCustomerIDs(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	cache, ok := NewGatewayCache(client).(service.LiveCallStore)
+	require.True(t, ok)
+	record := &service.LiveCallRecord{
+		CallID:           "call_technical",
+		CallHash:         HashLiveCallID("call_technical"),
+		AccountID:        11,
+		LeaseID:          "technical-lease",
+		Model:            "gpt-live-test",
+		CreatedAt:        time.Now(),
+		ExpiresAt:        time.Now().Add(time.Hour),
+		Controller:       service.LiveControllerPending,
+		Technical:        true,
+		TechnicalPoolID:  44,
+		TechnicalRequest: "request-1",
+		TechnicalSession: "session-1",
+	}
+	require.NoError(t, cache.SaveLiveCall(context.Background(), record, time.Hour))
+
+	loaded, err := cache.GetLiveCall(context.Background(), record.CallHash)
+	require.NoError(t, err)
+	require.True(t, loaded.Technical)
+	require.Equal(t, int64(44), loaded.TechnicalPoolID)
+	require.Equal(t, "request-1", loaded.TechnicalRequest)
+	require.Equal(t, "session-1", loaded.TechnicalSession)
+	require.Zero(t, loaded.UserID)
+	require.Zero(t, loaded.APIKeyID)
+	require.Zero(t, loaded.SubscriptionID)
+}

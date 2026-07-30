@@ -18,10 +18,11 @@ var (
 
 // Pool is the technical account-pool identity resolved by Next API.
 type Pool struct {
-	ID       int64
-	Name     string
-	Platform string
-	Active   bool
+	ID        int64
+	Name      string
+	Platform  string
+	Active    bool
+	AllowLive bool
 }
 
 // PoolResolver loads the technical pool selected by New API.
