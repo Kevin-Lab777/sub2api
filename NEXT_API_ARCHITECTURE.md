@@ -57,19 +57,28 @@ and excluded account IDs. It does not accept New API user IDs or provider
 metadata user IDs. A pool-level client restriction rejects the invocation in
 place; configured legacy fallback-group IDs are never traversed by scheduling.
 
-The Anthropic provider path now has a framework-independent transport exchange
-implemented by both the transitional Gin handler and the native `net/http`
-runtime. Direct Anthropic, API-key passthrough, Bedrock, streaming, and local
-web-search responses use the same provider code without constructing a Gin
-context. The native Anthropic dispatcher parses the original request, enforces
-invocation/body model consistency, schedules and fails over only inside the
-resolved pool, acquires account concurrency leases, and returns raw
-measurements.
+The Anthropic and native Gemini provider paths now share a
+framework-independent transport exchange implemented by both the transitional
+Gin handlers and the native `net/http` runtime. Direct Anthropic, Anthropic
+API-key passthrough, Bedrock, and native Gemini streaming/non-streaming
+responses use the same provider code without constructing a Gin context. Their
+dispatchers parse the original request, enforce invocation model consistency,
+schedule and fail over only inside the resolved pool, acquire account
+concurrency leases, and return raw measurements.
 
-OpenAI and Gemini still need native dispatchers before a complete production
-`gatewaycore.Runtime` can be assembled. New API does not import this partial
-runtime yet. The existing customer-authenticated HTTP handlers therefore remain
-transitional code rather than the final in-process path.
+The native Gemini path forwards the actual provider response. It does not
+estimate `countTokens` after an upstream failure, invent thought signatures,
+strip tool/thinking history after a validation error, or rewrite empty parts.
+Those failures remain visible to the caller. Provider-account RPM limits now
+apply to Gemini accounts as well as Anthropic accounts.
+
+OpenAI still needs a native dispatcher. Antigravity accounts participating in
+Gemini mixed scheduling also retain a separate Gin-bound forwarder and are not
+silently routed through the native Gemini implementation. Both paths must be
+migrated before a complete production `gatewaycore.Runtime` can be assembled.
+New API does not import this partial runtime yet. The existing
+customer-authenticated HTTP handlers therefore remain transitional code rather
+than the final in-process path.
 
 ## Removal Sequence
 
@@ -132,11 +141,18 @@ transitional code rather than the final in-process path.
 - A native Anthropic dispatcher enforces exact-pool scheduling, strict account
   wait-queue errors, no failover after response commitment, sticky-session
   binding, account RPM updates, and raw token/cache/web-search measurements.
+- Native Gemini forwarding uses the same transport boundary for Gemini API-key,
+  OAuth, and service-account requests. Its dispatcher enforces an exact native
+  Gemini pool, strict model/path matching, account concurrency, sticky sessions,
+  account RPM, committed-response failover boundaries, and raw token/cache/image
+  measurements.
+- Synthetic Gemini token estimates and signature/content rectification were
+  removed from the native and Anthropic-compat Gemini paths.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
-  or deletion. OpenAI and Gemini provider services also still depend on Gin and
-  block complete runtime assembly. Their presence is tracked as unfinished
-  work, not as a runtime compatibility mechanism.
+  or deletion. OpenAI and Antigravity provider services still depend on Gin and
+  block complete runtime assembly. Their presence is tracked as unfinished work,
+  not as a runtime compatibility mechanism.
 
 Each removal is complete only when its route, dependency injection provider,
 background worker, persistence schema, generated ORM code, frontend entry, and

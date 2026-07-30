@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -502,6 +503,81 @@ func TestGeminiMessagesCompatServiceForward_PreservesRequestedModelAndMappedUpst
 	require.Contains(t, httpStub.lastReq.URL.String(), "/models/claude-sonnet-4-20250514:")
 }
 
+func TestGeminiMessagesCompatServiceForwardNativeExchangeUsesHTTPTransport(t *testing.T) {
+	httpStub := &geminiCompatHTTPUpstreamStub{
+		response: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}, "X-Request-Id": []string{"gemini-native-1"}},
+			Body:       io.NopCloser(strings.NewReader(`{"candidates":[{"content":{"parts":[{"text":"hello"}]}}],"usageMetadata":{"promptTokenCount":11,"candidatesTokenCount":6}}`)),
+		},
+	}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID:       2,
+		Platform: PlatformGemini,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key": "native-key",
+		},
+	}
+	body := []byte(`{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-pro:generateContent", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	result, err := svc.ForwardNativeExchange(
+		context.Background(),
+		gatewaytransport.NewHTTPExchange(recorder, req),
+		account,
+		"gemini-2.5-pro",
+		"generateContent",
+		false,
+		body,
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, 11, result.Usage.InputTokens)
+	require.Equal(t, 6, result.Usage.OutputTokens)
+	require.Equal(t, "gemini-native-1", result.RequestID)
+	require.Contains(t, httpStub.lastReq.URL.String(), "/v1beta/models/gemini-2.5-pro:generateContent")
+}
+
+func TestGeminiMessagesCompatServiceCountTokensDoesNotFabricateOnUpstreamFailure(t *testing.T) {
+	upstreamBody := `{"error":{"code":400,"message":"invalid count request","status":"INVALID_ARGUMENT"}}`
+	httpStub := &geminiCompatHTTPUpstreamStub{
+		response: &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+		},
+	}
+	svc := &GeminiMessagesCompatService{httpUpstream: httpStub, cfg: &config.Config{}}
+	account := &Account{
+		ID:       3,
+		Platform: PlatformGemini,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key": "native-key",
+		},
+	}
+	body := []byte(`{"contents":[{"parts":[{"text":"hello"}]}]}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-pro:countTokens", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	result, err := svc.ForwardNativeExchange(
+		context.Background(),
+		gatewaytransport.NewHTTPExchange(recorder, req),
+		account,
+		"gemini-2.5-pro",
+		"countTokens",
+		false,
+		body,
+	)
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.JSONEq(t, upstreamBody, recorder.Body.String())
+}
+
 func TestGeminiMessagesCompatServiceForward_NormalizesWebSearchToolForAIStudio(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -793,71 +869,6 @@ func TestExtractGeminiUsage(t *testing.T) {
 			}
 			if got.CacheReadInputTokens != tt.wantUsage.CacheReadInputTokens {
 				t.Errorf("CacheReadInputTokens: 期望 %d，实际 %d", tt.wantUsage.CacheReadInputTokens, got.CacheReadInputTokens)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Task 8.2 — estimateGeminiCountTokens 测试
-// ---------------------------------------------------------------------------
-
-func TestEstimateGeminiCountTokens(t *testing.T) {
-	tests := []struct {
-		name      string
-		input     string
-		wantGt0   bool // 期望结果 > 0
-		wantExact *int // 如果非 nil，期望精确匹配
-	}{
-		{
-			name: "含 systemInstruction 和 contents",
-			input: `{
-				"systemInstruction":{"parts":[{"text":"You are a helpful assistant."}]},
-				"contents":[{"parts":[{"text":"Hello, how are you?"}]}]
-			}`,
-			wantGt0: true,
-		},
-		{
-			name: "仅 contents，无 systemInstruction",
-			input: `{
-				"contents":[{"parts":[{"text":"Hello, how are you?"}]}]
-			}`,
-			wantGt0: true,
-		},
-		{
-			name:      "空 parts",
-			input:     `{"contents":[{"parts":[]}]}`,
-			wantGt0:   false,
-			wantExact: intPtr(0),
-		},
-		{
-			name:      "非文本 parts（inlineData）",
-			input:     `{"contents":[{"parts":[{"inlineData":{"mimeType":"image/png"}}]}]}`,
-			wantGt0:   false,
-			wantExact: intPtr(0),
-		},
-		{
-			name:      "空白文本",
-			input:     `{"contents":[{"parts":[{"text":"   "}]}]}`,
-			wantGt0:   false,
-			wantExact: intPtr(0),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := estimateGeminiCountTokens([]byte(tt.input))
-			if tt.wantExact != nil {
-				if got != *tt.wantExact {
-					t.Errorf("期望精确值 %d，实际 %d", *tt.wantExact, got)
-				}
-				return
-			}
-			if tt.wantGt0 && got <= 0 {
-				t.Errorf("期望返回 > 0，实际 %d", got)
-			}
-			if !tt.wantGt0 && got != 0 {
-				t.Errorf("期望返回 0，实际 %d", got)
 			}
 		})
 	}

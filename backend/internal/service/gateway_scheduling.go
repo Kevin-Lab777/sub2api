@@ -1310,7 +1310,7 @@ func (s *GatewayService) withRPMPrefetch(ctx context.Context, accounts []Account
 
 	var ids []int64
 	for i := range accounts {
-		if accounts[i].IsAnthropicOAuthOrSetupToken() && accounts[i].GetBaseRPM() > 0 {
+		if accounts[i].GetBaseRPM() > 0 {
 			ids = append(ids, accounts[i].ID)
 		}
 	}
@@ -1325,12 +1325,8 @@ func (s *GatewayService) withRPMPrefetch(ctx context.Context, accounts []Account
 	return context.WithValue(ctx, rpmPrefetchContextKey, counts)
 }
 
-// isAccountSchedulableForRPM 检查账号是否可根据 RPM 进行调度
-// 仅适用于 Anthropic OAuth/SetupToken 账号
+// isAccountSchedulableForRPM checks the provider-account RPM limit.
 func (s *GatewayService) isAccountSchedulableForRPM(ctx context.Context, account *Account, isSticky bool) bool {
-	if !account.IsAnthropicOAuthOrSetupToken() {
-		return true
-	}
 	baseRPM := account.GetBaseRPM()
 	if baseRPM <= 0 {
 		return true

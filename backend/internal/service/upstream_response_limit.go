@@ -109,3 +109,12 @@ func openAITooLargeError(c *gin.Context) {
 		},
 	})
 }
+
+func openAITooLargeExchangeError(exchange gatewaytransport.Exchange) {
+	_ = exchange.WriteJSON(http.StatusBadGateway, map[string]any{
+		"error": map[string]any{
+			"type":    "upstream_error",
+			"message": "Upstream response too large",
+		},
+	})
+}

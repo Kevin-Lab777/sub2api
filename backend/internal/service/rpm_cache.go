@@ -2,8 +2,7 @@ package service
 
 import "context"
 
-// RPMCache RPM 计数器缓存接口
-// 用于 Anthropic OAuth/SetupToken 账号的每分钟请求数限制
+// RPMCache stores per-provider-account request counts for the current minute.
 type RPMCache interface {
 	// IncrementRPM 原子递增并返回当前分钟的计数
 	// 使用 Redis 服务器时间确定 minute key，避免多实例时钟偏差

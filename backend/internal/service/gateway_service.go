@@ -696,7 +696,7 @@ type GatewayService struct {
 	concurrencyService    *ConcurrencyService
 	claudeTokenProvider   *ClaudeTokenProvider
 	sessionLimitCache     SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
-	rpmCache              RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
+	rpmCache              RPMCache          // provider-account RPM counter cache
 	userGroupRateResolver *userGroupRateResolver
 	userGroupRateCache    *gocache.Cache
 	userGroupRateSF       singleflight.Group
@@ -768,6 +768,43 @@ func (s *GatewayService) ValidateTechnicalRuntime() error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("technical gateway dependencies are incomplete: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// ValidateTechnicalSchedulerRuntime verifies the account-pool scheduler without
+// requiring any provider-specific forwarder.
+func (s *GatewayService) ValidateTechnicalSchedulerRuntime() error {
+	if s == nil {
+		return errors.New("gateway scheduler is nil")
+	}
+	missing := make([]string, 0, 8)
+	if s.accountRepo == nil {
+		missing = append(missing, "account repository")
+	}
+	if s.groupRepo == nil {
+		missing = append(missing, "group repository")
+	}
+	if s.cache == nil {
+		missing = append(missing, "gateway cache")
+	}
+	if s.cfg == nil {
+		missing = append(missing, "gateway config")
+	}
+	if s.schedulerSnapshot == nil {
+		missing = append(missing, "scheduler snapshot")
+	}
+	if s.concurrencyService == nil {
+		missing = append(missing, "account concurrency service")
+	}
+	if s.rateLimitService == nil {
+		missing = append(missing, "account rate-limit service")
+	}
+	if s.rpmCache == nil {
+		missing = append(missing, "account RPM cache")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("technical scheduler dependencies are incomplete: %s", strings.Join(missing, ", "))
 	}
 	return nil
 }
