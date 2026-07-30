@@ -85,7 +85,7 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | `POST /v1/chat/completions` direct API-key upstream | Implemented and tested |
 | Subscription-account Chat Completions adapter | Implemented and tested |
 | Legacy `POST /v1/completions` direct API-key upstream | Implemented and tested |
-| Embeddings | Pending |
+| Embeddings | Implemented and tested |
 | Images | Pending |
 | Live/realtime and sideband | Pending |
 
@@ -143,6 +143,15 @@ The legacy Completions endpoint shares the same strict direct transport and
 account boundary while preserving its prompt-shaped request and
 `text_completion` response. It has a distinct account capability and is never
 routed to subscription accounts or translated through Chat Completions.
+
+The native Embeddings endpoint selects only exact-pool API-key accounts with
+explicit embedding capability. It preserves the request and response schema,
+changes only the exact account model mapping, requires a JSON success response,
+and reports authoritative prompt, cache, and image-input token counts. Missing,
+negative, contradictory, or non-integral usage is a transport failure; it is
+never replaced by `total_tokens`, estimated, or accepted as zero usage. Because
+Embeddings is stateless, its dispatcher neither reads nor writes sticky-session
+bindings.
 
 Antigravity accounts participating in Gemini mixed scheduling also retain a
 separate Gin-bound forwarder and are not silently routed through the native
@@ -237,6 +246,9 @@ therefore remain transitional code rather than the final in-process path.
   Responses adapter with deterministic request/output conversion, authoritative
   upstream IDs/timestamps, exact terminal usage, and no semantic-error
   failover. Lossy request shapes are rejected explicitly.
+- Native `POST /v1/embeddings` now uses exact API-key capability scheduling,
+  raw JSON forwarding, exact model mapping, strict endpoint usage extraction,
+  and multimodal image-input token telemetry.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

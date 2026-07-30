@@ -469,3 +469,21 @@ func TestOpenAISelectTechnicalChatCompletionsRejectsUnsupportedAccountType(t *te
 	require.NoError(t, err)
 	require.Equal(t, int64(2), selection.Account.ID)
 }
+
+func TestOpenAISelectTechnicalEmbeddingsRequiresAPIKeyCapability(t *testing.T) {
+	t.Parallel()
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0},
+			{ID: 2, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, Credentials: map[string]any{"openai_capabilities": []any{"chat_completions"}}},
+			{ID: 3, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 2, Credentials: map[string]any{"openai_capabilities": []any{"embeddings"}}},
+		}},
+		concurrencyService: NewConcurrencyService(&technicalOpenAIConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{1: {AccountID: 1, LoadRate: 0}, 2: {AccountID: 2, LoadRate: 0}, 3: {AccountID: 3, LoadRate: 0}},
+		}),
+	}
+	selection, err := svc.SelectTechnicalEmbeddingsAccountWithLoadAwareness(context.Background(), nil, "", "embedding-alias", nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), selection.Account.ID)
+}

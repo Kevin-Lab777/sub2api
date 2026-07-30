@@ -266,6 +266,16 @@ var technicalOpenAIChatCompletionsSelectionPolicy = openAISelectionPolicy{
 	allowedAccountTypes:   []string{AccountTypeAPIKey, AccountTypeOAuth},
 }
 
+var technicalOpenAIEmbeddingsSelectionPolicy = openAISelectionPolicy{
+	enforceChannelPricing: false,
+	useUpstreamTokenCost:  false,
+	strictState:           true,
+	bindStickyOnSelection: false,
+	requireExactModel:     true,
+	requireKnownCompact:   false,
+	requiredAccountType:   AccountTypeAPIKey,
+}
+
 func (p openAISelectionPolicy) acceptsAccount(account *Account, requestedModel string) bool {
 	if account == nil || (p.requiredAccountType != "" && account.Type != p.requiredAccountType) {
 		return false
@@ -1017,6 +1027,12 @@ func (s *OpenAIGatewayService) SelectTechnicalChatCompletionsAccountWithLoadAwar
 // pool API-key account that exposes the legacy Completions endpoint.
 func (s *OpenAIGatewayService) SelectTechnicalCompletionsDirectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityCompletions, technicalOpenAIChatCompletionsDirectSelectionPolicy)
+}
+
+// SelectTechnicalEmbeddingsAccountWithLoadAwareness selects an exact-pool
+// API-key account that explicitly exposes the Embeddings endpoint.
+func (s *OpenAIGatewayService) SelectTechnicalEmbeddingsAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityEmbeddings, technicalOpenAIEmbeddingsSelectionPolicy)
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, policy openAISelectionPolicy) (*AccountSelectionResult, error) {
