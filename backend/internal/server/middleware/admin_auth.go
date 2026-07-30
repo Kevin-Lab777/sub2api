@@ -13,7 +13,7 @@ import (
 
 // NewAdminAuthMiddleware 创建管理员认证中间件
 func NewAdminAuthMiddleware(
-	authService *service.AuthService,
+	authService *service.AdminAuthService,
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
@@ -26,7 +26,7 @@ func NewAdminAuthMiddleware(
 // 1. Admin API Key: x-api-key: <admin-api-key>
 // 2. JWT Token: Authorization: Bearer <jwt-token> (需要管理员角色)
 func adminAuth(
-	authService *service.AuthService,
+	authService *service.AdminAuthService,
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
@@ -157,7 +157,7 @@ func validateAdminAPIKey(
 func validateJWTForAdmin(
 	c *gin.Context,
 	token string,
-	authService *service.AuthService,
+	authService *service.AdminAuthService,
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,

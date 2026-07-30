@@ -14,7 +14,7 @@ import (
 // 带 header 则委托严格 JWT 校验（token 版本 / 用户状态 / 会话绑定），失败返回 401——
 // 前端 API client 对 401 会自动走 refresh-token 重试，因此不做静默降级。
 func NewOptionalJWTAuthMiddleware(
-	authService *service.AuthService,
+	authService *service.AdminAuthService,
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,

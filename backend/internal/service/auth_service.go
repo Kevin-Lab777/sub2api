@@ -66,12 +66,9 @@ type JWTClaims struct {
 
 // AuthService 认证服务
 type AuthService struct {
+	*AdminAuthService
 	entClient             *dbent.Client
-	userRepo              UserRepository
 	redeemRepo            RedeemCodeRepository
-	refreshTokenCache     RefreshTokenCache
-	cfg                   *config.Config
-	settingService        *SettingService
 	emailService          *EmailService
 	turnstileService      *TurnstileService
 	emailQueueService     *EmailQueueService
@@ -109,12 +106,9 @@ func NewAuthService(
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
 ) *AuthService {
 	return &AuthService{
+		AdminAuthService:      NewAdminAuthService(userRepo, refreshTokenCache, cfg, settingService),
 		entClient:             entClient,
-		userRepo:              userRepo,
 		redeemRepo:            redeemRepo,
-		refreshTokenCache:     refreshTokenCache,
-		cfg:                   cfg,
-		settingService:        settingService,
 		emailService:          emailService,
 		turnstileService:      turnstileService,
 		emailQueueService:     emailQueueService,
@@ -440,27 +434,39 @@ func (s *AuthService) IsEmailVerifyEnabled(ctx context.Context) bool {
 	return s.settingService.IsEmailVerifyEnabled(ctx)
 }
 
-// Login 用户登录，返回JWT token
-func (s *AuthService) Login(ctx context.Context, email, password string) (string, *User, error) {
+// Authenticate verifies local administrator credentials without issuing a
+// throwaway access token. Session issuance is an explicit subsequent step.
+func (s *AdminAuthService) Authenticate(ctx context.Context, email, password string) (*User, error) {
 	// 查找用户
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
-			return "", nil, ErrInvalidCredentials
+			return nil, ErrInvalidCredentials
 		}
 		// 记录数据库错误但不暴露给用户
 		logger.LegacyPrintf("service.auth", "[Auth] Database error during login: %v", err)
-		return "", nil, ErrServiceUnavailable
+		return nil, ErrServiceUnavailable
 	}
 
 	// 验证密码
 	if !s.CheckPassword(password, user.PasswordHash) {
-		return "", nil, ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
 
 	// 检查用户状态
 	if !user.IsActive() {
-		return "", nil, ErrUserNotActive
+		return nil, ErrUserNotActive
+	}
+	return user, nil
+}
+
+// Login is retained for legacy customer-auth code that still expects an
+// immediate access token. Next API's administrator handler calls Authenticate
+// and issues one token pair explicitly.
+func (s *AdminAuthService) Login(ctx context.Context, email, password string) (string, *User, error) {
+	user, err := s.Authenticate(ctx, email, password)
+	if err != nil {
+		return "", nil, err
 	}
 
 	// 生成JWT token
@@ -1128,7 +1134,7 @@ func buildEmailSuffixNotAllowedError(whitelist []string) error {
 }
 
 // ValidateToken 验证JWT token并返回用户声明
-func (s *AuthService) ValidateToken(tokenString string) (*JWTClaims, error) {
+func (s *AdminAuthService) ValidateToken(tokenString string) (*JWTClaims, error) {
 	// 先做长度校验，尽早拒绝异常超长 token，降低 DoS 风险。
 	if len(tokenString) > maxTokenLength {
 		return nil, ErrTokenTooLarge
@@ -1191,7 +1197,7 @@ func isReservedEmail(email string) bool {
 // GenerateToken 生成JWT access token
 // 使用新的access_token_expire_minutes配置项（如果配置了），否则回退到expire_hour。
 // 会话指纹（IP/UA）从 ctx 中提取（由 HTTP 入口中间件注入），缺失时生成不带绑定的 token。
-func (s *AuthService) GenerateToken(ctx context.Context, user *User) (string, error) {
+func (s *AdminAuthService) GenerateToken(ctx context.Context, user *User) (string, error) {
 	sessionID, err := randomHexString(8)
 	if err != nil {
 		return "", fmt.Errorf("generate session id: %w", err)
@@ -1200,7 +1206,7 @@ func (s *AuthService) GenerateToken(ctx context.Context, user *User) (string, er
 }
 
 // generateAccessToken 生成带会话 ID 与绑定指纹的 access token。
-func (s *AuthService) generateAccessToken(user *User, sessionID, bindingHash string) (string, error) {
+func (s *AdminAuthService) generateAccessToken(user *User, sessionID, bindingHash string) (string, error) {
 	now := time.Now()
 	var expiresAt time.Time
 	if s.cfg.JWT.AccessTokenExpireMinutes > 0 {
@@ -1235,7 +1241,7 @@ func (s *AuthService) generateAccessToken(user *User, sessionID, bindingHash str
 
 // GetAccessTokenExpiresIn 返回Access Token的有效期（秒）
 // 用于前端设置刷新定时器
-func (s *AuthService) GetAccessTokenExpiresIn() int {
+func (s *AdminAuthService) GetAccessTokenExpiresIn() int {
 	if s.cfg.JWT.AccessTokenExpireMinutes > 0 {
 		return s.cfg.JWT.AccessTokenExpireMinutes * 60
 	}
@@ -1243,7 +1249,7 @@ func (s *AuthService) GetAccessTokenExpiresIn() int {
 }
 
 // HashPassword 使用bcrypt加密密码
-func (s *AuthService) HashPassword(password string) (string, error) {
+func (s *AdminAuthService) HashPassword(password string) (string, error) {
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return "", err
@@ -1252,13 +1258,13 @@ func (s *AuthService) HashPassword(password string) (string, error) {
 }
 
 // CheckPassword 验证密码是否匹配
-func (s *AuthService) CheckPassword(password, hashedPassword string) bool {
+func (s *AdminAuthService) CheckPassword(password, hashedPassword string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	return err == nil
 }
 
 // RefreshToken 刷新token
-func (s *AuthService) RefreshToken(ctx context.Context, oldTokenString string) (string, error) {
+func (s *AdminAuthService) RefreshToken(ctx context.Context, oldTokenString string) (string, error) {
 	// 验证旧token（即使过期也允许，用于刷新）
 	claims, err := s.ValidateToken(oldTokenString)
 	if err != nil && !errors.Is(err, ErrTokenExpired) {
@@ -1469,7 +1475,7 @@ type TokenPairWithUser struct {
 
 // GenerateTokenPair 生成Access Token和Refresh Token对
 // familyID: 可选的Token家族ID，用于Token轮转时保持家族关系
-func (s *AuthService) GenerateTokenPair(ctx context.Context, user *User, familyID string) (*TokenPair, error) {
+func (s *AdminAuthService) GenerateTokenPair(ctx context.Context, user *User, familyID string) (*TokenPair, error) {
 	// 检查 refreshTokenCache 是否可用
 	if s.refreshTokenCache == nil {
 		return nil, errors.New("refresh token cache not configured")
@@ -1505,7 +1511,7 @@ func (s *AuthService) GenerateTokenPair(ctx context.Context, user *User, familyI
 }
 
 // generateRefreshToken 生成并存储Refresh Token
-func (s *AuthService) generateRefreshToken(ctx context.Context, user *User, familyID string) (string, error) {
+func (s *AdminAuthService) generateRefreshToken(ctx context.Context, user *User, familyID string) (string, error) {
 	// 生成随机Token
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -1559,7 +1565,7 @@ func (s *AuthService) generateRefreshToken(ctx context.Context, user *User, fami
 
 // RefreshTokenPair 使用Refresh Token刷新Token对
 // 实现Token轮转：每次刷新都会生成新的Refresh Token，旧Token立即失效
-func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string) (*TokenPairWithUser, error) {
+func (s *AdminAuthService) RefreshTokenPair(ctx context.Context, refreshToken string) (*TokenPairWithUser, error) {
 	// 检查 refreshTokenCache 是否可用
 	if s.refreshTokenCache == nil {
 		return nil, ErrRefreshTokenInvalid
@@ -1645,7 +1651,7 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 }
 
 // RevokeRefreshToken 撤销单个Refresh Token
-func (s *AuthService) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
+func (s *AdminAuthService) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
 	if s.refreshTokenCache == nil {
 		return nil // No-op if cache not configured
 	}
@@ -1659,7 +1665,7 @@ func (s *AuthService) RevokeRefreshToken(ctx context.Context, refreshToken strin
 
 // RevokeSessionFamily 撤销单个会话家族（该会话的所有 refresh token）。
 // 用于会话绑定失效等单会话级撤销场景，不影响用户的其他设备会话。
-func (s *AuthService) RevokeSessionFamily(ctx context.Context, familyID string) error {
+func (s *AdminAuthService) RevokeSessionFamily(ctx context.Context, familyID string) error {
 	if s.refreshTokenCache == nil || familyID == "" {
 		return nil
 	}
@@ -1668,7 +1674,7 @@ func (s *AuthService) RevokeSessionFamily(ctx context.Context, familyID string) 
 
 // RevokeAllUserSessions 撤销用户的所有会话（所有Refresh Token）
 // 用于密码更改或用户主动登出所有设备
-func (s *AuthService) RevokeAllUserSessions(ctx context.Context, userID int64) error {
+func (s *AdminAuthService) RevokeAllUserSessions(ctx context.Context, userID int64) error {
 	if s.refreshTokenCache == nil {
 		return nil // No-op if cache not configured
 	}
@@ -1682,7 +1688,7 @@ func (s *AuthService) RevokeAllUserSessions(ctx context.Context, userID int64) e
 // Update 不写任何有效数据，却会用旧快照覆盖并发写入的列，故已移除。
 // 会话撤销由下面的 refresh session 清理承担；改密路径通过 password_hash 变化
 // 改变指纹，从而使旧 token 失效。
-func (s *AuthService) RevokeAllUserTokens(ctx context.Context, userID int64) error {
+func (s *AdminAuthService) RevokeAllUserTokens(ctx context.Context, userID int64) error {
 	if _, err := s.userRepo.GetByID(ctx, userID); err != nil {
 		return fmt.Errorf("get user: %w", err)
 	}

@@ -84,13 +84,19 @@ in-process path.
   the invocation context for scheduler reuse.
 - Account scheduling no longer accepts customer identity arguments and cannot
   switch from the requested pool to a fallback group.
+- Administrator password/TOTP authentication and refresh-token sessions use a
+  dedicated `AdminAuthService` dependency graph. It does not construct promo,
+  redeem, affiliate, subscription, or customer OAuth services.
+- Unregistered customer registration, social OAuth, affiliate, platform-quota,
+  identity-binding, and notification-email handlers have been physically
+  removed with their route-specific tests.
 - Customer self-service and commerce routes are no longer registered.
 - Inactive customer, payment, subscription, announcement, affiliate, promo,
   redeem, user-attribute, risk-control, model-plaza, and payment-route handlers
   are no longer members of the Wire handler aggregation graph.
 - The administrator frontend exposes only the retained gateway management
   routes.
-- The legacy gateway handlers, authentication service, settings handler,
+- The legacy gateway handlers, customer authentication implementation, settings handler,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. Their presence is tracked as unfinished work, not as a runtime
   compatibility mechanism.

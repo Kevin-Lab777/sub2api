@@ -60,7 +60,7 @@ func SecurityClientIP(c *gin.Context) string {
 // 该会话在下一次 refresh 轮转时会自动获得绑定。
 func enforceSessionBinding(
 	c *gin.Context,
-	authService *service.AuthService,
+	authService *service.AdminAuthService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
 	claims *service.JWTClaims,

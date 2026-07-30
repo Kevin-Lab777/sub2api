@@ -12,7 +12,7 @@ import (
 
 // NewJWTAuthMiddleware 创建 JWT 认证中间件
 func NewJWTAuthMiddleware(
-	authService *service.AuthService,
+	authService *service.AdminAuthService,
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
@@ -30,7 +30,7 @@ type userActivityToucher interface {
 
 // jwtAuth JWT认证中间件实现
 func jwtAuth(
-	authService *service.AuthService,
+	authService *service.AdminAuthService,
 	userService jwtUserReader,
 	activityToucher userActivityToucher,
 	settingService *service.SettingService,

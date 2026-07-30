@@ -16,7 +16,7 @@ import (
 
 // newOptionalJWTTestEnv 创建 OptionalJWT 中间件测试环境。
 // handler 回写「是否携带 AuthSubject」,便于断言匿名 vs 登录两种路径。
-func newOptionalJWTTestEnv(users map[int64]*service.User) (*gin.Engine, *service.AuthService) {
+func newOptionalJWTTestEnv(users map[int64]*service.User) (*gin.Engine, *service.AdminAuthService) {
 	gin.SetMode(gin.TestMode)
 
 	cfg := &config.Config{}
@@ -24,7 +24,7 @@ func newOptionalJWTTestEnv(users map[int64]*service.User) (*gin.Engine, *service
 	cfg.JWT.AccessTokenExpireMinutes = 60
 
 	userRepo := &stubJWTUserRepo{users: users}
-	authSvc := service.NewAuthService(nil, userRepo, nil, nil, cfg, nil, nil, nil, nil, nil, nil, nil, nil)
+	authSvc := service.NewAdminAuthService(userRepo, nil, cfg, nil)
 	userSvc := service.NewUserService(userRepo, nil, nil, nil)
 	mw := NewOptionalJWTAuthMiddleware(authSvc, userSvc, nil, nil)
 

@@ -18,13 +18,13 @@ import (
 
 type PasskeyHandler struct {
 	passkeys    *service.PasskeyService
-	authService *service.AuthService
+	authService *service.AdminAuthService
 	settingSvc  *service.SettingService
 }
 
 func NewPasskeyHandler(
 	passkeys *service.PasskeyService,
-	authService *service.AuthService,
+	authService *service.AdminAuthService,
 	settingService *service.SettingService,
 ) *PasskeyHandler {
 	return &PasskeyHandler{

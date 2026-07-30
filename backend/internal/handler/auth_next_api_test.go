@@ -8,7 +8,7 @@ import (
 )
 
 func TestEnsureNextAPIAdminLogin(t *testing.T) {
-	require.NoError(t, ensureNextAPIAdminLogin(&service.User{Role: service.RoleAdmin}))
+	require.NoError(t, ensureNextAPIAdminLogin(&service.User{Role: service.RoleAdmin, Status: service.StatusActive}))
 	require.Error(t, ensureNextAPIAdminLogin(&service.User{Role: service.RoleUser}))
 	require.Error(t, ensureNextAPIAdminLogin(nil))
 }
