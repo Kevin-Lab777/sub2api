@@ -46,16 +46,6 @@ func ProvideOAuthRefreshAPI(accountRepo AccountRepository, tokenCache GeminiToke
 	return NewOAuthRefreshAPI(accountRepo, tokenCache)
 }
 
-func ProvideBatchImageModelPricingResolver(resolver *ModelPricingResolver) *BatchImageModelPricingResolver {
-	return &BatchImageModelPricingResolver{Resolver: resolver}
-}
-
-func ProvideBatchImageCleanupService(repo BatchImageRepository, accountRepo AccountRepository, cfg *config.Config) *BatchImageCleanupService {
-	svc := NewBatchImageCleanupService(repo, accountRepo, cfg)
-	svc.Start()
-	return svc
-}
-
 // ProvideOpenAIOAuthService creates OpenAIOAuthService with privacy/account enrichment support.
 func ProvideOpenAIOAuthService(
 	proxyRepo ProxyRepository,
@@ -542,15 +532,6 @@ func ProvideImageStorageSettingService(
 	return NewImageStorageSettingService(settingRepo, encryptor, backup, factory, cfg.ImageStorage)
 }
 
-// ProvideImageTaskService 构造异步图片任务服务。
-//
-// 对象存储是异步图片任务的启用前提：仅当开关打开且凭证齐全时功能才可用，否则整体禁用
-// （handler 返回 404，不创建任务、不写 Redis），从而避免大 base64 结果撑爆 Redis。
-// 启用状态由 settings 服务在运行时解析，因此后台改开关后无需重启即可生效。
-func ProvideImageTaskService(store ImageTaskStore, settings *ImageStorageSettingService) *ImageTaskService {
-	return NewImageTaskServiceWithResolver(store, settings.Resolver(), defaultImageTaskTTL, defaultImageTaskExecutionTimeout)
-}
-
 // ProvideBackupService creates and starts BackupService
 func ProvideBackupService(
 	settingRepo SettingRepository,
@@ -697,12 +678,6 @@ var ProviderSet = wire.NewSet(
 	NewGatewayService,
 	NewOpenAIGatewayService,
 	ProvideImageStorageSettingService,
-	ProvideImageTaskService,
-	ProvideBatchImageModelPricingResolver,
-	NewBatchImagePublicService,
-	NewBatchImageDownloadService,
-	ProvideBatchImageCleanupService,
-	ProvideBatchImageWorkerRuntime,
 	wire.Bind(new(AccountRuntimeBlocker), new(*OpenAIGatewayService)),
 	NewOAuthService,
 	ProvideOpenAIOAuthService,
@@ -782,7 +757,6 @@ var ProviderSet = wire.NewSet(
 	NewAffiliateService,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
-	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
@@ -814,14 +788,6 @@ func ProvideBalanceNotifyService(emailService *EmailService, settingRepo Setting
 func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService, notificationEmailService *NotificationEmailService) *PaymentService {
 	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
 	svc.SetNotificationEmailService(notificationEmailService)
-	return svc
-}
-
-// ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
-func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache LeaderLockCache, db *sql.DB) *PaymentOrderExpiryService {
-	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
-	svc.SetLeaderLock(lockCache, db)
-	svc.Start()
 	return svc
 }
 

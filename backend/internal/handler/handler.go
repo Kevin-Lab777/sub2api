@@ -43,8 +43,6 @@ type Handlers struct {
 	Setting       *SettingHandler
 	Totp          *TotpHandler
 	Passkey       *PasskeyHandler
-	AsyncImage    *AsyncImageHandler
-	BatchImage    *BatchImageHandler
 }
 
 // BuildInfo contains build-time information

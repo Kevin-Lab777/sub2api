@@ -37,7 +37,6 @@ func newGatewayRoutesTestRouterWithConfig(cfg *config.Config, platform ...string
 		&handler.Handlers{
 			Gateway:       &handler.GatewayHandler{},
 			OpenAIGateway: &handler.OpenAIGatewayHandler{},
-			AsyncImage:    handler.NewAsyncImageHandler(nil, nil),
 		},
 		servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
 			groupID := int64(1)
@@ -124,7 +123,7 @@ func TestGatewayRoutesOpenAIImagesPathsAreRegistered(t *testing.T) {
 	}
 }
 
-func TestGatewayRoutesAsyncImagesPathsAreRegistered(t *testing.T) {
+func TestGatewayRoutesExcludeCustomerImageOrchestration(t *testing.T) {
 	router := newGatewayRoutesTestRouter()
 	registered := make(map[string]bool)
 	for _, route := range router.Routes() {
@@ -135,11 +134,17 @@ func TestGatewayRoutesAsyncImagesPathsAreRegistered(t *testing.T) {
 		"POST /v1/images/generations/async",
 		"POST /v1/images/edits/async",
 		"GET /v1/images/tasks/:task_id",
+		"POST /v1/images/batches",
+		"GET /v1/images/batches",
+		"GET /v1/images/batches/:id",
 		"POST /images/generations/async",
 		"POST /images/edits/async",
 		"GET /images/tasks/:task_id",
+		"POST /images/batches",
+		"GET /images/batches",
+		"GET /images/batches/:id",
 	} {
-		require.True(t, registered[route], "%s should be registered", route)
+		require.False(t, registered[route], "%s should not be registered", route)
 	}
 }
 

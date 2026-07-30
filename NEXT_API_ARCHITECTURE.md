@@ -102,6 +102,10 @@ in-process path.
   physically removed. Stripe and Airwallex browser SDKs are no longer runtime
   dependencies; payment-provider editors remain temporarily because the
   transitional settings page still embeds them.
+- Customer-owned asynchronous image-task and batch-image HTTP routes are no
+  longer registered, and their queues, cleanup services, workers, and the
+  otherwise-idle payment-order expiry worker are absent from the application
+  dependency graph. Synchronous provider image forwarding remains available.
 - The legacy gateway handlers, customer authentication implementation, settings handler,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. Their presence is tracked as unfinished work, not as a runtime
