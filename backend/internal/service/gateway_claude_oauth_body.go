@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/anthropicfp"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -424,7 +425,7 @@ func (s *GatewayService) applyClaudeCodeOAuthMimicryToBody(
 	if rw := buildToolNameRewriteFromBody(body); rw != nil {
 		body = applyToolNameRewriteToBody(body, rw)
 		if c != nil {
-			c.Set(toolNameRewriteKey, rw)
+			gatewaytransport.Store(c, toolNameRewriteKey, rw)
 		}
 	} else {
 		body = applyToolsLastCacheBreakpoint(body)

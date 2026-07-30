@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
@@ -356,6 +357,10 @@ func (s *GatewayService) readUpstreamErrorBody(resp *http.Response) ([]byte, err
 }
 
 func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, requestedModel ...string) (*ForwardResult, error) {
+	return s.handleErrorResponseExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account, requestedModel...)
+}
+
+func (s *GatewayService) handleErrorResponseExchange(ctx context.Context, resp *http.Response, exchange gatewaytransport.Exchange, account *Account, requestedModel ...string) (*ForwardResult, error) {
 	// Upstream returned a non-success HTTP status; count Ollama Cloud activity.
 	scheduleOllamaCloudUsageActivity(s.deferredService, account)
 	body, readErr := s.readUpstreamErrorBody(resp)
@@ -375,15 +380,13 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 
 	// Print a compact upstream request fingerprint when we hit the Claude Code OAuth
 	// credential scope error. This avoids requiring env-var tweaks in a fixed deploy.
-	if isClaudeCodeCredentialScopeError(upstreamMsg) && c != nil {
-		if v, ok := c.Get(claudeMimicDebugInfoKey); ok {
-			if line, ok := v.(string); ok && strings.TrimSpace(line) != "" {
-				logger.LegacyPrintf("service.gateway", "[ClaudeMimicDebugOnError] status=%d request_id=%s %s",
-					resp.StatusCode,
-					resp.Header.Get("x-request-id"),
-					line,
-				)
-			}
+	if isClaudeCodeCredentialScopeError(upstreamMsg) {
+		if line, ok := gatewaytransport.Load(exchange.Values(), claudeMimicDebugInfoKey); ok && strings.TrimSpace(line) != "" {
+			logger.LegacyPrintf("service.gateway", "[ClaudeMimicDebugOnError] status=%d request_id=%s %s",
+				resp.StatusCode,
+				resp.Header.Get("x-request-id"),
+				line,
+			)
 		}
 	}
 
@@ -396,8 +399,8 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		}
 		upstreamDetail = truncateString(string(body), maxBytes)
 	}
-	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
-	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+	setOpsUpstreamError(exchange.Values(), resp.StatusCode, upstreamMsg, upstreamDetail)
+	appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 		Platform:           account.Platform,
 		AccountID:          account.ID,
 		UpstreamStatusCode: resp.StatusCode,
@@ -420,7 +423,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: body}
 	}
 
-	MarkResponseCommitted(c)
+	MarkResponseCommitted(exchange.Values())
 
 	// 记录上游错误响应体摘要便于排障（可选：由配置控制；不回显到客户端）
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
@@ -436,7 +439,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 
 	// 非 failover 错误也支持错误透传规则匹配。
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(
-		c,
+		exchange.Values(),
 		account.Platform,
 		resp.StatusCode,
 		body,
@@ -444,7 +447,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		"upstream_error",
 		"Upstream request failed",
 	); matched {
-		c.JSON(status, gin.H{
+		_ = exchange.WriteJSON(status, gin.H{
 			"type": "error",
 			"error": gin.H{
 				"type":    errType,
@@ -468,7 +471,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 
 	switch resp.StatusCode {
 	case 400:
-		c.Data(http.StatusBadRequest, "application/json", body)
+		_ = exchange.WriteData(http.StatusBadRequest, "application/json", body)
 		summary := upstreamMsg
 		if summary == "" {
 			summary = truncateForLog(body, 512)
@@ -504,7 +507,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 	}
 
 	// 返回自定义错误响应
-	c.JSON(statusCode, gin.H{
+	_ = exchange.WriteJSON(statusCode, gin.H{
 		"type": "error",
 		"error": gin.H{
 			"type":    errType,
@@ -545,7 +548,11 @@ func (s *GatewayService) handleFailoverSideEffects(ctx context.Context, resp *ht
 // OAuth 403：标记账号异常
 // API Key 未配置错误码：仅返回错误，不标记账号
 func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *http.Response, c *gin.Context, account *Account) (*ForwardResult, error) {
-	MarkResponseCommitted(c)
+	return s.handleRetryExhaustedErrorExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account)
+}
+
+func (s *GatewayService) handleRetryExhaustedErrorExchange(ctx context.Context, resp *http.Response, exchange gatewaytransport.Exchange, account *Account) (*ForwardResult, error) {
+	MarkResponseCommitted(exchange.Values())
 	// Capture upstream error body before side-effects consume the stream.
 	respBody, _ := s.readUpstreamErrorBody(resp)
 	_ = resp.Body.Close()
@@ -556,15 +563,13 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 
-	if isClaudeCodeCredentialScopeError(upstreamMsg) && c != nil {
-		if v, ok := c.Get(claudeMimicDebugInfoKey); ok {
-			if line, ok := v.(string); ok && strings.TrimSpace(line) != "" {
-				logger.LegacyPrintf("service.gateway", "[ClaudeMimicDebugOnError] status=%d request_id=%s %s",
-					resp.StatusCode,
-					resp.Header.Get("x-request-id"),
-					line,
-				)
-			}
+	if isClaudeCodeCredentialScopeError(upstreamMsg) {
+		if line, ok := gatewaytransport.Load(exchange.Values(), claudeMimicDebugInfoKey); ok && strings.TrimSpace(line) != "" {
+			logger.LegacyPrintf("service.gateway", "[ClaudeMimicDebugOnError] status=%d request_id=%s %s",
+				resp.StatusCode,
+				resp.Header.Get("x-request-id"),
+				line,
+			)
 		}
 	}
 
@@ -576,8 +581,8 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 		}
 		upstreamDetail = truncateString(string(respBody), maxBytes)
 	}
-	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
-	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+	setOpsUpstreamError(exchange.Values(), resp.StatusCode, upstreamMsg, upstreamDetail)
+	appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 		Platform:           account.Platform,
 		AccountID:          account.ID,
 		UpstreamStatusCode: resp.StatusCode,
@@ -599,7 +604,7 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 	}
 
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(
-		c,
+		exchange.Values(),
 		account.Platform,
 		resp.StatusCode,
 		respBody,
@@ -607,7 +612,7 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 		"upstream_error",
 		"Upstream request failed after retries",
 	); matched {
-		c.JSON(status, gin.H{
+		_ = exchange.WriteJSON(status, gin.H{
 			"type": "error",
 			"error": gin.H{
 				"type":    errType,
@@ -626,7 +631,7 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 	}
 
 	// 返回统一的重试耗尽错误响应
-	c.JSON(http.StatusBadGateway, gin.H{
+	_ = exchange.WriteJSON(http.StatusBadGateway, gin.H{
 		"type": "error",
 		"error": gin.H{
 			"type":    "upstream_error",
@@ -648,27 +653,30 @@ type streamingResult struct {
 }
 
 func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string, mimicClaudeCode bool) (*streamingResult, error) {
+	return s.handleStreamingResponseExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account, startTime, originalModel, mappedModel, mimicClaudeCode)
+}
+
+func (s *GatewayService) handleStreamingResponseExchange(ctx context.Context, resp *http.Response, exchange gatewaytransport.Exchange, account *Account, startTime time.Time, originalModel, mappedModel string, mimicClaudeCode bool) (*streamingResult, error) {
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
 	if s.responseHeaderFilter != nil {
-		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+		responseheaders.WriteFilteredHeaders(exchange.Response().Header(), resp.Header, s.responseHeaderFilter)
 	}
 
 	// 设置SSE响应头
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
+	exchange.SetResponseHeader("Content-Type", "text/event-stream")
+	exchange.SetResponseHeader("Cache-Control", "no-cache")
+	exchange.SetResponseHeader("Connection", "keep-alive")
+	exchange.SetResponseHeader("X-Accel-Buffering", "no")
 
 	// 透传其他响应头
 	if v := resp.Header.Get("x-request-id"); v != "" {
-		c.Header("x-request-id", v)
+		exchange.SetResponseHeader("x-request-id", v)
 	}
 
-	w := c.Writer
-	flusher, ok := w.(http.Flusher)
-	if !ok {
+	w := exchange.Response()
+	if !w.SupportsFlush() {
 		return nil, errors.New("streaming not supported")
 	}
 
@@ -783,13 +791,13 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			body = []byte(fmt.Sprintf(`{"type":"error","error":{"type":%q,"message":%q}}`, reason, message))
 		}
 		_, _ = fmt.Fprintf(w, "event: error\ndata: %s\n\n", body)
-		flusher.Flush()
+		_ = w.Flush()
 	}
 
 	needModelReplace := originalModel != mappedModel
 	clientDisconnected := false // 客户端断开标志，断开后继续读取上游以获取完整usage
 	sawTerminalEvent := false
-	useNoopDeltaKeepalive := c != nil && c.Request != nil && shouldUseClaudeCodeNoopDeltaKeepalive(c.GetHeader("User-Agent"))
+	useNoopDeltaKeepalive := shouldUseClaudeCodeNoopDeltaKeepalive(exchange.RequestHeader("User-Agent"))
 	noopDeltaKeepaliveBlockIndex := -1
 	noopDeltaKeepaliveDeltaType := ""
 
@@ -990,7 +998,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 				// 默认 *net.OpError 的 Error() 会泄露内部 IP/端口和上游地址。完整 ev.err
 				// 仅在下方 LegacyPrintf 内部日志中保留供运维诊断。
 				disconnectMsg := "upstream stream disconnected: " + sanitizeStreamError(ev.err)
-				if !c.Writer.Written() {
+				if !exchange.Response().Written() {
 					logger.LegacyPrintf("service.gateway", "Upstream stream read error before any client output (account=%d), failing over: %v", account.ID, ev.err)
 					body, _ := json.Marshal(map[string]any{
 						"type": "error",
@@ -1027,7 +1035,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 
 				for _, block := range outputBlocks {
 					if !clientDisconnected {
-						restored := reverseToolNamesIfPresent(c, []byte(block))
+						restored := reverseToolNamesIfPresent(exchange.Values(), []byte(block))
 						if _, werr := fmt.Fprint(w, string(restored)); werr != nil {
 							clientDisconnected = true
 							logger.LegacyPrintf("service.gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
@@ -1035,7 +1043,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 							// 否则会漏计当前事件携带的 usage 导致少计费。后续写入由
 							// clientDisconnected 守卫跳过。
 						} else {
-							flusher.Flush()
+							_ = w.Flush()
 							lastDataAt = time.Now()
 							resetKeepaliveTimer()
 						}
@@ -1090,7 +1098,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 				logger.LegacyPrintf("service.gateway", "Client disconnected during keepalive ping, continuing to drain upstream for billing")
 				continue
 			}
-			flusher.Flush()
+			_ = w.Flush()
 			lastDataAt = time.Now()
 			resetKeepaliveTimer()
 		}
@@ -1331,10 +1339,14 @@ func (s *GatewayService) resolveCacheTTLUsageOverrideTarget(ctx context.Context,
 }
 
 func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*ClaudeUsage, error) {
+	return s.handleNonStreamingResponseExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account, originalModel, mappedModel)
+}
+
+func (s *GatewayService) handleNonStreamingResponseExchange(ctx context.Context, resp *http.Response, exchange gatewaytransport.Exchange, account *Account, originalModel, mappedModel string) (*ClaudeUsage, error) {
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
-	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, anthropicTooLargeError)
+	body, err := readUpstreamResponseBodyExchange(resp.Body, s.cfg, exchange, anthropicTooLargeExchangeError)
 	if err != nil {
 		return nil, err
 	}
@@ -1388,7 +1400,7 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
 	}
 
-	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	responseheaders.WriteFilteredHeaders(exchange.Response().Header(), resp.Header, s.responseHeaderFilter)
 
 	contentType := "application/json"
 	if s.cfg != nil && !s.cfg.Security.ResponseHeaders.Enabled {
@@ -1397,10 +1409,12 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		}
 	}
 
-	body = reverseToolNamesIfPresent(c, body)
+	body = reverseToolNamesIfPresent(exchange.Values(), body)
 
 	// 写入响应
-	c.Data(resp.StatusCode, contentType, body)
+	if err := exchange.WriteData(resp.StatusCode, contentType, body); err != nil {
+		return nil, fmt.Errorf("write downstream response: %w", err)
+	}
 
 	return &response.Usage, nil
 }

@@ -83,9 +83,10 @@ func TestWaitingQueueFull_Returns429Signal(t *testing.T) {
 	require.False(t, allowed, "账号等待队列满时应返回 false")
 }
 
-// TestWaitingQueue_FailOpen_OnCacheError 测试 Redis 故障时 fail-open
-func TestWaitingQueue_FailOpen_OnCacheError(t *testing.T) {
-	cache := &stubConcurrencyCacheForTest{waitErr: errors.New("redis connection refused")}
+// TestWaitingQueue_CacheErrorPolicy verifies that technical account leases fail closed.
+func TestWaitingQueue_CacheErrorPolicy(t *testing.T) {
+	wantErr := errors.New("redis connection refused")
+	cache := &stubConcurrencyCacheForTest{waitErr: wantErr}
 	svc := NewConcurrencyService(cache)
 
 	// 用户级：Redis 错误时允许通过
@@ -93,10 +94,10 @@ func TestWaitingQueue_FailOpen_OnCacheError(t *testing.T) {
 	require.NoError(t, err, "Redis 错误不应向调用方传播")
 	require.True(t, allowed, "Redis 故障时应 fail-open 放行")
 
-	// 账号级：同样 fail-open
+	// 账号级属于上游技术租约，缓存故障必须显式失败。
 	allowed, err = svc.IncrementAccountWaitCount(context.Background(), 1, 10)
-	require.NoError(t, err, "Redis 错误不应向调用方传播")
-	require.True(t, allowed, "Redis 故障时应 fail-open 放行")
+	require.ErrorIs(t, err, wantErr)
+	require.False(t, allowed)
 }
 
 // TestCalculateMaxWait_Scenarios 测试最大等待队列大小计算

@@ -38,7 +38,7 @@ loopback HTTP, Docker DNS, or response buffering.
 Every invocation provides:
 
 - a positive technical `PoolID`;
-- New API's request and session identifiers;
+- New API's non-empty request and session identifiers;
 - an explicit client protocol and requested model;
 - a required raw-usage callback.
 
@@ -57,10 +57,19 @@ and excluded account IDs. It does not accept New API user IDs or provider
 metadata user IDs. A pool-level client restriction rejects the invocation in
 place; configured legacy fallback-group IDs are never traversed by scheduling.
 
-The engine is ready for provider adapters, but the existing HTTP handlers have
-not yet been attached to it. Those handlers still accept customer API-key
-principals and therefore remain transitional code rather than the final
-in-process path.
+The Anthropic provider path now has a framework-independent transport exchange
+implemented by both the transitional Gin handler and the native `net/http`
+runtime. Direct Anthropic, API-key passthrough, Bedrock, streaming, and local
+web-search responses use the same provider code without constructing a Gin
+context. The native Anthropic dispatcher parses the original request, enforces
+invocation/body model consistency, schedules and fails over only inside the
+resolved pool, acquires account concurrency leases, and returns raw
+measurements.
+
+OpenAI and Gemini still need native dispatchers before a complete production
+`gatewaycore.Runtime` can be assembled. New API does not import this partial
+runtime yet. The existing customer-authenticated HTTP handlers therefore remain
+transitional code rather than the final in-process path.
 
 ## Removal Sequence
 
@@ -98,10 +107,9 @@ in-process path.
   routes.
 - Customer self-service, registration and social OAuth, payment consumption,
   subscriptions, affiliate, redeem, promotion, announcement, risk-control,
-  model-plaza, and customer-management frontend implementations have been
-  physically removed. Stripe and Airwallex browser SDKs are no longer runtime
-  dependencies; payment-provider editors remain temporarily because the
-  transitional settings page still embeds them.
+  model-plaza, customer-management, and payment-provider frontend
+  implementations have been physically removed. Stripe and Airwallex browser
+  SDKs are no longer runtime dependencies.
 - Customer-owned asynchronous image-task and batch-image HTTP routes are no
   longer registered, and their queues, cleanup services, workers, and the
   otherwise-idle payment-order expiry worker are absent from the application
@@ -118,10 +126,17 @@ in-process path.
 - Payment providers, image-storage providers, customer notification services,
   Turnstile, user attributes, and customer TOTP/user services are absent from
   the administrator settings dependency graph.
+- Provider forwarding now uses a real HTTP exchange with typed request state,
+  response status/byte tracking, and streaming flush support. Existing Gin
+  routes are thin adapters over that exchange.
+- A native Anthropic dispatcher enforces exact-pool scheduling, strict account
+  wait-queue errors, no failover after response commitment, sticky-session
+  binding, account RPM updates, and raw token/cache/web-search measurements.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
-  or deletion. Their presence is tracked as unfinished work, not as a runtime
-  compatibility mechanism.
+  or deletion. OpenAI and Gemini provider services also still depend on Gin and
+  block complete runtime assembly. Their presence is tracked as unfinished
+  work, not as a runtime compatibility mechanism.
 
 Each removal is complete only when its route, dependency injection provider,
 background worker, persistence schema, generated ORM code, frontend entry, and

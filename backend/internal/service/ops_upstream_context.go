@@ -2,11 +2,28 @@ package service
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
+
+type requestValues interface {
+	Get(key string) (any, bool)
+	Set(key string, value any)
+}
+
+func requestValuesNil(values requestValues) bool {
+	if values == nil {
+		return true
+	}
+	value := reflect.ValueOf(values)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
 
 // Gin context keys used by Ops error logger for capturing upstream error details.
 // These keys are set by gateway services and consumed by handler/ops_error_logger.go.
@@ -53,9 +70,16 @@ const (
 	OpsClientBusinessLimitedReasonLocalPolicyDenied      = "local_policy_denied"
 )
 
-func MarkResponseCommitted(c *gin.Context) { c.Set(ResponseCommittedKey, true) }
+func MarkResponseCommitted(c requestValues) {
+	if !requestValuesNil(c) {
+		c.Set(ResponseCommittedKey, true)
+	}
+}
 
-func IsResponseCommitted(c *gin.Context) bool {
+func IsResponseCommitted(c requestValues) bool {
+	if requestValuesNil(c) {
+		return false
+	}
 	v, ok := c.Get(ResponseCommittedKey)
 	if !ok {
 		return false
@@ -64,15 +88,15 @@ func IsResponseCommitted(c *gin.Context) bool {
 	return b
 }
 
-func SetOpsLatencyMs(c *gin.Context, key string, value int64) {
-	if c == nil || strings.TrimSpace(key) == "" || value < 0 {
+func SetOpsLatencyMs(c requestValues, key string, value int64) {
+	if requestValuesNil(c) || strings.TrimSpace(key) == "" || value < 0 {
 		return
 	}
 	c.Set(key, value)
 }
 
-func MarkOpsClientBusinessLimited(c *gin.Context, reason string) {
-	if c == nil {
+func MarkOpsClientBusinessLimited(c requestValues, reason string) {
+	if requestValuesNil(c) {
 		return
 	}
 	c.Set(OpsClientBusinessLimitedKey, true)
@@ -81,8 +105,8 @@ func MarkOpsClientBusinessLimited(c *gin.Context, reason string) {
 	}
 }
 
-func HasOpsClientBusinessLimited(c *gin.Context) bool {
-	if c == nil {
+func HasOpsClientBusinessLimited(c requestValues) bool {
+	if requestValuesNil(c) {
 		return false
 	}
 	v, ok := c.Get(OpsClientBusinessLimitedKey)
@@ -118,7 +142,7 @@ type OpsStreamError struct {
 // MarkOpsStreamError 记录一次就地 SSE 错误，供 ops 日志采集。
 // 采用「首个标记生效」策略：同一请求若先后补发多帧（如上游透传错误后又追加通用兜底帧），
 // 保留最先记录的根因错误，而不是被后续的 "Upstream request failed" 覆盖。
-func MarkOpsStreamError(c *gin.Context, errType, message string, intendedStatus int) {
+func MarkOpsStreamError(c requestValues, errType, message string, intendedStatus int) {
 	markOpsStreamError(c, OpsStreamError{
 		ErrType:        errType,
 		Message:        message,
@@ -129,7 +153,7 @@ func MarkOpsStreamError(c *gin.Context, errType, message string, intendedStatus 
 // MarkOpsStreamFailure records an in-band stream error that represents a failed
 // request and therefore must count towards Ops error rate/SLA despite HTTP 200
 // already being committed on the wire.
-func MarkOpsStreamFailure(c *gin.Context, errType, code, message string, intendedStatus int) {
+func MarkOpsStreamFailure(c requestValues, errType, code, message string, intendedStatus int) {
 	markOpsStreamError(c, OpsStreamError{
 		ErrType:         errType,
 		Code:            code,
@@ -139,8 +163,8 @@ func MarkOpsStreamFailure(c *gin.Context, errType, code, message string, intende
 	})
 }
 
-func markOpsStreamError(c *gin.Context, streamErr OpsStreamError) {
-	if c == nil {
+func markOpsStreamError(c requestValues, streamErr OpsStreamError) {
+	if requestValuesNil(c) {
 		return
 	}
 	if _, exists := c.Get(OpsStreamErrorKey); exists {
@@ -153,8 +177,8 @@ func markOpsStreamError(c *gin.Context, streamErr OpsStreamError) {
 }
 
 // GetOpsStreamError 返回本请求记录的就地 SSE 错误（若有）。
-func GetOpsStreamError(c *gin.Context) (OpsStreamError, bool) {
-	if c == nil {
+func GetOpsStreamError(c requestValues) (OpsStreamError, bool) {
+	if requestValuesNil(c) {
 		return OpsStreamError{}, false
 	}
 	v, ok := c.Get(OpsStreamErrorKey)
@@ -168,12 +192,12 @@ func GetOpsStreamError(c *gin.Context) (OpsStreamError, bool) {
 // SetOpsUpstreamError is the exported wrapper for setOpsUpstreamError, used by
 // handler-layer code (e.g. failover-exhausted paths) that needs to record the
 // original upstream status code before mapping it to a client-facing code.
-func SetOpsUpstreamError(c *gin.Context, upstreamStatusCode int, upstreamMessage, upstreamDetail string) {
+func SetOpsUpstreamError(c requestValues, upstreamStatusCode int, upstreamMessage, upstreamDetail string) {
 	setOpsUpstreamError(c, upstreamStatusCode, upstreamMessage, upstreamDetail)
 }
 
-func setOpsUpstreamError(c *gin.Context, upstreamStatusCode int, upstreamMessage, upstreamDetail string) {
-	if c == nil {
+func setOpsUpstreamError(c requestValues, upstreamStatusCode int, upstreamMessage, upstreamDetail string) {
+	if requestValuesNil(c) {
 		return
 	}
 	if upstreamStatusCode > 0 {
@@ -224,8 +248,8 @@ type OpsUpstreamErrorEvent struct {
 	Detail  string `json:"detail,omitempty"`
 }
 
-func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
-	if c == nil {
+func appendOpsUpstreamError(c requestValues, ev OpsUpstreamErrorEvent) {
+	if requestValuesNil(c) {
 		return
 	}
 	if ev.AtUnixMs <= 0 {
@@ -264,7 +288,7 @@ func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
 // OpsSkipPassthroughKey on the context.  This ensures intermediate retry /
 // failover errors (which never go through the final applyErrorPassthroughRule
 // path) can still suppress ops_error_logs recording.
-func checkSkipMonitoringForUpstreamEvent(c *gin.Context, ev *OpsUpstreamErrorEvent) {
+func checkSkipMonitoringForUpstreamEvent(c requestValues, ev *OpsUpstreamErrorEvent) {
 	if ev.UpstreamStatusCode == 0 {
 		return
 	}

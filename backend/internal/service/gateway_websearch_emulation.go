@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/websearch"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -143,6 +144,12 @@ func extractWebSearchTextFromContent(content gjson.Result) string {
 func (s *GatewayService) handleWebSearchEmulation(
 	ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest,
 ) (*ForwardResult, error) {
+	return s.handleWebSearchEmulationExchange(ctx, gatewaytransport.NewGinExchange(c), account, parsed)
+}
+
+func (s *GatewayService) handleWebSearchEmulationExchange(
+	ctx context.Context, exchange gatewaytransport.Exchange, account *Account, parsed *ParsedRequest,
+) (*ForwardResult, error) {
 	startTime := time.Now()
 
 	// Release the serial queue lock immediately — we don't need upstream.
@@ -179,9 +186,9 @@ func (s *GatewayService) handleWebSearchEmulation(
 	}
 
 	if parsed.Stream {
-		return writeWebSearchStreamResponse(c, query, resp, model, startTime)
+		return writeWebSearchStreamResponse(exchange, query, resp, model, startTime)
 	}
-	return writeWebSearchNonStreamResponse(c, query, resp, model, startTime)
+	return writeWebSearchNonStreamResponse(exchange, query, resp, model, startTime)
 }
 
 func doWebSearch(ctx context.Context, account *Account, query string) (*websearch.SearchResponse, string, error) {
@@ -210,14 +217,14 @@ func resolveAccountProxyURL(account *Account) string {
 // --- SSE streaming response ---
 
 func writeWebSearchStreamResponse(
-	c *gin.Context, query string, resp *websearch.SearchResponse, model string, startTime time.Time,
+	exchange gatewaytransport.Exchange, query string, resp *websearch.SearchResponse, model string, startTime time.Time,
 ) (*ForwardResult, error) {
 	msgID := webSearchMsgIDPrefix + uuid.New().String()
 	toolUseID := webSearchToolUseIDPrefix + uuid.New().String()[:16]
 	textSummary := buildTextSummary(query, resp.Results)
 
-	setSSEHeaders(c)
-	w := c.Writer
+	setSSEHeaders(exchange)
+	w := exchange.Response()
 	for _, fn := range []func() error{
 		func() error { return writeSSEMessageStart(w, msgID, model) },
 		func() error { return writeSSEServerToolUse(w, toolUseID, query, 0) },
@@ -230,20 +237,20 @@ func writeWebSearchStreamResponse(
 			break
 		}
 	}
-	w.Flush()
+	_ = w.Flush()
 
-	return &ForwardResult{Model: model, Duration: time.Since(startTime), Usage: ClaudeUsage{}}, nil
+	return &ForwardResult{Model: model, Duration: time.Since(startTime), Usage: ClaudeUsage{}, WebSearchCalls: 1}, nil
 }
 
-func setSSEHeaders(c *gin.Context) {
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("X-Accel-Buffering", "no")
-	c.Writer.WriteHeader(http.StatusOK)
+func setSSEHeaders(exchange gatewaytransport.Exchange) {
+	exchange.SetResponseHeader("Content-Type", "text/event-stream")
+	exchange.SetResponseHeader("Cache-Control", "no-cache")
+	exchange.SetResponseHeader("Connection", "keep-alive")
+	exchange.SetResponseHeader("X-Accel-Buffering", "no")
+	exchange.Response().WriteHeader(http.StatusOK)
 }
 
-func writeSSEMessageStart(w http.ResponseWriter, msgID, model string) error {
+func writeSSEMessageStart(w gatewaytransport.ResponseWriter, msgID, model string) error {
 	evt := map[string]any{
 		"type": "message_start",
 		"message": map[string]any{
@@ -255,7 +262,7 @@ func writeSSEMessageStart(w http.ResponseWriter, msgID, model string) error {
 	return flushSSEJSON(w, "message_start", evt)
 }
 
-func writeSSEServerToolUse(w http.ResponseWriter, toolUseID, query string, index int) error {
+func writeSSEServerToolUse(w gatewaytransport.ResponseWriter, toolUseID, query string, index int) error {
 	start := map[string]any{
 		"type": "content_block_start", "index": index,
 		"content_block": map[string]any{
@@ -269,7 +276,7 @@ func writeSSEServerToolUse(w http.ResponseWriter, toolUseID, query string, index
 	return flushSSEJSON(w, "content_block_stop", map[string]any{"type": "content_block_stop", "index": index})
 }
 
-func writeSSEToolResult(w http.ResponseWriter, toolUseID string, results []websearch.SearchResult, index int) error {
+func writeSSEToolResult(w gatewaytransport.ResponseWriter, toolUseID string, results []websearch.SearchResult, index int) error {
 	start := map[string]any{
 		"type": "content_block_start", "index": index,
 		"content_block": map[string]any{
@@ -283,7 +290,7 @@ func writeSSEToolResult(w http.ResponseWriter, toolUseID string, results []webse
 	return flushSSEJSON(w, "content_block_stop", map[string]any{"type": "content_block_stop", "index": index})
 }
 
-func writeSSETextBlock(w http.ResponseWriter, text string, index int) error {
+func writeSSETextBlock(w gatewaytransport.ResponseWriter, text string, index int) error {
 	if err := flushSSEJSON(w, "content_block_start", map[string]any{
 		"type": "content_block_start", "index": index,
 		"content_block": map[string]any{"type": "text", "text": ""},
@@ -299,7 +306,7 @@ func writeSSETextBlock(w http.ResponseWriter, text string, index int) error {
 	return flushSSEJSON(w, "content_block_stop", map[string]any{"type": "content_block_stop", "index": index})
 }
 
-func writeSSEMessageEnd(w http.ResponseWriter, outputTokens int) error {
+func writeSSEMessageEnd(w gatewaytransport.ResponseWriter, outputTokens int) error {
 	if err := flushSSEJSON(w, "message_delta", map[string]any{
 		"type":  "message_delta",
 		"delta": map[string]any{"stop_reason": "end_turn", "stop_sequence": nil},
@@ -311,7 +318,7 @@ func writeSSEMessageEnd(w http.ResponseWriter, outputTokens int) error {
 }
 
 // flushSSEJSON marshals data to JSON and writes an SSE event.
-func flushSSEJSON(w http.ResponseWriter, event string, data any) error {
+func flushSSEJSON(w gatewaytransport.ResponseWriter, event string, data any) error {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
@@ -319,16 +326,13 @@ func flushSSEJSON(w http.ResponseWriter, event string, data any) error {
 	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b); err != nil {
 		return fmt.Errorf("write: %w", err)
 	}
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
-	return nil
+	return w.Flush()
 }
 
 // --- Non-streaming JSON response ---
 
 func writeWebSearchNonStreamResponse(
-	c *gin.Context, query string, resp *websearch.SearchResponse, model string, startTime time.Time,
+	exchange gatewaytransport.Exchange, query string, resp *websearch.SearchResponse, model string, startTime time.Time,
 ) (*ForwardResult, error) {
 	msgID := webSearchMsgIDPrefix + uuid.New().String()
 	toolUseID := webSearchToolUseIDPrefix + uuid.New().String()[:16]
@@ -355,9 +359,11 @@ func writeWebSearchNonStreamResponse(
 	if err != nil {
 		return nil, fmt.Errorf("web search emulation: marshal response: %w", err)
 	}
-	c.Data(http.StatusOK, "application/json", body)
+	if err := exchange.WriteData(http.StatusOK, "application/json", body); err != nil {
+		return nil, fmt.Errorf("web search emulation: write response: %w", err)
+	}
 
-	return &ForwardResult{Model: model, Duration: time.Since(startTime), Usage: ClaudeUsage{}}, nil
+	return &ForwardResult{Model: model, Duration: time.Since(startTime), Usage: ClaudeUsage{}, WebSearchCalls: 1}, nil
 }
 
 // --- Helpers ---

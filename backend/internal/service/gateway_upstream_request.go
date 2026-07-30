@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
@@ -19,8 +20,12 @@ import (
 )
 
 func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token, tokenType, modelID string, reqStream bool, mimicClaudeCode bool) (*http.Request, []byte, error) {
+	return s.buildUpstreamRequestExchange(ctx, gatewaytransport.NewGinExchange(c), account, body, token, tokenType, modelID, reqStream, mimicClaudeCode)
+}
+
+func (s *GatewayService) buildUpstreamRequestExchange(ctx context.Context, exchange gatewaytransport.Exchange, account *Account, body []byte, token, tokenType, modelID string, reqStream bool, mimicClaudeCode bool) (*http.Request, []byte, error) {
 	if account.Platform == PlatformAnthropic && account.Type == AccountTypeServiceAccount {
-		req, err := s.buildUpstreamRequestAnthropicVertex(ctx, c, account, body, token, modelID, reqStream)
+		req, err := s.buildUpstreamRequestAnthropicVertexExchange(ctx, exchange, account, body, token, modelID, reqStream)
 		return req, body, err
 	}
 
@@ -47,10 +52,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		targetURL = s.buildCustomRelayURL(validatedURL, "/v1/messages", account)
 	}
 
-	clientHeaders := http.Header{}
-	if c != nil && c.Request != nil {
-		clientHeaders = c.Request.Header
-	}
+	clientHeaders := exchange.Request().Header
 
 	// OAuth账号：应用统一指纹和metadata重写（受设置开关控制）
 	var fingerprint *Fingerprint
@@ -99,7 +101,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	//      被 Anthropic 判 third-party）
 	//   4) NewRequest（body 至此最终敲定）
 	//   5) 透传白名单 / fingerprint / mimic header / 写入 finalBeta
-	policyFilterSet := s.getBetaPolicyFilterSet(ctx, c, account, modelID)
+	policyFilterSet := s.getBetaPolicyFilterSet(ctx, exchange.Values(), account, modelID)
 	effectiveDropSet := mergeDropSets(policyFilterSet)
 	finalBetaHeader, finalBetaShouldSet := s.computeFinalAnthropicBeta(
 		tokenType, mimicClaudeCode, modelID, clientHeaders, body, effectiveDropSet,
@@ -200,8 +202,8 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 
 	// Always capture a compact fingerprint line for later error diagnostics.
 	// We only print it when needed (or when the explicit debug flag is enabled).
-	if c != nil && tokenType == "oauth" {
-		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
+	if tokenType == "oauth" {
+		gatewaytransport.Store(exchange.Values(), claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
 	}
 	if s.debugClaudeMimicEnabled() {
 		logClaudeMimicDebug(req, body, account, tokenType, mimicClaudeCode)
@@ -261,6 +263,18 @@ func (s *GatewayService) buildUpstreamRequestAnthropicVertex(
 	modelID string,
 	reqStream bool,
 ) (*http.Request, error) {
+	return s.buildUpstreamRequestAnthropicVertexExchange(ctx, gatewaytransport.NewGinExchange(c), account, body, token, modelID, reqStream)
+}
+
+func (s *GatewayService) buildUpstreamRequestAnthropicVertexExchange(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	body []byte,
+	token string,
+	modelID string,
+	reqStream bool,
+) (*http.Request, error) {
 	vertexBody, err := buildVertexAnthropicRequestBody(body)
 	if err != nil {
 		return nil, err
@@ -273,10 +287,7 @@ func (s *GatewayService) buildUpstreamRequestAnthropicVertex(
 	// （issue #3358）。这里复用 BetaPolicy 的 block 检查（与 Bedrock 的
 	// resolveBedrockBetaTokensForRequest 对称），再按 vertexSupportedBetaTokens 白名单
 	// 剥离其余 token，使该路径与 Anthropic 直连 / Bedrock 路径行为一致。
-	clientBeta := ""
-	if c != nil && c.Request != nil {
-		clientBeta = getHeaderRaw(c.Request.Header, "anthropic-beta")
-	}
+	clientBeta := getHeaderRaw(exchange.Request().Header, "anthropic-beta")
 	policy := s.evaluateBetaPolicy(ctx, clientBeta, account, modelID)
 	if policy.blockErr != nil {
 		return nil, policy.blockErr
@@ -297,16 +308,14 @@ func (s *GatewayService) buildUpstreamRequestAnthropicVertex(
 		return nil, err
 	}
 
-	if c != nil && c.Request != nil {
-		for key, values := range c.Request.Header {
-			lowerKey := strings.ToLower(strings.TrimSpace(key))
-			if !allowedHeaders[lowerKey] || lowerKey == "anthropic-version" {
-				continue
-			}
-			wireKey := resolveWireCasing(key)
-			for _, v := range values {
-				addHeaderRaw(req.Header, wireKey, v)
-			}
+	for key, values := range exchange.Request().Header {
+		lowerKey := strings.ToLower(strings.TrimSpace(key))
+		if !allowedHeaders[lowerKey] || lowerKey == "anthropic-version" {
+			continue
+		}
+		wireKey := resolveWireCasing(key)
+		for _, v := range values {
+			addHeaderRaw(req.Header, wireKey, v)
 		}
 	}
 
@@ -672,20 +681,15 @@ func mergeDropSets(policySet map[string]struct{}, extra ...string) map[string]st
 	return m
 }
 
-// betaPolicyFilterSetKey is the gin.Context key for caching the policy filter set within a request.
-const betaPolicyFilterSetKey = "betaPolicyFilterSet"
+var betaPolicyFilterSetKey = gatewaytransport.NewKey[map[string]struct{}]("beta_policy_filter_set")
 
 // getBetaPolicyFilterSet returns the beta policy filter set, using the gin context cache if available.
 // In the /v1/messages path, Forward() evaluates the policy first and caches the result;
 // buildUpstreamRequest reuses it (zero extra DB calls). In the count_tokens path, this
 // evaluates on demand (one DB call).
-func (s *GatewayService) getBetaPolicyFilterSet(ctx context.Context, c *gin.Context, account *Account, model string) map[string]struct{} {
-	if c != nil {
-		if v, ok := c.Get(betaPolicyFilterSetKey); ok {
-			if fs, ok := v.(map[string]struct{}); ok {
-				return fs
-			}
-		}
+func (s *GatewayService) getBetaPolicyFilterSet(ctx context.Context, values gatewaytransport.Values, account *Account, model string) map[string]struct{} {
+	if filterSet, ok := gatewaytransport.Load(values, betaPolicyFilterSetKey); ok {
+		return filterSet
 	}
 	return s.evaluateBetaPolicy(ctx, "", account, model).filterSet
 }

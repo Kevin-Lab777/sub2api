@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"sync"
@@ -525,14 +526,13 @@ func (s *ConcurrencyService) DecrementWaitCount(ctx context.Context, userID int6
 
 // IncrementAccountWaitCount increments the wait queue counter for an account.
 func (s *ConcurrencyService) IncrementAccountWaitCount(ctx context.Context, accountID int64, maxWait int) (bool, error) {
-	if s.cache == nil {
-		return true, nil
+	if s == nil || s.cache == nil {
+		return false, errors.New("account concurrency cache is unavailable")
 	}
 
 	result, err := s.cache.IncrementAccountWaitCount(ctx, accountID, maxWait)
 	if err != nil {
-		logger.LegacyPrintf("service.concurrency", "Warning: increment wait count failed for account %d: %v", accountID, err)
-		return true, nil
+		return false, fmt.Errorf("increment account wait count for %d: %w", accountID, err)
 	}
 	return result, nil
 }

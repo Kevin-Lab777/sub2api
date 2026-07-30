@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -30,18 +31,28 @@ func (s *GatewayService) handleBedrockStreamingResponse(
 	startTime time.Time,
 	model string,
 ) (*streamingResult, error) {
-	w := c.Writer
-	flusher, ok := w.(http.Flusher)
-	if !ok {
+	return s.handleBedrockStreamingResponseExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account, startTime, model)
+}
+
+func (s *GatewayService) handleBedrockStreamingResponseExchange(
+	ctx context.Context,
+	resp *http.Response,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	startTime time.Time,
+	model string,
+) (*streamingResult, error) {
+	w := exchange.Response()
+	if !w.SupportsFlush() {
 		return nil, errors.New("streaming not supported")
 	}
 
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("X-Accel-Buffering", "no")
+	exchange.SetResponseHeader("Content-Type", "text/event-stream")
+	exchange.SetResponseHeader("Cache-Control", "no-cache")
+	exchange.SetResponseHeader("Connection", "keep-alive")
+	exchange.SetResponseHeader("X-Accel-Buffering", "no")
 	if v := resp.Header.Get("x-amzn-requestid"); v != "" {
-		c.Header("x-request-id", v)
+		exchange.SetResponseHeader("x-request-id", v)
 	}
 
 	usage := &ClaudeUsage{}
@@ -109,7 +120,7 @@ func (s *GatewayService) handleBedrockStreamingResponse(
 		case ev, ok := <-events:
 			if !ok {
 				if !clientDisconnected {
-					flusher.Flush()
+					_ = w.Flush()
 				}
 				return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, nil
 			}
@@ -156,7 +167,7 @@ func (s *GatewayService) handleBedrockStreamingResponse(
 					clientDisconnected = true
 					logger.LegacyPrintf("service.gateway", "[Bedrock] Client disconnected during streaming, continue draining for usage: account=%d", account.ID)
 				} else {
-					flusher.Flush()
+					_ = w.Flush()
 				}
 			}
 

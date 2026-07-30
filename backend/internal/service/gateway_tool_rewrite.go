@@ -7,14 +7,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
-// toolNameRewriteKey 是 gin.Context 上存 ToolNameRewrite 映射的 key。
-// 请求阶段写入，响应阶段读取，用于 bytes 级逆向还原假名 → 真名。
-const toolNameRewriteKey = "claude_tool_name_rewrite"
+// 请求阶段写入，响应阶段读取，用于 bytes 级逆向还原假名 -> 真名。
+var toolNameRewriteKey = gatewaytransport.NewKey[*ToolNameRewrite]("claude_tool_name_rewrite")
 
 // staticToolNameRewrites 是"静态前缀映射"，与 Parrot src/transform/cc_mimicry.py
 // TOOL_NAME_REWRITES 完全一致。只有以这些前缀开头的工具会被重写。
@@ -317,25 +317,17 @@ func replaceAllBytes(data []byte, from, to string) []byte {
 
 // toolNameRewriteFromContext 从 gin.Context 取出请求阶段保存的工具名映射。
 // 找不到（c==nil 或 key 不存在或类型不对）时返回 nil；调用方必须能处理 nil。
-func toolNameRewriteFromContext(c interface {
-	Get(string) (any, bool)
-}) *ToolNameRewrite {
+func toolNameRewriteFromContext(c gatewaytransport.Values) *ToolNameRewrite {
 	if c == nil {
 		return nil
 	}
-	raw, ok := c.Get(toolNameRewriteKey)
-	if !ok || raw == nil {
-		return nil
-	}
-	rw, _ := raw.(*ToolNameRewrite)
+	rw, _ := gatewaytransport.Load(c, toolNameRewriteKey)
 	return rw
 }
 
 // reverseToolNamesIfPresent 是响应侧 5 处注入点的统一封装：从 c 取出 mapping
 // 并对 chunk 做 bytes 级假名→真名替换。c 没有 mapping 时仍会做静态前缀还原。
-func reverseToolNamesIfPresent(c interface {
-	Get(string) (any, bool)
-}, chunk []byte) []byte {
+func reverseToolNamesIfPresent(c gatewaytransport.Values, chunk []byte) []byte {
 	rw := toolNameRewriteFromContext(c)
 	if rw == nil && len(staticToolNameRewrites) == 0 {
 		return chunk

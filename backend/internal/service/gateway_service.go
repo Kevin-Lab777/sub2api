@@ -19,6 +19,7 @@ import (
 	"unsafe"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/cespare/xxhash/v2"
@@ -63,9 +64,7 @@ IMPORTANT: You must NEVER generate or guess URLs for the user unless you are con
 	gatewayUpstreamErrorBodyReadLimit int64 = 512 << 10
 )
 
-const (
-	claudeMimicDebugInfoKey = "claude_mimic_debug_info"
-)
+var claudeMimicDebugInfoKey = gatewaytransport.NewKey[string]("claude_mimic_debug_info")
 
 const (
 	cacheTTLTarget5m = "5m"
@@ -572,6 +571,7 @@ type ForwardResult struct {
 	ImageOutputSizes   []string
 	ImageSizeSource    string
 	ImageSizeBreakdown map[string]int
+	WebSearchCalls     int
 }
 
 // GatewayFailureStage identifies which request stage failed. The zero value is
@@ -713,6 +713,63 @@ type GatewayService struct {
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+}
+
+// ValidateTechnicalRuntime verifies the retained upstream gateway dependency graph.
+func (s *GatewayService) ValidateTechnicalRuntime() error {
+	if s == nil {
+		return errors.New("gateway service is nil")
+	}
+	missing := make([]string, 0, 16)
+	if s.accountRepo == nil {
+		missing = append(missing, "account repository")
+	}
+	if s.groupRepo == nil {
+		missing = append(missing, "group repository")
+	}
+	if s.usageLogRepo == nil {
+		missing = append(missing, "account usage repository")
+	}
+	if s.cache == nil {
+		missing = append(missing, "gateway cache")
+	}
+	if s.cfg == nil {
+		missing = append(missing, "gateway config")
+	}
+	if s.schedulerSnapshot == nil {
+		missing = append(missing, "scheduler snapshot")
+	}
+	if s.concurrencyService == nil {
+		missing = append(missing, "account concurrency service")
+	}
+	if s.rateLimitService == nil {
+		missing = append(missing, "account rate-limit service")
+	}
+	if s.identityService == nil {
+		missing = append(missing, "provider identity service")
+	}
+	if s.httpUpstream == nil {
+		missing = append(missing, "upstream HTTP transport")
+	}
+	if s.claudeTokenProvider == nil {
+		missing = append(missing, "Anthropic token provider")
+	}
+	if s.sessionLimitCache == nil {
+		missing = append(missing, "account session-limit cache")
+	}
+	if s.rpmCache == nil {
+		missing = append(missing, "account RPM cache")
+	}
+	if s.settingService == nil {
+		missing = append(missing, "gateway setting service")
+	}
+	if s.tlsFPProfileService == nil {
+		missing = append(missing, "TLS fingerprint profile service")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("technical gateway dependencies are incomplete: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 // NewGatewayService creates a new GatewayService

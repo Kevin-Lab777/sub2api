@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +23,11 @@ import (
 // 清理 body 中 Anthropic API 专有字段、修复 thinking/tool_use ID、过滤 beta token，
 // 同时过滤 HTTP header 中的 anthropic-beta（防止 Passthrough 路径透传不支持的 token）。
 func (s *GatewayService) ApplyBedrockCCCompat(c *gin.Context, body []byte, model string, account *Account, groupID *int64) []byte {
-	if !s.isBedrockCCCompatEnabled(c.Request.Context(), account, groupID) {
+	return s.ApplyBedrockCCCompatExchange(gatewaytransport.NewGinExchange(c), body, model, account, groupID)
+}
+
+func (s *GatewayService) ApplyBedrockCCCompatExchange(exchange gatewaytransport.Exchange, body []byte, model string, account *Account, groupID *int64) []byte {
+	if !s.isBedrockCCCompatEnabled(exchange.Request().Context(), account, groupID) {
 		return body
 	}
 	body = sanitizeBedrockCCFields(body)
@@ -30,11 +35,11 @@ func (s *GatewayService) ApplyBedrockCCCompat(c *gin.Context, body []byte, model
 	body = sanitizeBedrockToolUseIDs(body)
 	body = sanitizeBedrockCCBetaTokens(body, model)
 	// 过滤 HTTP header 中的 anthropic-beta，只保留 Bedrock 支持的 token
-	if betaHeader := c.GetHeader("anthropic-beta"); betaHeader != "" {
+	if betaHeader := exchange.RequestHeader("anthropic-beta"); betaHeader != "" {
 		if filtered := ResolveBedrockBetaTokens(betaHeader, body, model); len(filtered) > 0 {
-			c.Request.Header.Set("anthropic-beta", strings.Join(filtered, ", "))
+			exchange.Request().Header.Set("anthropic-beta", strings.Join(filtered, ", "))
 		} else {
-			c.Request.Header.Del("anthropic-beta")
+			exchange.Request().Header.Del("anthropic-beta")
 		}
 	}
 	return body
@@ -60,6 +65,16 @@ func (s *GatewayService) forwardBedrock(
 	parsed *ParsedRequest,
 	startTime time.Time,
 ) (*ForwardResult, error) {
+	return s.forwardBedrockExchange(ctx, gatewaytransport.NewGinExchange(c), account, parsed, startTime)
+}
+
+func (s *GatewayService) forwardBedrockExchange(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	parsed *ParsedRequest,
+	startTime time.Time,
+) (*ForwardResult, error) {
 	reqModel := parsed.Model
 	reqStream := parsed.Stream
 	body := parsed.Body.Bytes()
@@ -73,10 +88,7 @@ func (s *GatewayService) forwardBedrock(
 		logger.LegacyPrintf("service.gateway", "[Bedrock] Model mapping: %s -> %s (account: %s)", reqModel, mappedModel, account.Name)
 	}
 
-	betaHeader := ""
-	if c != nil && c.Request != nil {
-		betaHeader = c.GetHeader("anthropic-beta")
-	}
+	betaHeader := exchange.RequestHeader("anthropic-beta")
 
 	// 准备请求体（注入 anthropic_version/anthropic_beta，移除 Bedrock 不支持的字段，清理 cache_control）
 	betaTokens, err := s.resolveBedrockBetaTokensForRequest(ctx, account, betaHeader, body, mappedModel)
@@ -113,7 +125,7 @@ func (s *GatewayService) forwardBedrock(
 	}
 
 	// 执行上游请求（含重试）
-	resp, err := s.executeBedrockUpstream(ctx, c, account, bedrockBody, mappedModel, region, reqStream, signer, bedrockAPIKey, proxyURL)
+	resp, err := s.executeBedrockUpstreamExchange(ctx, exchange, account, bedrockBody, mappedModel, region, reqStream, signer, bedrockAPIKey, proxyURL)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +139,7 @@ func (s *GatewayService) forwardBedrock(
 
 	// 错误/failover 处理
 	if resp.StatusCode >= 400 {
-		return s.handleBedrockUpstreamErrors(ctx, resp, c, account)
+		return s.handleBedrockUpstreamErrorsExchange(ctx, resp, exchange, account)
 	}
 
 	// Bedrock 分支绕过通用 Forward 成功路径，这里保持上游接受回调语义一致。
@@ -140,7 +152,7 @@ func (s *GatewayService) forwardBedrock(
 	var firstTokenMs *int
 	var clientDisconnect bool
 	if reqStream {
-		streamResult, err := s.handleBedrockStreamingResponse(ctx, resp, c, account, startTime, reqModel)
+		streamResult, err := s.handleBedrockStreamingResponseExchange(ctx, resp, exchange, account, startTime, reqModel)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +160,7 @@ func (s *GatewayService) forwardBedrock(
 		firstTokenMs = streamResult.firstTokenMs
 		clientDisconnect = streamResult.clientDisconnect
 	} else {
-		usage, err = s.handleBedrockNonStreamingResponse(ctx, resp, c, account)
+		usage, err = s.handleBedrockNonStreamingResponseExchange(ctx, resp, exchange, account)
 		if err != nil {
 			return nil, err
 		}
@@ -182,6 +194,21 @@ func (s *GatewayService) executeBedrockUpstream(
 	apiKey string,
 	proxyURL string,
 ) (*http.Response, error) {
+	return s.executeBedrockUpstreamExchange(ctx, gatewaytransport.NewGinExchange(c), account, body, modelID, region, stream, signer, apiKey, proxyURL)
+}
+
+func (s *GatewayService) executeBedrockUpstreamExchange(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	body []byte,
+	modelID string,
+	region string,
+	stream bool,
+	signer *BedrockSigner,
+	apiKey string,
+	proxyURL string,
+) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 	retryStart := time.Now()
@@ -202,8 +229,8 @@ func (s *GatewayService) executeBedrockUpstream(
 				_ = resp.Body.Close()
 			}
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
-			setOpsUpstreamError(c, 0, safeErr, "")
-			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			setOpsUpstreamError(exchange.Values(), 0, safeErr, "")
+			appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
@@ -212,7 +239,7 @@ func (s *GatewayService) executeBedrockUpstream(
 				Kind:               "request_error",
 				Message:            safeErr,
 			})
-			c.JSON(http.StatusBadGateway, gin.H{
+			_ = exchange.WriteJSON(http.StatusBadGateway, gin.H{
 				"type": "error",
 				"error": gin.H{
 					"type":    "upstream_error",
@@ -240,7 +267,7 @@ func (s *GatewayService) executeBedrockUpstream(
 
 				respBody, _ := s.readUpstreamErrorBody(resp)
 				_ = resp.Body.Close()
-				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 					Platform:           account.Platform,
 					AccountID:          account.ID,
 					AccountName:        account.Name,
@@ -280,6 +307,15 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 	c *gin.Context,
 	account *Account,
 ) (*ForwardResult, error) {
+	return s.handleBedrockUpstreamErrorsExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account)
+}
+
+func (s *GatewayService) handleBedrockUpstreamErrorsExchange(
+	ctx context.Context,
+	resp *http.Response,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+) (*ForwardResult, error) {
 	// retry exhausted + failover
 	if s.shouldRetryUpstreamError(account, resp.StatusCode) {
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {
@@ -291,7 +327,7 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 				account.ID, account.Name, resp.StatusCode, truncateString(string(respBody), 1000))
 
 			s.handleRetryExhaustedSideEffects(ctx, resp, account)
-			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
@@ -305,7 +341,7 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 				RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
 			}
 		}
-		return s.handleRetryExhaustedError(ctx, resp, c, account)
+		return s.handleRetryExhaustedErrorExchange(ctx, resp, exchange, account)
 	}
 
 	// non-retryable failover
@@ -315,7 +351,7 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
 		s.handleFailoverSideEffects(ctx, resp, account)
-		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,
@@ -331,7 +367,7 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 	}
 
 	// other errors
-	return s.handleErrorResponse(ctx, resp, c, account)
+	return s.handleErrorResponseExchange(ctx, resp, exchange, account)
 }
 
 // buildUpstreamRequestBedrock 构建 Bedrock 上游请求
@@ -392,7 +428,16 @@ func (s *GatewayService) handleBedrockNonStreamingResponse(
 	c *gin.Context,
 	account *Account,
 ) (*ClaudeUsage, error) {
-	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, anthropicTooLargeError)
+	return s.handleBedrockNonStreamingResponseExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account)
+}
+
+func (s *GatewayService) handleBedrockNonStreamingResponseExchange(
+	ctx context.Context,
+	resp *http.Response,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+) (*ClaudeUsage, error) {
+	body, err := readUpstreamResponseBodyExchange(resp.Body, s.cfg, exchange, anthropicTooLargeExchangeError)
 	if err != nil {
 		return nil, err
 	}
@@ -403,10 +448,12 @@ func (s *GatewayService) handleBedrockNonStreamingResponse(
 
 	usage := parseClaudeUsageFromResponseBody(body)
 
-	c.Header("Content-Type", "application/json")
+	exchange.SetResponseHeader("Content-Type", "application/json")
 	if v := resp.Header.Get("x-amzn-requestid"); v != "" {
-		c.Header("x-request-id", v)
+		exchange.SetResponseHeader("x-request-id", v)
 	}
-	c.Data(resp.StatusCode, "application/json", body)
+	if err := exchange.WriteData(resp.StatusCode, "application/json", body); err != nil {
+		return nil, fmt.Errorf("write downstream response: %w", err)
+	}
 	return usage, nil
 }

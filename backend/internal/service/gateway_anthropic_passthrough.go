@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/tidwall/gjson"
@@ -44,7 +45,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthrough(
 	reqStream bool,
 	startTime time.Time,
 ) (*ForwardResult, error) {
-	return s.forwardAnthropicAPIKeyPassthroughWithInput(ctx, c, account, anthropicPassthroughForwardInput{
+	return s.forwardAnthropicAPIKeyPassthroughWithInputExchange(ctx, gatewaytransport.NewGinExchange(c), account, anthropicPassthroughForwardInput{
 		Body:          body,
 		RequestModel:  reqModel,
 		OriginalModel: originalModel,
@@ -56,6 +57,15 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthrough(
 func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	ctx context.Context,
 	c *gin.Context,
+	account *Account,
+	input anthropicPassthroughForwardInput,
+) (*ForwardResult, error) {
+	return s.forwardAnthropicAPIKeyPassthroughWithInputExchange(ctx, gatewaytransport.NewGinExchange(c), account, input)
+}
+
+func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInputExchange(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
 	account *Account,
 	input anthropicPassthroughForwardInput,
 ) (*ForwardResult, error) {
@@ -75,9 +85,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	logger.LegacyPrintf("service.gateway", "[Anthropic 自动透传] 命中 API Key 透传分支: account=%d name=%s model=%s stream=%v",
 		account.ID, account.Name, input.RequestModel, input.RequestStream)
 
-	if c != nil {
-		c.Set("anthropic_passthrough", true)
-	}
+	exchange.Values().Set("anthropic_passthrough", true)
 	// Pre-filter: strip empty text blocks (including nested in tool_result) to prevent upstream 400.
 	input.Body = StripEmptyTextBlocks(input.Body)
 	// Pre-filter: strip web-search history blocks the upstream cannot accept
@@ -96,7 +104,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	retryStart := time.Now()
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, input.RequestStream)
-		upstreamReq, wireBody, err := s.buildUpstreamRequestAnthropicAPIKeyPassthrough(upstreamCtx, c, account, input.Body, token)
+		upstreamReq, wireBody, err := s.buildUpstreamRequestAnthropicAPIKeyPassthroughExchange(upstreamCtx, exchange, account, input.Body, token)
 		releaseUpstreamCtx()
 		if err != nil {
 			return nil, err
@@ -118,8 +126,8 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 				scheduleOllamaCloudUsageActivity(s.deferredService, account)
 			}
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
-			setOpsUpstreamError(c, 0, safeErr, "")
-			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			setOpsUpstreamError(exchange.Values(), 0, safeErr, "")
+			appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
@@ -129,7 +137,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 				Kind:               "request_error",
 				Message:            safeErr,
 			})
-			c.JSON(http.StatusBadGateway, gin.H{
+			_ = exchange.WriteJSON(http.StatusBadGateway, gin.H{
 				"type": "error",
 				"error": gin.H{
 					"type":    "upstream_error",
@@ -158,7 +166,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 
 				respBody, _ := s.readUpstreamErrorBody(resp)
 				_ = resp.Body.Close()
-				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 					Platform:           account.Platform,
 					AccountID:          account.ID,
 					AccountName:        account.Name,
@@ -202,7 +210,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 				account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
 			s.handleRetryExhaustedSideEffects(ctx, resp, account)
-			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
 				AccountID:          account.ID,
 				AccountName:        account.Name,
@@ -224,7 +232,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 				RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
 			}
 		}
-		return s.handleRetryExhaustedError(ctx, resp, c, account)
+		return s.handleRetryExhaustedErrorExchange(ctx, resp, exchange, account)
 	}
 
 	if resp.StatusCode >= 400 && s.shouldFailoverUpstreamError(resp.StatusCode) {
@@ -236,7 +244,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
 		s.handleFailoverSideEffects(ctx, resp, account, input.RequestModel)
-		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		appendOpsUpstreamError(exchange.Values(), OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,
@@ -260,14 +268,14 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	}
 
 	if resp.StatusCode >= 400 {
-		return s.handleErrorResponse(ctx, resp, c, account, input.RequestModel)
+		return s.handleErrorResponseExchange(ctx, resp, exchange, account, input.RequestModel)
 	}
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
 	var clientDisconnect bool
 	if input.RequestStream {
-		streamResult, err := s.handleStreamingResponseAnthropicAPIKeyPassthrough(ctx, resp, c, account, input.StartTime, input.RequestModel)
+		streamResult, err := s.handleStreamingResponseAnthropicAPIKeyPassthroughExchange(ctx, resp, exchange, account, input.StartTime, input.RequestModel)
 		if err != nil {
 			return nil, err
 		}
@@ -275,7 +283,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 		firstTokenMs = streamResult.firstTokenMs
 		clientDisconnect = streamResult.clientDisconnect
 	} else {
-		usage, err = s.handleNonStreamingResponseAnthropicAPIKeyPassthrough(ctx, resp, c, account)
+		usage, err = s.handleNonStreamingResponseAnthropicAPIKeyPassthroughExchange(ctx, resp, exchange, account)
 		if err != nil {
 			return nil, err
 		}
@@ -303,6 +311,16 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	body []byte,
 	token string,
 ) (*http.Request, []byte, error) {
+	return s.buildUpstreamRequestAnthropicAPIKeyPassthroughExchange(ctx, gatewaytransport.NewGinExchange(c), account, body, token)
+}
+
+func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthroughExchange(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	body []byte,
+	token string,
+) (*http.Request, []byte, error) {
 	targetURL := claudeAPIURL
 	baseURL := account.GetBaseURL()
 	if baseURL != "" {
@@ -316,10 +334,7 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	// 能力维度 body sanitize：透传路径上 anthropic-beta header 原样透传客户端值，
 	// 依此决定是否保留 body 中的 context_management。避免“客户端 body 带字段但
 	// header 忘记带 beta token”的客户端 bug 在透传场景下让上游 400。
-	clientBeta := ""
-	if c != nil && c.Request != nil {
-		clientBeta = getHeaderRaw(c.Request.Header, "anthropic-beta")
-	}
+	clientBeta := getHeaderRaw(exchange.Request().Header, "anthropic-beta")
 	// 账号覆写了 anthropic-beta 时，覆写值即最终上游值：净化以覆写值为准
 	if beta, ok := account.HeaderOverrideValue("anthropic-beta"); ok {
 		clientBeta = beta
@@ -333,16 +348,14 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 		return nil, nil, err
 	}
 
-	if c != nil && c.Request != nil {
-		for key, values := range c.Request.Header {
-			lowerKey := strings.ToLower(strings.TrimSpace(key))
-			if !allowedHeaders[lowerKey] {
-				continue
-			}
-			wireKey := resolveWireCasing(key)
-			for _, v := range values {
-				addHeaderRaw(req.Header, wireKey, v)
-			}
+	for key, values := range exchange.Request().Header {
+		lowerKey := strings.ToLower(strings.TrimSpace(key))
+		if !allowedHeaders[lowerKey] {
+			continue
+		}
+		wireKey := resolveWireCasing(key)
+		for _, v := range values {
+			addHeaderRaw(req.Header, wireKey, v)
 		}
 	}
 
@@ -374,31 +387,41 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 	startTime time.Time,
 	model string,
 ) (*streamingResult, error) {
+	return s.handleStreamingResponseAnthropicAPIKeyPassthroughExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account, startTime, model)
+}
+
+func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthroughExchange(
+	ctx context.Context,
+	resp *http.Response,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	startTime time.Time,
+	model string,
+) (*streamingResult, error) {
 	if s.rateLimitService != nil {
 		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 	}
 
-	writeAnthropicPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	writeAnthropicPassthroughResponseHeaders(exchange.Response().Header(), resp.Header, s.responseHeaderFilter)
 
 	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	if contentType == "" {
 		contentType = "text/event-stream"
 	}
-	c.Header("Content-Type", contentType)
-	if c.Writer.Header().Get("Cache-Control") == "" {
-		c.Header("Cache-Control", "no-cache")
+	exchange.SetResponseHeader("Content-Type", contentType)
+	if exchange.Response().Header().Get("Cache-Control") == "" {
+		exchange.SetResponseHeader("Cache-Control", "no-cache")
 	}
-	if c.Writer.Header().Get("Connection") == "" {
-		c.Header("Connection", "keep-alive")
+	if exchange.Response().Header().Get("Connection") == "" {
+		exchange.SetResponseHeader("Connection", "keep-alive")
 	}
-	c.Header("X-Accel-Buffering", "no")
+	exchange.SetResponseHeader("X-Accel-Buffering", "no")
 	if v := resp.Header.Get("x-request-id"); v != "" {
-		c.Header("x-request-id", v)
+		exchange.SetResponseHeader("x-request-id", v)
 	}
 
-	w := c.Writer
-	flusher, ok := w.(http.Flusher)
-	if !ok {
+	w := exchange.Response()
+	if !w.SupportsFlush() {
 		return nil, errors.New("streaming not supported")
 	}
 
@@ -494,7 +517,7 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 			if !ok {
 				if !clientDisconnected {
 					// 兜底补刷，确保最后一个未以空行结尾的事件也能及时送达客户端。
-					flusher.Flush()
+					_ = w.Flush()
 				}
 				if !sawTerminalEvent {
 					if clientDisconnected && streamInterval > 0 {
@@ -543,7 +566,7 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 			}
 
 			if !clientDisconnected {
-				restored := string(reverseToolNamesIfPresent(c, []byte(line)))
+				restored := string(reverseToolNamesIfPresent(exchange.Values(), []byte(line)))
 				if _, err := io.WriteString(w, restored); err != nil {
 					clientDisconnected = true
 					logger.LegacyPrintf("service.gateway", "[Anthropic passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
@@ -552,7 +575,7 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 					logger.LegacyPrintf("service.gateway", "[Anthropic passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
 				} else if line == "" {
 					// 按 SSE 事件边界刷出，减少每行 flush 带来的 syscall 开销。
-					flusher.Flush()
+					_ = w.Flush()
 					lastDataAt = time.Now()
 					resetKeepaliveTimer()
 					inPartialEvent = false
@@ -592,7 +615,7 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 				logger.LegacyPrintf("service.gateway", "[Anthropic passthrough] Client disconnected during keepalive ping, continue draining upstream for usage: account=%d", account.ID)
 				continue
 			}
-			flusher.Flush()
+			_ = w.Flush()
 			lastDataAt = time.Now()
 			resetKeepaliveTimer()
 		}
@@ -769,11 +792,20 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 	c *gin.Context,
 	account *Account,
 ) (*ClaudeUsage, error) {
+	return s.handleNonStreamingResponseAnthropicAPIKeyPassthroughExchange(ctx, resp, gatewaytransport.NewGinExchange(c), account)
+}
+
+func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthroughExchange(
+	ctx context.Context,
+	resp *http.Response,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+) (*ClaudeUsage, error) {
 	if s.rateLimitService != nil {
 		s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 	}
 
-	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, anthropicTooLargeError)
+	body, err := readUpstreamResponseBodyExchange(resp.Body, s.cfg, exchange, anthropicTooLargeExchangeError)
 	if err != nil {
 		return nil, err
 	}
@@ -793,13 +825,15 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 		}
 	}
 
-	writeAnthropicPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	writeAnthropicPassthroughResponseHeaders(exchange.Response().Header(), resp.Header, s.responseHeaderFilter)
 	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	if contentType == "" {
 		contentType = "application/json"
 	}
-	body = reverseToolNamesIfPresent(c, body)
-	c.Data(resp.StatusCode, contentType, body)
+	body = reverseToolNamesIfPresent(exchange.Values(), body)
+	if err := exchange.WriteData(resp.StatusCode, contentType, body); err != nil {
+		return nil, fmt.Errorf("write downstream response: %w", err)
+	}
 	return usage, nil
 }
 

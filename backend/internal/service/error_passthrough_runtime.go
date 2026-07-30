@@ -1,19 +1,17 @@
 package service
 
-import "github.com/gin-gonic/gin"
-
 const errorPassthroughServiceContextKey = "error_passthrough_service"
 
 // BindErrorPassthroughService 将错误透传服务绑定到请求上下文，供 service 层在非 failover 场景下复用规则。
-func BindErrorPassthroughService(c *gin.Context, svc *ErrorPassthroughService) {
-	if c == nil || svc == nil {
+func BindErrorPassthroughService(c requestValues, svc *ErrorPassthroughService) {
+	if requestValuesNil(c) || svc == nil {
 		return
 	}
 	c.Set(errorPassthroughServiceContextKey, svc)
 }
 
-func getBoundErrorPassthroughService(c *gin.Context) *ErrorPassthroughService {
-	if c == nil {
+func getBoundErrorPassthroughService(c requestValues) *ErrorPassthroughService {
+	if requestValuesNil(c) {
 		return nil
 	}
 	v, ok := c.Get(errorPassthroughServiceContextKey)
@@ -29,7 +27,7 @@ func getBoundErrorPassthroughService(c *gin.Context) *ErrorPassthroughService {
 
 // applyErrorPassthroughRule 按规则改写错误响应；未命中时返回默认响应参数。
 func applyErrorPassthroughRule(
-	c *gin.Context,
+	c requestValues,
 	platform string,
 	upstreamStatus int,
 	responseBody []byte,

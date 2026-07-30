@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/gatewaytransport"
 	"github.com/gin-gonic/gin"
 )
 
@@ -61,11 +62,38 @@ func ReadUpstreamResponseBody(reader io.Reader, cfg *config.Config, c *gin.Conte
 	return body, nil
 }
 
+type tooLargeExchangeWriter func(gatewaytransport.Exchange)
+
+func readUpstreamResponseBodyExchange(reader io.Reader, cfg *config.Config, exchange gatewaytransport.Exchange, onTooLarge tooLargeExchangeWriter) ([]byte, error) {
+	maxBytes := resolveUpstreamResponseReadLimit(cfg)
+	body, err := readUpstreamResponseBodyLimited(reader, maxBytes)
+	if err != nil {
+		if errors.Is(err, ErrUpstreamResponseBodyTooLarge) {
+			setOpsUpstreamError(exchange.Values(), http.StatusBadGateway, "upstream response too large", "")
+			if onTooLarge != nil {
+				onTooLarge(exchange)
+			}
+		}
+		return nil, err
+	}
+	return body, nil
+}
+
 // anthropicTooLargeError 以 Anthropic Messages API 格式写入超限错误。
 func anthropicTooLargeError(c *gin.Context) {
 	c.JSON(http.StatusBadGateway, gin.H{
 		"type": "error",
 		"error": gin.H{
+			"type":    "upstream_error",
+			"message": "Upstream response too large",
+		},
+	})
+}
+
+func anthropicTooLargeExchangeError(exchange gatewaytransport.Exchange) {
+	_ = exchange.WriteJSON(http.StatusBadGateway, map[string]any{
+		"type": "error",
+		"error": map[string]any{
 			"type":    "upstream_error",
 			"message": "Upstream response too large",
 		},

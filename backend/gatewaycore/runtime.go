@@ -46,6 +46,9 @@ func (i Invocation) Validate() error {
 	if strings.TrimSpace(i.RequestID) == "" {
 		return fmt.Errorf("%w: request ID is required", ErrInvalidInvocation)
 	}
+	if strings.TrimSpace(i.SessionID) == "" {
+		return fmt.Errorf("%w: session ID is required", ErrInvalidInvocation)
+	}
 	if !i.Protocol.valid() {
 		return fmt.Errorf("%w: unsupported protocol %q", ErrInvalidInvocation, i.Protocol)
 	}
