@@ -26,7 +26,7 @@ type Pool struct {
 
 // PoolResolver loads the technical pool selected by New API.
 type PoolResolver interface {
-	ResolvePool(ctx context.Context, poolID int64) (Pool, error)
+	ResolvePool(ctx context.Context, poolID int64) (context.Context, Pool, error)
 }
 
 // DispatchRequest is the provider-facing request after pool resolution.
@@ -167,9 +167,12 @@ func (e *Engine) Invoke(
 		return err
 	}
 
-	pool, err := e.resolver.ResolvePool(ctx, invocation.PoolID)
+	resolvedCtx, pool, err := e.resolver.ResolvePool(ctx, invocation.PoolID)
 	if err != nil {
 		return fmt.Errorf("resolve gateway pool %d: %w", invocation.PoolID, err)
+	}
+	if resolvedCtx == nil {
+		return fmt.Errorf("%w: pool resolver returned a nil context", ErrInvalidPool)
 	}
 	if pool.ID != invocation.PoolID || strings.TrimSpace(pool.Platform) == "" {
 		return fmt.Errorf("%w: resolver returned pool %d for requested pool %d", ErrInvalidPool, pool.ID, invocation.PoolID)
@@ -179,7 +182,7 @@ func (e *Engine) Invoke(
 	}
 
 	dispatcher := e.dispatchers.forProtocol(invocation.Protocol)
-	measurement, dispatchErr := dispatcher.Forward(ctx, w, req, DispatchRequest{
+	measurement, dispatchErr := dispatcher.Forward(resolvedCtx, w, req, DispatchRequest{
 		Pool:       pool,
 		Invocation: invocation,
 	})
@@ -190,7 +193,7 @@ func (e *Engine) Invoke(
 		return errors.Join(dispatchErr, err)
 	}
 
-	usageErr := invocation.OnUsage(ctx, Usage{
+	usageErr := invocation.OnUsage(resolvedCtx, Usage{
 		PoolID:                  pool.ID,
 		AccountID:               measurement.AccountID,
 		RequestID:               invocation.RequestID,

@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-type poolResolverFunc func(context.Context, int64) (Pool, error)
+type poolResolverFunc func(context.Context, int64) (context.Context, Pool, error)
 
-func (f poolResolverFunc) ResolvePool(ctx context.Context, poolID int64) (Pool, error) {
+func (f poolResolverFunc) ResolvePool(ctx context.Context, poolID int64) (context.Context, Pool, error) {
 	return f(ctx, poolID)
 }
 
@@ -67,8 +67,8 @@ func newTestEngine(t *testing.T, openAI *dispatcherStub) (*Engine, *dispatcherSt
 		return nil, nil
 	}}
 	engine, err := NewEngine(
-		poolResolverFunc(func(_ context.Context, poolID int64) (Pool, error) {
-			return Pool{ID: poolID, Name: "Codex", Platform: "openai", Active: true}, nil
+		poolResolverFunc(func(ctx context.Context, poolID int64) (context.Context, Pool, error) {
+			return ctx, Pool{ID: poolID, Name: "Codex", Platform: "openai", Active: true}, nil
 		}),
 		Dispatchers{Anthropic: anthropic, OpenAI: openAI, Gemini: gemini},
 	)
@@ -114,8 +114,8 @@ func TestEngineInvokeRejectsUnavailablePoolBeforeDispatch(t *testing.T) {
 		return nil, nil
 	}}
 	engine, err := NewEngine(
-		poolResolverFunc(func(_ context.Context, poolID int64) (Pool, error) {
-			return Pool{ID: poolID, Platform: "openai", Active: false}, nil
+		poolResolverFunc(func(ctx context.Context, poolID int64) (context.Context, Pool, error) {
+			return ctx, Pool{ID: poolID, Platform: "openai", Active: false}, nil
 		}),
 		Dispatchers{Anthropic: dispatcher, OpenAI: dispatcher, Gemini: dispatcher},
 	)
@@ -129,6 +129,27 @@ func TestEngineInvokeRejectsUnavailablePoolBeforeDispatch(t *testing.T) {
 	}
 	if called {
 		t.Fatal("dispatcher was called for an inactive pool")
+	}
+}
+
+func TestEngineInvokeRejectsNilResolvedContext(t *testing.T) {
+	dispatcher := &dispatcherStub{forward: func(context.Context, http.ResponseWriter, *http.Request, DispatchRequest) (*Measurement, error) {
+		t.Fatal("dispatcher must not run")
+		return nil, nil
+	}}
+	engine, err := NewEngine(
+		poolResolverFunc(func(context.Context, int64) (context.Context, Pool, error) {
+			return nil, Pool{ID: 7, Platform: "openai", Active: true}, nil
+		}),
+		Dispatchers{Anthropic: dispatcher, OpenAI: dispatcher, Gemini: dispatcher},
+	)
+	if err != nil {
+		t.Fatalf("NewEngine() error = %v", err)
+	}
+
+	err = engine.Invoke(context.Background(), httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/responses", nil), validInvocation(func(context.Context, Usage) error { return nil }))
+	if !errors.Is(err, ErrInvalidPool) {
+		t.Fatalf("Invoke() error = %v, want ErrInvalidPool", err)
 	}
 }
 
