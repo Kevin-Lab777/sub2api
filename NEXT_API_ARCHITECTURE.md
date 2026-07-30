@@ -81,7 +81,9 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | `POST /v1/responses` over HTTP/SSE | Implemented and tested |
 | `POST /v1/responses/compact` unary JSON | Implemented and tested |
 | `GET /v1/responses` inbound WebSocket v2 | Implemented and tested |
-| Chat Completions and Completions | Pending |
+| `POST /v1/chat/completions` direct API-key upstream | Implemented and tested |
+| Subscription-account Chat Completions adapter | Pending |
+| Legacy `POST /v1/completions` | Pending |
 | Embeddings | Pending |
 | Images | Pending |
 | Live/realtime and sideband | Pending |
@@ -112,6 +114,17 @@ HTTP bridge, connection reuse, payload replay, continuation repair, synthetic
 events, or client identity impersonation. Completed-turn usage is parsed from
 the exact Responses schema and accumulated into one Engine-validated connection
 measurement when the socket closes.
+
+The native direct Chat Completions component currently selects only API-key
+accounts with explicit Chat Completions eligibility. It preserves the request
+and response protocol, changes only the exact account model mapping, and asks a
+streaming upstream for the documented terminal usage chunk required by the
+runtime contract. JSON and SSE media types, request model/stream fields,
+terminal `[DONE]`, and endpoint-schema usage are validated exactly. It does not
+run the legacy client-restriction, fast-policy, silent-refusal, image-bridge,
+response-repair, or protocol-probing paths. Subscription accounts are not
+silently routed through this direct component; their Responses adapter remains
+explicitly unfinished.
 
 Antigravity accounts participating in Gemini mixed scheduling also retain a
 separate Gin-bound forwarder and are not silently routed through the native
@@ -196,6 +209,11 @@ therefore remain transitional code rather than the final in-process path.
   boundaries, and raw token/cache/image measurements. WebSocket connections
   aggregate exact completed-turn telemetry into one runtime measurement. The
   dispatcher remains endpoint-specific and is not a complete OpenAI dispatcher.
+- Direct API-key `POST /v1/chat/completions` now has a separate strict
+  exact-pool dispatcher with raw JSON/SSE forwarding, documented stream-usage
+  negotiation, committed-response failover boundaries, and exact
+  prompt/completion/cache telemetry. Subscription-account conversion and the
+  legacy Completions endpoint remain pending.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

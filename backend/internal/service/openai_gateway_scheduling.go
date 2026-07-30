@@ -203,6 +203,7 @@ type openAISelectionPolicy struct {
 	requireExactModel     bool
 	requireKnownCompact   bool
 	requireResponsesWSV2  bool
+	requiredAccountType   string
 }
 
 func legacyOpenAISelectionPolicy(useUpstreamTokenCost bool) openAISelectionPolicy {
@@ -244,7 +245,20 @@ var technicalOpenAIResponsesWebSocketSelectionPolicy = openAISelectionPolicy{
 	requireResponsesWSV2:  true,
 }
 
+var technicalOpenAIChatCompletionsDirectSelectionPolicy = openAISelectionPolicy{
+	enforceChannelPricing: false,
+	useUpstreamTokenCost:  false,
+	strictState:           true,
+	bindStickyOnSelection: false,
+	requireExactModel:     true,
+	requireKnownCompact:   false,
+	requiredAccountType:   AccountTypeAPIKey,
+}
+
 func (p openAISelectionPolicy) acceptsAccount(account *Account, requestedModel string) bool {
+	if account == nil || (p.requiredAccountType != "" && account.Type != p.requiredAccountType) {
+		return false
+	}
 	if p.requireExactModel && !openAIAccountHasExactModelMapping(account, requestedModel) {
 		return false
 	}
@@ -961,6 +975,12 @@ func (s *OpenAIGatewayService) SelectTechnicalResponsesCompactAccountWithLoadAwa
 // pool account with explicit direct Responses WebSocket v2 support.
 func (s *OpenAIGatewayService) SelectTechnicalResponsesWebSocketAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityResponses, technicalOpenAIResponsesWebSocketSelectionPolicy)
+}
+
+// SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness selects an
+// exact-pool API-key account that exposes the Chat Completions endpoint.
+func (s *OpenAIGatewayService) SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityChatCompletions, technicalOpenAIChatCompletionsDirectSelectionPolicy)
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, policy openAISelectionPolicy) (*AccountSelectionResult, error) {

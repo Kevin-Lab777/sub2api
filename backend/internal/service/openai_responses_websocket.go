@@ -102,7 +102,7 @@ func (s *OpenAIGatewayService) ForwardResponsesWebSocket(
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}
-		return nil, nativeOpenAIResponsesWebSocketFailover(
+		return nil, nativeOpenAIAccountFailoverError(
 			http.StatusBadGateway,
 			GatewayFailureStageAccountAuth,
 			openAIResponsesCredentialUnavailableReason,
@@ -111,7 +111,7 @@ func (s *OpenAIGatewayService) ForwardResponsesWebSocket(
 	}
 	headers, err := s.buildNativeOpenAIResponsesWebSocketHeaders(ctx, account, token, sessionID)
 	if err != nil {
-		return nil, nativeOpenAIResponsesWebSocketFailover(
+		return nil, nativeOpenAIAccountFailoverError(
 			http.StatusBadGateway,
 			GatewayFailureStageAccountAuth,
 			openAIResponsesCredentialUnavailableReason,
@@ -137,7 +137,7 @@ func (s *OpenAIGatewayService) ForwardResponsesWebSocket(
 		if statusCode < 100 || statusCode > 599 {
 			statusCode = http.StatusBadGateway
 		}
-		return nil, nativeOpenAIResponsesWebSocketFailover(
+		return nil, nativeOpenAIAccountFailoverError(
 			statusCode,
 			GatewayFailureStageInference,
 			openAIResponsesTransportUnavailableReason,
@@ -145,7 +145,7 @@ func (s *OpenAIGatewayService) ForwardResponsesWebSocket(
 		)
 	}
 	if upstreamClient == nil {
-		return nil, nativeOpenAIResponsesWebSocketFailover(
+		return nil, nativeOpenAIAccountFailoverError(
 			http.StatusBadGateway,
 			GatewayFailureStageInference,
 			openAIResponsesTransportUnavailableReason,
@@ -221,7 +221,7 @@ func (s *OpenAIGatewayService) buildNativeOpenAIResponsesWebSocketHeaders(ctx co
 	return headers, nil
 }
 
-func nativeOpenAIResponsesWebSocketFailover(statusCode int, stage GatewayFailureStage, reason GatewayFailureReason, cause error) error {
+func nativeOpenAIAccountFailoverError(statusCode int, stage GatewayFailureStage, reason GatewayFailureReason, cause error) error {
 	return errors.Join(&UpstreamFailoverError{
 		StatusCode:        statusCode,
 		Stage:             stage,
