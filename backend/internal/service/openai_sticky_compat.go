@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 type openAILegacySessionHashContextKey struct{}
@@ -134,6 +136,9 @@ func (s *OpenAIGatewayService) getStickySessionAccountID(ctx context.Context, gr
 		return accountID, nil
 	}
 	if !s.openAISessionHashReadOldFallbackEnabled() {
+		if errors.Is(err, redis.Nil) {
+			return 0, nil
+		}
 		return accountID, err
 	}
 
@@ -148,7 +153,13 @@ func (s *OpenAIGatewayService) getStickySessionAccountID(ctx context.Context, gr
 		openAIStickyLegacyReadFallbackHit.Add(1)
 		return legacyAccountID, nil
 	}
-	return accountID, err
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return 0, err
+	}
+	if legacyErr != nil && !errors.Is(legacyErr, redis.Nil) {
+		return 0, legacyErr
+	}
+	return 0, nil
 }
 
 func (s *OpenAIGatewayService) setStickySessionAccountID(ctx context.Context, groupID *int64, sessionHash string, accountID int64, ttl time.Duration) error {

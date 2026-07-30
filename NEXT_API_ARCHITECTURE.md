@@ -72,13 +72,34 @@ strip tool/thinking history after a validation error, or rewrite empty parts.
 Those failures remain visible to the caller. Provider-account RPM limits now
 apply to Gemini accounts as well as Anthropic accounts.
 
-OpenAI still needs a native dispatcher. Antigravity accounts participating in
-Gemini mixed scheduling also retain a separate Gin-bound forwarder and are not
-silently routed through the native Gemini implementation. Both paths must be
-migrated before a complete production `gatewaycore.Runtime` can be assembled.
-New API does not import this partial runtime yet. The existing
-customer-authenticated HTTP handlers therefore remain transitional code rather
-than the final in-process path.
+OpenAI migration is split by endpoint contract. `/v1/responses` now has a
+dedicated native component, but it is deliberately not registered as the
+complete OpenAI protocol dispatcher. The current support matrix is:
+
+| OpenAI endpoint family | Native runtime state |
+| --- | --- |
+| `POST /v1/responses` over HTTP/SSE | Implemented and tested |
+| Responses compact and inbound WebSocket | Pending |
+| Chat Completions and Completions | Pending |
+| Embeddings | Pending |
+| Images | Pending |
+| Live/realtime and sideband | Pending |
+
+The native Responses path performs only protocol validation, exact model
+mapping, provider authentication, HTTP/SSE transport, terminal SSE collection
+for non-streaming clients, and endpoint-schema usage extraction. It rejects
+invalid JSON instead of normalizing control bytes, requires exact response
+media types, and does not use legacy token aliases or content-hash output
+deduplication. It does not inject prompts, drop rejected fields, repair
+continuation state, reconstruct missing output, or invent usage. Missing
+terminal usage is an error rather than a zero-token success.
+
+Antigravity accounts participating in Gemini mixed scheduling also retain a
+separate Gin-bound forwarder and are not silently routed through the native
+Gemini implementation. These paths must be migrated before a complete
+production `gatewaycore.Runtime` can be assembled. New API does not import this
+partial runtime yet. The existing customer-authenticated HTTP handlers
+therefore remain transitional code rather than the final in-process path.
 
 ## Removal Sequence
 
@@ -148,6 +169,12 @@ than the final in-process path.
   measurements.
 - Synthetic Gemini token estimates and signature/content rectification were
   removed from the native and Anthropic-compat Gemini paths.
+- Native OpenAI `POST /v1/responses` forwarding now has strict JSON/model
+  validation, exact-pool scheduling, account concurrency leases, API-key and
+  subscription-account authentication, raw JSON/SSE forwarding, terminal SSE
+  collection, committed-response failover boundaries, and raw token/cache/image
+  measurements. It remains endpoint-specific and is not a complete OpenAI
+  dispatcher.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

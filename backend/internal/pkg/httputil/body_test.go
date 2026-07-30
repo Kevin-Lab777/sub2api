@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"compress/zlib"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -139,5 +140,35 @@ func TestReadRequestBodyWithPrealloc_RespectsIdentityEncoding(t *testing.T) {
 	}
 	if string(got) != samplePayload {
 		t.Fatalf("body mismatch: got %q", got)
+	}
+}
+
+func TestReadRequestBodyWithPreallocLimitRejectsWireBodyOverLimit(t *testing.T) {
+	req := newRequestWithBody(t, []byte("12345"), "")
+	_, err := ReadRequestBodyWithPreallocLimit(req, 4)
+	var maxErr *http.MaxBytesError
+	if !errors.As(err, &maxErr) || maxErr.Limit != 4 {
+		t.Fatalf("expected four-byte MaxBytesError, got %T %v", err, err)
+	}
+}
+
+func TestReadRequestBodyWithPreallocLimitRejectsDecodedBodyOverLimit(t *testing.T) {
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	if _, err := gw.Write([]byte(strings.Repeat("a", 1024))); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	if buf.Len() >= 64 {
+		t.Fatalf("test gzip payload must fit within the wire limit, got %d bytes", buf.Len())
+	}
+
+	req := newRequestWithBody(t, buf.Bytes(), "gzip")
+	_, err := ReadRequestBodyWithPreallocLimit(req, 64)
+	var maxErr *http.MaxBytesError
+	if !errors.As(err, &maxErr) || maxErr.Limit != 64 {
+		t.Fatalf("expected decoded-body MaxBytesError, got %T %v", err, err)
 	}
 }

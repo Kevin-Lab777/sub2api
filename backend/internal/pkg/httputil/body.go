@@ -26,6 +26,20 @@ const (
 // on content length, transparently decoding any Content-Encoding the upstream
 // client used to compress the body (zstd, gzip, deflate).
 func ReadRequestBodyWithPrealloc(req *http.Request) ([]byte, error) {
+	return readRequestBodyWithPrealloc(req, 0)
+}
+
+// ReadRequestBodyWithPreallocLimit reads and decodes a request body while
+// enforcing the same exact byte limit on both the wire representation and the
+// decoded representation. It does not normalize or repair the body.
+func ReadRequestBodyWithPreallocLimit(req *http.Request, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, errors.New("request body limit must be positive")
+	}
+	return readRequestBodyWithPrealloc(req, maxBytes)
+}
+
+func readRequestBodyWithPrealloc(req *http.Request, maxBytes int64) ([]byte, error) {
 	if req == nil || req.Body == nil {
 		return nil, nil
 	}
@@ -41,19 +55,33 @@ func ReadRequestBodyWithPrealloc(req *http.Request) ([]byte, error) {
 			capHint = int(req.ContentLength)
 		}
 	}
+	if maxBytes > 0 && int64(capHint) > maxBytes {
+		capHint = int(maxBytes)
+	}
 
 	buf := bytes.NewBuffer(make([]byte, 0, capHint))
-	if _, err := io.Copy(buf, req.Body); err != nil {
+	reader := io.Reader(req.Body)
+	if maxBytes > 0 {
+		reader = io.LimitReader(req.Body, maxBytes+1)
+	}
+	if _, err := io.Copy(buf, reader); err != nil {
 		return nil, err
 	}
 	raw := buf.Bytes()
+	if maxBytes > 0 && int64(len(raw)) > maxBytes {
+		return nil, &http.MaxBytesError{Limit: maxBytes}
+	}
 
 	enc := strings.ToLower(strings.TrimSpace(req.Header.Get("Content-Encoding")))
 	if enc == "" || enc == "identity" {
 		return raw, nil
 	}
 
-	decoded, err := decompressRequestBody(enc, raw)
+	decodedLimit := int64(maxDecompressedBodySize)
+	if maxBytes > 0 {
+		decodedLimit = maxBytes
+	}
+	decoded, err := decompressRequestBody(enc, raw, decodedLimit)
 	if err != nil {
 		return nil, fmt.Errorf("decode Content-Encoding %q: %w", enc, err)
 	}
@@ -68,39 +96,58 @@ func ReadRequestBodyWithPrealloc(req *http.Request) ([]byte, error) {
 // ReadLenientJSONRequestBodyWithPrealloc reads a request body and normalizes
 // JSON string control bytes before strict validation.
 func ReadLenientJSONRequestBodyWithPrealloc(req *http.Request, maxNormalizedBytes int64) ([]byte, error) {
-	body, err := ReadRequestBodyWithPrealloc(req)
+	if maxNormalizedBytes <= 0 {
+		maxNormalizedBytes = maxDecompressedBodySize
+	}
+	body, err := ReadRequestBodyWithPreallocLimit(req, maxNormalizedBytes)
 	if err != nil {
 		return nil, err
 	}
 	return NormalizeLenientJSONRequestBody(body, maxNormalizedBytes)
 }
 
-func decompressRequestBody(encoding string, raw []byte) ([]byte, error) {
+func decompressRequestBody(encoding string, raw []byte, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, errors.New("decompressed body limit must be positive")
+	}
+	var (
+		reader io.Reader
+		close  func()
+	)
 	switch encoding {
 	case "zstd":
 		dec, err := zstd.NewReader(bytes.NewReader(raw))
 		if err != nil {
 			return nil, err
 		}
-		defer dec.Close()
-		return io.ReadAll(io.LimitReader(dec, maxDecompressedBodySize))
+		reader = dec
+		close = dec.Close
 	case "gzip", "x-gzip":
 		gr, err := gzip.NewReader(bytes.NewReader(raw))
 		if err != nil {
 			return nil, err
 		}
-		defer func() { _ = gr.Close() }()
-		return io.ReadAll(io.LimitReader(gr, maxDecompressedBodySize))
+		reader = gr
+		close = func() { _ = gr.Close() }
 	case "deflate":
 		zr, err := zlib.NewReader(bytes.NewReader(raw))
 		if err != nil {
 			return nil, err
 		}
-		defer func() { _ = zr.Close() }()
-		return io.ReadAll(io.LimitReader(zr, maxDecompressedBodySize))
+		reader = zr
+		close = func() { _ = zr.Close() }
 	default:
 		return nil, errors.New("unsupported Content-Encoding")
 	}
+	defer close()
+	decoded, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(decoded)) > maxBytes {
+		return nil, &http.MaxBytesError{Limit: maxBytes}
+	}
+	return decoded, nil
 }
 
 // NormalizeLenientJSONRequestBody escapes raw control bytes that broken

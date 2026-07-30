@@ -2059,7 +2059,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 		if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
 			effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
 			for {
-				selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, useUpstreamTokenCost)
+				selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, legacyOpenAISelectionPolicy(useUpstreamTokenCost))
 				if err != nil {
 					return nil, decision, err
 				}
@@ -2084,7 +2084,7 @@ func (s *OpenAIGatewayService) selectAccountWithScheduler(
 
 		effectiveExcludedIDs := cloneExcludedAccountIDs(excludedIDs)
 		for {
-			selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, useUpstreamTokenCost)
+			selection, err := s.selectAccountWithLoadAwareness(ctx, groupID, platform, sessionHash, requestedModel, effectiveExcludedIDs, requireCompact, requiredCapability, legacyOpenAISelectionPolicy(useUpstreamTokenCost))
 			if err != nil {
 				return nil, decision, err
 			}

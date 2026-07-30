@@ -23,7 +23,22 @@ const (
 
 // AcquireSelection resolves a scheduler wait plan into an account concurrency lease.
 func (s *GatewayService) AcquireSelection(ctx context.Context, selection *AccountSelectionResult) (func(), error) {
-	if s == nil || selection == nil || selection.Account == nil {
+	if s == nil {
+		return nil, ErrInvalidAccountSelection
+	}
+	return acquireAccountSelection(ctx, s.concurrencyService, selection)
+}
+
+// AcquireSelection resolves an OpenAI scheduler wait plan into an account lease.
+func (s *OpenAIGatewayService) AcquireSelection(ctx context.Context, selection *AccountSelectionResult) (func(), error) {
+	if s == nil {
+		return nil, ErrInvalidAccountSelection
+	}
+	return acquireAccountSelection(ctx, s.concurrencyService, selection)
+}
+
+func acquireAccountSelection(ctx context.Context, concurrencyService *ConcurrencyService, selection *AccountSelectionResult) (func(), error) {
+	if selection == nil || selection.Account == nil {
 		return nil, ErrInvalidAccountSelection
 	}
 	if selection.Acquired {
@@ -35,7 +50,7 @@ func (s *GatewayService) AcquireSelection(ctx context.Context, selection *Accoun
 	if selection.WaitPlan == nil {
 		return nil, ErrAccountConcurrencyBusy
 	}
-	if s.concurrencyService == nil {
+	if concurrencyService == nil {
 		return nil, fmt.Errorf("%w: concurrency service is unavailable", ErrInvalidAccountSelection)
 	}
 
@@ -44,21 +59,21 @@ func (s *GatewayService) AcquireSelection(ctx context.Context, selection *Accoun
 		return nil, fmt.Errorf("%w: malformed account wait plan", ErrInvalidAccountSelection)
 	}
 
-	canWait, err := s.concurrencyService.IncrementAccountWaitCount(ctx, plan.AccountID, plan.MaxWaiting)
+	canWait, err := concurrencyService.IncrementAccountWaitCount(ctx, plan.AccountID, plan.MaxWaiting)
 	if err != nil {
 		return nil, fmt.Errorf("increment account wait count: %w", err)
 	}
 	if !canWait {
 		return nil, ErrAccountWaitQueueFull
 	}
-	defer s.concurrencyService.DecrementAccountWaitCount(ctx, plan.AccountID)
+	defer concurrencyService.DecrementAccountWaitCount(ctx, plan.AccountID)
 
 	waitCtx, cancel := context.WithTimeout(ctx, plan.Timeout)
 	defer cancel()
 
 	backoff := accountWaitInitialBackoff
 	for {
-		result, err := s.concurrencyService.AcquireAccountSlot(waitCtx, plan.AccountID, plan.MaxConcurrency)
+		result, err := concurrencyService.AcquireAccountSlot(waitCtx, plan.AccountID, plan.MaxConcurrency)
 		if err != nil {
 			return nil, fmt.Errorf("acquire account slot: %w", err)
 		}
