@@ -340,7 +340,7 @@ func TestChatCompletionsToResponses_ResponseFormatJsonSchema(t *testing.T) {
 }
 
 func TestChatCompletionsToResponses_ImageURL(t *testing.T) {
-	content := `[{"type":"text","text":"Describe this"},{"type":"image_url","image_url":{"url":"data:image/png;base64,abc123"}}]`
+	content := `[{"type":"text","text":"Describe this"},{"type":"image_url","image_url":{"url":"data:image/png;base64,abc123","detail":"high"}}]`
 	req := &ChatCompletionsRequest{
 		Model: "gpt-4o",
 		Messages: []ChatMessage{
@@ -361,6 +361,7 @@ func TestChatCompletionsToResponses_ImageURL(t *testing.T) {
 	assert.Equal(t, "Describe this", parts[0].Text)
 	assert.Equal(t, "input_image", parts[1].Type)
 	assert.Equal(t, "data:image/png;base64,abc123", parts[1].ImageURL)
+	assert.Equal(t, "high", parts[1].Detail)
 }
 
 func TestChatCompletionsToResponses_EmptyBase64ImageURLSkipped(t *testing.T) {

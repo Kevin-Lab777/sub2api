@@ -204,6 +204,7 @@ type openAISelectionPolicy struct {
 	requireKnownCompact   bool
 	requireResponsesWSV2  bool
 	requiredAccountType   string
+	allowedAccountTypes   []string
 }
 
 func legacyOpenAISelectionPolicy(useUpstreamTokenCost bool) openAISelectionPolicy {
@@ -255,9 +256,31 @@ var technicalOpenAIChatCompletionsDirectSelectionPolicy = openAISelectionPolicy{
 	requiredAccountType:   AccountTypeAPIKey,
 }
 
+var technicalOpenAIChatCompletionsSelectionPolicy = openAISelectionPolicy{
+	enforceChannelPricing: false,
+	useUpstreamTokenCost:  false,
+	strictState:           true,
+	bindStickyOnSelection: false,
+	requireExactModel:     true,
+	requireKnownCompact:   false,
+	allowedAccountTypes:   []string{AccountTypeAPIKey, AccountTypeOAuth},
+}
+
 func (p openAISelectionPolicy) acceptsAccount(account *Account, requestedModel string) bool {
 	if account == nil || (p.requiredAccountType != "" && account.Type != p.requiredAccountType) {
 		return false
+	}
+	if len(p.allowedAccountTypes) > 0 {
+		allowed := false
+		for _, accountType := range p.allowedAccountTypes {
+			if account.Type == accountType {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return false
+		}
 	}
 	if p.requireExactModel && !openAIAccountHasExactModelMapping(account, requestedModel) {
 		return false
@@ -981,6 +1004,13 @@ func (s *OpenAIGatewayService) SelectTechnicalResponsesWebSocketAccountWithLoadA
 // exact-pool API-key account that exposes the Chat Completions endpoint.
 func (s *OpenAIGatewayService) SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityChatCompletions, technicalOpenAIChatCompletionsDirectSelectionPolicy)
+}
+
+// SelectTechnicalChatCompletionsAccountWithLoadAwareness selects either an
+// exact direct API-key account or a subscription account with the native
+// Responses adapter, without leaving the requested technical pool.
+func (s *OpenAIGatewayService) SelectTechnicalChatCompletionsAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityChatCompletions, technicalOpenAIChatCompletionsSelectionPolicy)
 }
 
 // SelectTechnicalCompletionsDirectAccountWithLoadAwareness selects an exact-

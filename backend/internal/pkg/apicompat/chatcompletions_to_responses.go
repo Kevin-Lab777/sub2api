@@ -376,6 +376,7 @@ func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesCont
 				responseParts = append(responseParts, ResponsesContentPart{
 					Type:     "input_image",
 					ImageURL: p.ImageURL.URL,
+					Detail:   p.ImageURL.Detail,
 				})
 			}
 		}

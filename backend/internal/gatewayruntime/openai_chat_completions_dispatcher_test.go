@@ -15,17 +15,31 @@ import (
 )
 
 type openAIChatCompletionsGatewayStub struct {
-	selectAccount func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
-	forward       func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
-	pools         []int64
-	boundPool     int64
-	boundAccount  int64
-	boundSession  string
+	selectAccount  func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	forward        func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	pools          []int64
+	boundPool      int64
+	boundAccount   int64
+	boundSession   string
+	directSelects  int
+	unifiedSelects int
 }
 
 func (s *openAIChatCompletionsGatewayStub) ValidateTechnicalRuntime() error { return nil }
 
 func (s *openAIChatCompletionsGatewayStub) SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(_ context.Context, poolID *int64, _ string, _ string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+	s.directSelects++
+	if poolID != nil {
+		s.pools = append(s.pools, *poolID)
+	}
+	return s.selectAccount(poolID, excluded)
+}
+
+func (s *openAIChatCompletionsGatewayStub) SelectTechnicalChatCompletionsAccountWithLoadAwareness(ctx context.Context, poolID *int64, session, model string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+	_ = ctx
+	_ = session
+	_ = model
+	s.unifiedSelects++
 	if poolID != nil {
 		s.pools = append(s.pools, *poolID)
 	}
@@ -223,5 +237,49 @@ func TestOpenAIChatCompletionsDispatcherRoutesLegacyCompletionsDirectly(t *testi
 	measurement, err := newOpenAIChatCompletionsDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIChatCompletionsDispatchRequest())
 	if err != nil || measurement.Endpoint != "/v1/completions" || measurement.AccountID != 531 {
 		t.Fatalf("unexpected legacy measurement=%+v err=%v", measurement, err)
+	}
+}
+
+func TestOpenAIChatCompletionsDispatcherAllowsSubscriptionAccount(t *testing.T) {
+	account := &service.Account{ID: 541, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth}
+	gateway := &openAIChatCompletionsGatewayStub{}
+	gateway.selectAccount = func(_ *int64, _ map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	gateway.forward = func(exchange gatewaytransport.Exchange, got *service.Account, _ []byte) (*service.OpenAIForwardResult, error) {
+		if got.Type != service.AccountTypeOAuth {
+			t.Fatalf("subscription account was not preserved: %+v", got)
+		}
+		if err := exchange.WriteData(http.StatusOK, "application/json", []byte(`{"id":"chatcmpl_subscription"}`)); err != nil {
+			return nil, err
+		}
+		return &service.OpenAIForwardResult{UpstreamModel: "gpt-5.4", UpstreamEndpoint: "/v1/responses", Duration: time.Millisecond}, nil
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hi"}]}`))
+	measurement, err := newOpenAIChatCompletionsDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIChatCompletionsDispatchRequest())
+	if err != nil || measurement == nil || measurement.AccountID != 541 || gateway.unifiedSelects != 1 || gateway.directSelects != 0 {
+		t.Fatalf("subscription dispatcher failed: measurement=%+v err=%v", measurement, err)
+	}
+}
+
+func TestOpenAIChatCompletionsDispatcherRoutesLossySubscriptionShapeOnlyToDirectAccounts(t *testing.T) {
+	account := &service.Account{ID: 551, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey}
+	gateway := &openAIChatCompletionsGatewayStub{}
+	gateway.selectAccount = func(_ *int64, _ map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	gateway.forward = func(exchange gatewaytransport.Exchange, _ *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
+		if !strings.Contains(string(body), `"stop":"END"`) {
+			t.Fatalf("direct request lost unsupported subscription field: %s", body)
+		}
+		if err := exchange.WriteData(http.StatusOK, "application/json", []byte(`{"id":"chatcmpl_direct"}`)); err != nil {
+			return nil, err
+		}
+		return &service.OpenAIForwardResult{UpstreamModel: "gpt-5.4", Duration: time.Millisecond}, nil
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hi"}],"stop":"END"}`))
+	measurement, err := newOpenAIChatCompletionsDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIChatCompletionsDispatchRequest())
+	if err != nil || measurement == nil || gateway.directSelects != 1 || gateway.unifiedSelects != 0 {
+		t.Fatalf("lossy shape routing failed: measurement=%+v direct=%d unified=%d err=%v", measurement, gateway.directSelects, gateway.unifiedSelects, err)
 	}
 }

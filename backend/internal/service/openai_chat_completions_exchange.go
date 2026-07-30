@@ -154,15 +154,17 @@ func extractNativeOpenAIChatUsage(body []byte) (OpenAIUsage, bool, error) {
 	return result, true, nil
 }
 
-// ForwardChatCompletionsExchange forwards one direct API-key Chat Completions
-// request. Subscription-account protocol conversion is intentionally a
-// separate adapter and is not selected by this method.
+// ForwardChatCompletionsExchange forwards Chat Completions through either the
+// direct API-key protocol or the strict subscription Responses adapter.
 func (s *OpenAIGatewayService) ForwardChatCompletionsExchange(
 	ctx context.Context,
 	exchange gatewaytransport.Exchange,
 	account *Account,
 	body []byte,
 ) (*OpenAIForwardResult, error) {
+	if account != nil && account.Type == AccountTypeOAuth {
+		return s.forwardChatCompletionsSubscriptionExchange(ctx, exchange, account, body)
+	}
 	return s.forwardNativeOpenAICompletionsEndpoint(ctx, exchange, account, body, nativeOpenAIChatCompletionsEndpoint)
 }
 

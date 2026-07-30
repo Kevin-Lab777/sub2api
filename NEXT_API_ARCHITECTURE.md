@@ -82,7 +82,7 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | `POST /v1/responses/compact` unary JSON | Implemented and tested |
 | `GET /v1/responses` inbound WebSocket v2 | Implemented and tested |
 | `POST /v1/chat/completions` direct API-key upstream | Implemented and tested |
-| Subscription-account Chat Completions adapter | Pending |
+| Subscription-account Chat Completions adapter | Implemented and tested |
 | Legacy `POST /v1/completions` direct API-key upstream | Implemented and tested |
 | Embeddings | Pending |
 | Images | Pending |
@@ -122,9 +122,21 @@ streaming upstream for the documented terminal usage chunk required by the
 runtime contract. JSON and SSE media types, request model/stream fields,
 terminal `[DONE]`, and endpoint-schema usage are validated exactly. It does not
 run the legacy client-restriction, fast-policy, silent-refusal, image-bridge,
-response-repair, or protocol-probing paths. Subscription accounts are not
-silently routed through this direct component; their Responses adapter remains
-explicitly unfinished.
+response-repair, or protocol-probing paths.
+
+Subscription accounts use a distinct strict Chat-to-Responses adapter. It
+accepts only request fields, message roles/content, and function-tool shapes
+that the conversion can represent; unsupported or ambiguous fields fail before
+scheduling side effects instead of being dropped or rewritten. Requests with
+valid Chat fields that are not representable by the adapter are routed only to
+direct API-key accounts; they are never partially converted for a subscription
+account. The upstream always uses the real Responses stream. Non-streaming Chat
+responses use the upstream response ID and `created_at`; streaming Chat chunks
+begin only after a valid `response.created` and finish only from a real terminal
+event with exact usage. The adapter never generates fallback IDs/timestamps,
+repairs missing output, finalizes a truncated stream, retries semantic
+`response.failed` events, or exposes encrypted reasoning that Chat Completions
+cannot carry.
 
 The legacy Completions endpoint shares the same strict direct transport and
 account boundary while preserving its prompt-shaped request and
@@ -219,8 +231,11 @@ therefore remain transitional code rather than the final in-process path.
   negotiation, committed-response failover boundaries, and exact
   prompt/completion/cache telemetry. Subscription-account conversion and the
   legacy Completions endpoint uses the same direct transport with a distinct
-  capability and raw prompt/text-completion protocol. Subscription-account
-  conversion remains pending.
+  capability and raw prompt/text-completion protocol.
+- Subscription-account Chat Completions now uses a separately validated
+  Responses adapter with deterministic request/output conversion, authoritative
+  upstream IDs/timestamps, exact terminal usage, and no semantic-error
+  failover. Lossy request shapes are rejected explicitly.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

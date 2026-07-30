@@ -32,6 +32,7 @@ func OpenAIChatCompletionsDispatcherConfigFromApplication(cfg *config.Config) (O
 
 type openAIChatCompletionsGateway interface {
 	ValidateTechnicalRuntime() error
+	SelectTechnicalChatCompletionsAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	SelectTechnicalCompletionsDirectAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	AcquireSelection(context.Context, *service.AccountSelectionResult) (func(), error)
@@ -40,10 +41,9 @@ type openAIChatCompletionsGateway interface {
 	BindStickySession(context.Context, *int64, string, int64) error
 }
 
-// OpenAIChatCompletionsDispatcher is the native direct API-key component for
-// Chat Completions and legacy Completions. Subscription-account conversion
-// remains a separate unfinished component, so this dispatcher is not yet
-// registered as the complete OpenAI runtime.
+// OpenAIChatCompletionsDispatcher is the native Chat Completions component for
+// direct API-key and subscription accounts. Legacy Completions remains a
+// direct API-key protocol.
 type OpenAIChatCompletionsDispatcher struct {
 	gateway            openAIChatCompletionsGateway
 	maxAccountSwitches int
@@ -100,6 +100,10 @@ func (d *OpenAIChatCompletionsDispatcher) Forward(
 	if model != dispatch.Invocation.Model {
 		return nil, fmt.Errorf("%w: invocation=%q body=%q", ErrInvocationModelMismatch, dispatch.Invocation.Model, model)
 	}
+	var subscriptionValidationErr error
+	if !legacyCompletions {
+		subscriptionValidationErr = service.ValidateOpenAIChatCompletionsSubscriptionRequest(body)
+	}
 
 	req = req.Clone(ctx)
 	exchange := gatewaytransport.NewHTTPExchange(w, req)
@@ -114,10 +118,15 @@ func (d *OpenAIChatCompletionsDispatcher) Forward(
 		var selectErr error
 		if legacyCompletions {
 			selection, selectErr = d.gateway.SelectTechnicalCompletionsDirectAccountWithLoadAwareness(ctx, &poolID, dispatch.Invocation.SessionID, dispatch.Invocation.Model, failedAccountIDs)
-		} else {
+		} else if subscriptionValidationErr != nil {
 			selection, selectErr = d.gateway.SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(ctx, &poolID, dispatch.Invocation.SessionID, dispatch.Invocation.Model, failedAccountIDs)
+		} else {
+			selection, selectErr = d.gateway.SelectTechnicalChatCompletionsAccountWithLoadAwareness(ctx, &poolID, dispatch.Invocation.SessionID, dispatch.Invocation.Model, failedAccountIDs)
 		}
 		if selectErr != nil {
+			if subscriptionValidationErr != nil {
+				selectErr = errors.Join(subscriptionValidationErr, selectErr)
+			}
 			if lastFailover != nil {
 				return nil, errors.Join(lastFailover, selectErr)
 			}
@@ -132,9 +141,11 @@ func (d *OpenAIChatCompletionsDispatcher) Forward(
 			return nil, acquireErr
 		}
 		release = releaseOnContextDone(ctx, release)
-		if account.Platform != service.PlatformOpenAI || account.Type != service.AccountTypeAPIKey {
+		if account.Platform != service.PlatformOpenAI ||
+			(legacyCompletions && account.Type != service.AccountTypeAPIKey) ||
+			(!legacyCompletions && account.Type != service.AccountTypeAPIKey && account.Type != service.AccountTypeOAuth) {
 			release()
-			return nil, fmt.Errorf("scheduler selected non-direct account %d for OpenAI Chat Completions", account.ID)
+			return nil, fmt.Errorf("scheduler selected unsupported account %d for OpenAI Chat Completions", account.ID)
 		}
 
 		writtenBefore := exchange.Response().Written()
