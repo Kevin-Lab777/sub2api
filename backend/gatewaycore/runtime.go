@@ -88,6 +88,7 @@ type Usage struct {
 	CacheReadInputTokens    int64
 	CacheWriteInputTokens   int64
 	ImageCount              int
+	ImageOutputSizes        []string
 	VideoDurationSeconds    int
 	WebSearchCalls          int
 	UpstreamStatusCode      int

@@ -43,8 +43,9 @@ Every invocation provides:
 - a required raw-usage callback.
 
 The usage callback returns token and media measurements to New API, including
-the exact image-token subsets needed for multimodal pricing. Next API does not
-calculate customer prices or mutate customer balances.
+the exact image-token subsets and observed output sizes needed for multimodal
+pricing. Next API does not calculate customer prices or mutate customer
+balances.
 
 `gatewaycore.Engine` now implements this boundary. It resolves the exact
 technical pool selected by New API, rejects inactive or inconsistent pools,
@@ -86,7 +87,8 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | Subscription-account Chat Completions adapter | Implemented and tested |
 | Legacy `POST /v1/completions` direct API-key upstream | Implemented and tested |
 | Embeddings | Implemented and tested |
-| Images | Pending |
+| Direct API-key Images generations/edits | Implemented and tested |
+| Subscription-account Images adapter | Pending |
 | Live/realtime and sideband | Pending |
 
 The native Responses path performs only protocol validation, exact model
@@ -152,6 +154,16 @@ negative, contradictory, or non-integral usage is a transport failure; it is
 never replaced by `total_tokens`, estimated, or accepted as zero usage. Because
 Embeddings is stateless, its dispatcher neither reads nor writes sticky-session
 bindings.
+
+Direct API-key Images generation and editing preserve the public Image API for
+JSON and multipart requests and change only the exact account model mapping.
+Non-streaming responses report the actual `data` length. Streaming accepts only
+the documented `image_generation.*` or `image_edit.*` SSE families and sums the
+exact usage carried by each real completed-image event. It does not infer image
+count from request `n`, treat partial images as billable output, deduplicate by
+content, guess JSON from an SSE media type, emit keepalives, or synthesize a
+completion for a truncated stream. Like Embeddings, Images is stateless and
+does not create sticky-session cache entries.
 
 Antigravity accounts participating in Gemini mixed scheduling also retain a
 separate Gin-bound forwarder and are not silently routed through the native
@@ -249,6 +261,9 @@ therefore remain transitional code rather than the final in-process path.
 - Native `POST /v1/embeddings` now uses exact API-key capability scheduling,
   raw JSON forwarding, exact model mapping, strict endpoint usage extraction,
   and multimodal image-input token telemetry.
+- Direct API-key `POST /v1/images/generations` and `/v1/images/edits` now have
+  framework-independent JSON/multipart forwarding, official JSON/SSE usage
+  validation, actual completed-image accounting, and no sticky-session cache.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

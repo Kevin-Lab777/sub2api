@@ -277,6 +277,7 @@ func anthropicMeasurement(
 		CacheReadInputTokens:    int64(result.Usage.CacheReadInputTokens),
 		CacheWriteInputTokens:   int64(result.Usage.CacheCreationInputTokens),
 		ImageCount:              result.ImageCount,
+		ImageOutputSizes:        append([]string(nil), result.ImageOutputSizes...),
 		WebSearchCalls:          result.WebSearchCalls,
 		UpstreamStatusCode:      status,
 		StartedAt:               startedAt,

@@ -40,6 +40,8 @@ func validMeasurement() *Measurement {
 		OutputTokens:            30,
 		ImageOutputTokens:       10,
 		CacheReadInputTokens:    40,
+		ImageCount:              1,
+		ImageOutputSizes:        []string{"1024x1024"},
 		UpstreamStatusCode:      http.StatusOK,
 		StartedAt:               time.Unix(100, 0),
 		Duration:                2 * time.Second,
@@ -104,7 +106,7 @@ func TestEngineInvokeDispatchesResolvedPoolAndReportsRawUsage(t *testing.T) {
 	if gotDispatch.Pool.ID != 17 || gotDispatch.Invocation.RequestID != "req-1" {
 		t.Fatalf("dispatcher received %#v", gotDispatch)
 	}
-	if gotUsage.PoolID != 17 || gotUsage.AccountID != 91 || gotUsage.RequestID != "req-1" || gotUsage.Model != "gpt-5.4" || gotUsage.ImageInputTokens != 20 || gotUsage.ImageOutputTokens != 10 {
+	if gotUsage.PoolID != 17 || gotUsage.AccountID != 91 || gotUsage.RequestID != "req-1" || gotUsage.Model != "gpt-5.4" || gotUsage.ImageInputTokens != 20 || gotUsage.ImageOutputTokens != 10 || len(gotUsage.ImageOutputSizes) != 1 || gotUsage.ImageOutputSizes[0] != "1024x1024" {
 		t.Fatalf("usage = %#v", gotUsage)
 	}
 }
@@ -120,6 +122,20 @@ func TestMeasurementRejectsImageTokensOutsideTotals(t *testing.T) {
 	measurement.ImageOutputTokens = measurement.OutputTokens + 1
 	if err := measurement.validate(); !errors.Is(err, ErrInvalidMeasurement) {
 		t.Fatalf("validate output image tokens: %v", err)
+	}
+}
+
+func TestMeasurementRejectsInvalidImageOutputSizes(t *testing.T) {
+	measurement := validMeasurement()
+	measurement.ImageCount = 0
+	if err := measurement.validate(); !errors.Is(err, ErrInvalidMeasurement) {
+		t.Fatalf("validate image size count: %v", err)
+	}
+
+	measurement = validMeasurement()
+	measurement.ImageOutputSizes = []string{" 1024x1024"}
+	if err := measurement.validate(); !errors.Is(err, ErrInvalidMeasurement) {
+		t.Fatalf("validate exact image size: %v", err)
 	}
 }
 

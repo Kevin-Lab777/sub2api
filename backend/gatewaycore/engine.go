@@ -48,6 +48,7 @@ type Measurement struct {
 	CacheReadInputTokens    int64
 	CacheWriteInputTokens   int64
 	ImageCount              int
+	ImageOutputSizes        []string
 	VideoDurationSeconds    int
 	WebSearchCalls          int
 	UpstreamStatusCode      int
@@ -74,6 +75,14 @@ func (m Measurement) validate() error {
 	}
 	if m.ImageCount < 0 || m.VideoDurationSeconds < 0 || m.WebSearchCalls < 0 {
 		return fmt.Errorf("%w: media and tool usage cannot be negative", ErrInvalidMeasurement)
+	}
+	if len(m.ImageOutputSizes) > m.ImageCount {
+		return fmt.Errorf("%w: image output sizes exceed image count", ErrInvalidMeasurement)
+	}
+	for _, size := range m.ImageOutputSizes {
+		if size == "" || size != strings.TrimSpace(size) {
+			return fmt.Errorf("%w: image output sizes must be exact non-empty strings", ErrInvalidMeasurement)
+		}
 	}
 	if m.UpstreamStatusCode < 100 || m.UpstreamStatusCode > 599 {
 		return fmt.Errorf("%w: upstream status code must be a valid HTTP status", ErrInvalidMeasurement)
@@ -214,6 +223,7 @@ func (e *Engine) Invoke(
 		CacheReadInputTokens:    measurement.CacheReadInputTokens,
 		CacheWriteInputTokens:   measurement.CacheWriteInputTokens,
 		ImageCount:              measurement.ImageCount,
+		ImageOutputSizes:        append([]string(nil), measurement.ImageOutputSizes...),
 		VideoDurationSeconds:    measurement.VideoDurationSeconds,
 		WebSearchCalls:          measurement.WebSearchCalls,
 		UpstreamStatusCode:      measurement.UpstreamStatusCode,

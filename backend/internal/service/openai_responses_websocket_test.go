@@ -174,6 +174,7 @@ func TestForwardResponsesWebSocketRelaysRawFramesAndAggregatesCompletedTurns(t *
 	require.Equal(t, 6, observed.result.Usage.OutputTokens)
 	require.Equal(t, 3, observed.result.Usage.CacheReadInputTokens)
 	require.Equal(t, 1, observed.result.ImageCount)
+	require.Equal(t, []string{"1024x1024"}, observed.result.ImageOutputSizes)
 	require.Equal(t, 2, observed.result.WebSearchCalls)
 	require.Equal(t, 2, observed.result.CompletedResponseCount)
 	require.Equal(t, http.StatusSwitchingProtocols, observed.result.UpstreamStatusCode)
@@ -251,6 +252,7 @@ func TestNativeOpenAIResponsesWebSocketAggregateRejectsAliasesAndDuplicateTermin
 	terminal := []byte(`{"type":"response.completed","response":{"id":"resp_exact","usage":{"input_tokens":3,"output_tokens":2},"output":[{"type":"image_generation_call","result":"same"},{"type":"image_generation_call","result":"same"}]}}`)
 	require.NoError(t, aggregate.observe(coderws.MessageText, terminal))
 	require.Equal(t, 2, aggregate.imageCount)
+	require.Empty(t, aggregate.imageOutputSizes)
 	require.ErrorContains(t, aggregate.observe(coderws.MessageText, terminal), "multiple terminal events")
 }
 

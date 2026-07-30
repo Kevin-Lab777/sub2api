@@ -24,6 +24,7 @@ type OpenAIResponsesWebSocketResult struct {
 	Usage                  OpenAIUsage
 	UpstreamModel          string
 	ImageCount             int
+	ImageOutputSizes       []string
 	WebSearchCalls         int
 	UpstreamStatusCode     int
 	StartedAt              time.Time
@@ -374,6 +375,7 @@ func (s *OpenAIGatewayService) relayNativeOpenAIResponsesWebSocket(
 	secondExit := <-exits
 	result.Usage = aggregate.usage
 	result.ImageCount = aggregate.imageCount
+	result.ImageOutputSizes = append([]string(nil), aggregate.imageOutputSizes...)
 	result.WebSearchCalls = aggregate.webSearchCalls
 	result.CompletedResponseCount = len(aggregate.seenResponseIDs)
 	for _, exit := range [...]nativeOpenAIResponsesRelayExit{firstExit, secondExit} {
@@ -396,10 +398,11 @@ func nativeOpenAIResponsesWebSocketGracefulClose(err error) bool {
 }
 
 type nativeOpenAIResponsesWebSocketAggregate struct {
-	usage           OpenAIUsage
-	imageCount      int
-	webSearchCalls  int
-	seenResponseIDs map[string]struct{}
+	usage            OpenAIUsage
+	imageCount       int
+	imageOutputSizes []string
+	webSearchCalls   int
+	seenResponseIDs  map[string]struct{}
 }
 
 func (a *nativeOpenAIResponsesWebSocketAggregate) observe(messageType coderws.MessageType, payload []byte) error {
@@ -428,7 +431,7 @@ func (a *nativeOpenAIResponsesWebSocketAggregate) observe(messageType coderws.Me
 	if !found {
 		return fmt.Errorf("OpenAI Responses WebSocket %s event omitted usage", eventType.String())
 	}
-	imageCount, _, webSearchCalls := nativeOpenAIResponsesOutputTelemetry([]byte(response.Raw))
+	imageCount, imageOutputSizes, webSearchCalls := nativeOpenAIResponsesOutputTelemetry([]byte(response.Raw))
 	nextUsage := a.usage
 	if err := addNativeOpenAIResponsesUsage(&nextUsage, usage); err != nil {
 		return err
@@ -438,6 +441,7 @@ func (a *nativeOpenAIResponsesWebSocketAggregate) observe(messageType coderws.Me
 	}
 	a.usage = nextUsage
 	a.imageCount += imageCount
+	a.imageOutputSizes = append(a.imageOutputSizes, imageOutputSizes...)
 	a.webSearchCalls += webSearchCalls
 	if a.seenResponseIDs == nil {
 		a.seenResponseIDs = make(map[string]struct{})

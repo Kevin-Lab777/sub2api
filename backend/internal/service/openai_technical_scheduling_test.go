@@ -487,3 +487,20 @@ func TestOpenAISelectTechnicalEmbeddingsRequiresAPIKeyCapability(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(3), selection.Account.ID)
 }
+
+func TestOpenAISelectTechnicalImagesDirectRequiresAPIKeyAccount(t *testing.T) {
+	t.Parallel()
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0},
+			{ID: 2, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1},
+		}},
+		concurrencyService: NewConcurrencyService(&technicalOpenAIConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{1: {AccountID: 1, LoadRate: 0}, 2: {AccountID: 2, LoadRate: 0}},
+		}),
+	}
+	selection, err := svc.SelectTechnicalImagesDirectAccountWithLoadAwareness(context.Background(), nil, "", "image-alias", nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), selection.Account.ID)
+}
