@@ -42,7 +42,9 @@ type Measurement struct {
 	Endpoint                string
 	UpstreamModel           string
 	InputTokens             int64
+	ImageInputTokens        int64
 	OutputTokens            int64
+	ImageOutputTokens       int64
 	CacheReadInputTokens    int64
 	CacheWriteInputTokens   int64
 	ImageCount              int
@@ -64,8 +66,11 @@ func (m Measurement) validate() error {
 	if strings.TrimSpace(m.UpstreamModel) == "" {
 		return fmt.Errorf("%w: upstream model is required", ErrInvalidMeasurement)
 	}
-	if m.InputTokens < 0 || m.OutputTokens < 0 || m.CacheReadInputTokens < 0 || m.CacheWriteInputTokens < 0 {
+	if m.InputTokens < 0 || m.ImageInputTokens < 0 || m.OutputTokens < 0 || m.ImageOutputTokens < 0 || m.CacheReadInputTokens < 0 || m.CacheWriteInputTokens < 0 {
 		return fmt.Errorf("%w: token counts cannot be negative", ErrInvalidMeasurement)
+	}
+	if m.ImageInputTokens > m.InputTokens || m.ImageOutputTokens > m.OutputTokens {
+		return fmt.Errorf("%w: image token counts must be subsets of total token counts", ErrInvalidMeasurement)
 	}
 	if m.ImageCount < 0 || m.VideoDurationSeconds < 0 || m.WebSearchCalls < 0 {
 		return fmt.Errorf("%w: media and tool usage cannot be negative", ErrInvalidMeasurement)
@@ -203,7 +208,9 @@ func (e *Engine) Invoke(
 		Model:                   invocation.Model,
 		UpstreamModel:           measurement.UpstreamModel,
 		InputTokens:             measurement.InputTokens,
+		ImageInputTokens:        measurement.ImageInputTokens,
 		OutputTokens:            measurement.OutputTokens,
+		ImageOutputTokens:       measurement.ImageOutputTokens,
 		CacheReadInputTokens:    measurement.CacheReadInputTokens,
 		CacheWriteInputTokens:   measurement.CacheWriteInputTokens,
 		ImageCount:              measurement.ImageCount,

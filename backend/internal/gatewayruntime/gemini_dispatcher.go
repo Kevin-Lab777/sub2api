@@ -282,6 +282,7 @@ func geminiMeasurement(
 		UpstreamModel:           upstreamModel,
 		InputTokens:             int64(result.Usage.InputTokens),
 		OutputTokens:            int64(result.Usage.OutputTokens),
+		ImageOutputTokens:       int64(result.Usage.ImageOutputTokens),
 		CacheReadInputTokens:    int64(result.Usage.CacheReadInputTokens),
 		CacheWriteInputTokens:   int64(result.Usage.CacheCreationInputTokens),
 		ImageCount:              result.ImageCount,

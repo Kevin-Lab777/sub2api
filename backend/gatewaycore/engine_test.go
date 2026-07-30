@@ -36,7 +36,9 @@ func validMeasurement() *Measurement {
 		Endpoint:                "/backend-api/codex/responses",
 		UpstreamModel:           "gpt-5.4-codex",
 		InputTokens:             120,
+		ImageInputTokens:        20,
 		OutputTokens:            30,
+		ImageOutputTokens:       10,
 		CacheReadInputTokens:    40,
 		UpstreamStatusCode:      http.StatusOK,
 		StartedAt:               time.Unix(100, 0),
@@ -102,8 +104,22 @@ func TestEngineInvokeDispatchesResolvedPoolAndReportsRawUsage(t *testing.T) {
 	if gotDispatch.Pool.ID != 17 || gotDispatch.Invocation.RequestID != "req-1" {
 		t.Fatalf("dispatcher received %#v", gotDispatch)
 	}
-	if gotUsage.PoolID != 17 || gotUsage.AccountID != 91 || gotUsage.RequestID != "req-1" || gotUsage.Model != "gpt-5.4" {
+	if gotUsage.PoolID != 17 || gotUsage.AccountID != 91 || gotUsage.RequestID != "req-1" || gotUsage.Model != "gpt-5.4" || gotUsage.ImageInputTokens != 20 || gotUsage.ImageOutputTokens != 10 {
 		t.Fatalf("usage = %#v", gotUsage)
+	}
+}
+
+func TestMeasurementRejectsImageTokensOutsideTotals(t *testing.T) {
+	measurement := validMeasurement()
+	measurement.ImageInputTokens = measurement.InputTokens + 1
+	if err := measurement.validate(); !errors.Is(err, ErrInvalidMeasurement) {
+		t.Fatalf("validate input image tokens: %v", err)
+	}
+
+	measurement = validMeasurement()
+	measurement.ImageOutputTokens = measurement.OutputTokens + 1
+	if err := measurement.validate(); !errors.Is(err, ErrInvalidMeasurement) {
+		t.Fatalf("validate output image tokens: %v", err)
 	}
 }
 

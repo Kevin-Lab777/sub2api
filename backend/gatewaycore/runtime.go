@@ -82,7 +82,9 @@ type Usage struct {
 	Model                   string
 	UpstreamModel           string
 	InputTokens             int64
+	ImageInputTokens        int64
 	OutputTokens            int64
+	ImageOutputTokens       int64
 	CacheReadInputTokens    int64
 	CacheWriteInputTokens   int64
 	ImageCount              int

@@ -42,8 +42,9 @@ Every invocation provides:
 - an explicit client protocol and requested model;
 - a required raw-usage callback.
 
-The usage callback returns token and media measurements to New API. Next API
-does not calculate customer prices or mutate customer balances.
+The usage callback returns token and media measurements to New API, including
+the exact image-token subsets needed for multimodal pricing. Next API does not
+calculate customer prices or mutate customer balances.
 
 `gatewaycore.Engine` now implements this boundary. It resolves the exact
 technical pool selected by New API, rejects inactive or inconsistent pools,
