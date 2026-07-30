@@ -16,13 +16,14 @@ import (
 )
 
 type geminiSchedulerStub struct {
-	selectAccount func(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
-	selectedPools []int64
-	selectedIDs   []int64
-	boundPool     int64
-	boundSession  string
-	boundAccount  int64
-	rpmAccount    int64
+	selectAccount   func(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	selectedPools   []int64
+	selectedIDs     []int64
+	boundPool       int64
+	boundSession    string
+	boundAccount    int64
+	rpmAccount      int64
+	forcedPlatforms []string
 }
 
 func (s *geminiSchedulerStub) ValidateTechnicalSchedulerRuntime() error { return nil }
@@ -31,9 +32,8 @@ func (s *geminiSchedulerStub) SelectAccountWithLoadAwareness(ctx context.Context
 	if poolID != nil {
 		s.selectedPools = append(s.selectedPools, *poolID)
 	}
-	if platform, _ := ctx.Value(ctxkey.ForcePlatform).(string); platform != service.PlatformGemini {
-		return nil, errors.New("native Gemini platform constraint missing")
-	}
+	platform, _ := ctx.Value(ctxkey.ForcePlatform).(string)
+	s.forcedPlatforms = append(s.forcedPlatforms, platform)
 	return s.selectAccount(ctx, poolID, sessionID, model, excluded)
 }
 
@@ -75,9 +75,28 @@ func (s *geminiForwarderStub) ForwardNativeExchange(_ context.Context, exchange 
 	return s.forward(exchange, account, model, action, stream, body)
 }
 
+type antigravityGeminiForwarderStub struct {
+	forward func(gatewaytransport.Exchange, *service.Account, string, string, bool, []byte) (*service.ForwardResult, error)
+}
+
+func (s *antigravityGeminiForwarderStub) ValidateTechnicalRuntime() error { return nil }
+
+func (s *antigravityGeminiForwarderStub) ForwardGeminiExchange(_ context.Context, exchange gatewaytransport.Exchange, account *service.Account, model, action string, stream bool, body []byte) (*service.ForwardResult, error) {
+	return s.forward(exchange, account, model, action, stream, body)
+}
+
 func newGeminiDispatcherForTest(t *testing.T, scheduler *geminiSchedulerStub, forwarder *geminiForwarderStub) *GeminiDispatcher {
 	t.Helper()
-	dispatcher, err := NewGeminiDispatcher(scheduler, forwarder, GeminiDispatcherConfig{
+	antigravityForwarder := &antigravityGeminiForwarderStub{forward: func(gatewaytransport.Exchange, *service.Account, string, string, bool, []byte) (*service.ForwardResult, error) {
+		t.Fatal("Antigravity forwarder must not run")
+		return nil, nil
+	}}
+	return newGeminiDispatcherWithAntigravityForTest(t, scheduler, forwarder, antigravityForwarder)
+}
+
+func newGeminiDispatcherWithAntigravityForTest(t *testing.T, scheduler *geminiSchedulerStub, forwarder *geminiForwarderStub, antigravityForwarder *antigravityGeminiForwarderStub) *GeminiDispatcher {
+	t.Helper()
+	dispatcher, err := NewGeminiDispatcher(scheduler, forwarder, antigravityForwarder, GeminiDispatcherConfig{
 		MaxAccountSwitches: 3,
 		MaxBodyBytes:       1 << 20,
 	})
@@ -85,6 +104,111 @@ func newGeminiDispatcherForTest(t *testing.T, scheduler *geminiSchedulerStub, fo
 		t.Fatalf("NewGeminiDispatcher: %v", err)
 	}
 	return dispatcher
+}
+
+func TestGeminiDispatcherFailoverFromGeminiToAntigravityRemainsInsideExactPool(t *testing.T) {
+	accounts := []*service.Account{
+		{ID: 191, Platform: service.PlatformGemini, Type: service.AccountTypeAPIKey},
+		{ID: 192, Platform: service.PlatformAntigravity, Type: service.AccountTypeOAuth, Extra: map[string]any{"mixed_scheduling": true}},
+	}
+	scheduler := &geminiSchedulerStub{}
+	scheduler.selectAccount = func(_ context.Context, poolID *int64, _ string, _ string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		if poolID == nil || *poolID != 41 {
+			t.Fatalf("unexpected pool: %v", poolID)
+		}
+		account := accounts[0]
+		if _, failed := excluded[account.ID]; failed {
+			account = accounts[1]
+		}
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	nativeCalls := 0
+	forwarder := &geminiForwarderStub{forward: func(_ gatewaytransport.Exchange, account *service.Account, _ string, _ string, _ bool, _ []byte) (*service.ForwardResult, error) {
+		nativeCalls++
+		if account.ID != 191 {
+			t.Fatalf("native forward received account %d", account.ID)
+		}
+		return nil, &service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests}
+	}}
+	antigravityCalls := 0
+	antigravityForwarder := &antigravityGeminiForwarderStub{forward: func(exchange gatewaytransport.Exchange, account *service.Account, model, action string, stream bool, body []byte) (*service.ForwardResult, error) {
+		antigravityCalls++
+		if account.ID != 192 || model != "gemini-2.5-pro" || action != "generateContent" || stream || string(body) != `{"contents":[]}` {
+			t.Fatalf("unexpected Antigravity forward: account=%d model=%q action=%q stream=%v body=%s", account.ID, model, action, stream, body)
+		}
+		if err := exchange.WriteData(http.StatusOK, "application/json", []byte(`{"candidates":[]}`)); err != nil {
+			return nil, err
+		}
+		return &service.ForwardResult{
+			Model:         model,
+			UpstreamModel: "gemini-2.5-pro-antigravity",
+			Usage:         service.ClaudeUsage{InputTokens: 21, OutputTokens: 8},
+			Duration:      time.Millisecond,
+		}, nil
+	}}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-pro:generateContent", strings.NewReader(`{"contents":[]}`))
+	measurement, err := newGeminiDispatcherWithAntigravityForTest(t, scheduler, forwarder, antigravityForwarder).Forward(context.Background(), httptest.NewRecorder(), req, geminiDispatchRequest())
+	if err != nil {
+		t.Fatalf("Forward: %v", err)
+	}
+	if nativeCalls != 1 || antigravityCalls != 1 || measurement.AccountID != 192 || measurement.UpstreamModel != "gemini-2.5-pro-antigravity" || measurement.InputTokens != 21 || measurement.OutputTokens != 8 {
+		t.Fatalf("unexpected mixed failover result: native=%d antigravity=%d measurement=%+v", nativeCalls, antigravityCalls, measurement)
+	}
+	if len(scheduler.selectedPools) != 2 || scheduler.selectedPools[0] != 41 || scheduler.selectedPools[1] != 41 {
+		t.Fatalf("mixed failover escaped exact pool: %v", scheduler.selectedPools)
+	}
+	if len(scheduler.forcedPlatforms) != 2 || scheduler.forcedPlatforms[0] != "" || scheduler.forcedPlatforms[1] != "" {
+		t.Fatalf("generation unexpectedly forced a provider platform: %v", scheduler.forcedPlatforms)
+	}
+}
+
+func TestGeminiDispatcherRejectsAntigravityWithoutExplicitMixedScheduling(t *testing.T) {
+	scheduler := &geminiSchedulerStub{selectAccount: func(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		return &service.AccountSelectionResult{
+			Account:     &service.Account{ID: 201, Platform: service.PlatformAntigravity, Type: service.AccountTypeOAuth},
+			Acquired:    true,
+			ReleaseFunc: func() {},
+		}, nil
+	}}
+	forwarder := &geminiForwarderStub{forward: func(gatewaytransport.Exchange, *service.Account, string, string, bool, []byte) (*service.ForwardResult, error) {
+		t.Fatal("native forwarder must not run")
+		return nil, nil
+	}}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-pro:generateContent", strings.NewReader(`{"contents":[]}`))
+	_, err := newGeminiDispatcherForTest(t, scheduler, forwarder).Forward(context.Background(), httptest.NewRecorder(), req, geminiDispatchRequest())
+	if !errors.Is(err, ErrUnsupportedPoolPlatform) {
+		t.Fatalf("expected explicit mixed-scheduling rejection, got %v", err)
+	}
+}
+
+func TestGeminiDispatcherCountTokensForcesNativeGeminiInsidePool(t *testing.T) {
+	account := &service.Account{ID: 211, Platform: service.PlatformGemini, Type: service.AccountTypeAPIKey}
+	scheduler := &geminiSchedulerStub{selectAccount: func(ctx context.Context, poolID *int64, _ string, _ string, _ map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		if poolID == nil || *poolID != 41 {
+			t.Fatalf("unexpected pool: %v", poolID)
+		}
+		if platform, _ := ctx.Value(ctxkey.ForcePlatform).(string); platform != service.PlatformGemini {
+			t.Fatalf("countTokens did not force native Gemini: %q", platform)
+		}
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}}
+	forwarder := &geminiForwarderStub{forward: func(exchange gatewaytransport.Exchange, _ *service.Account, _ string, action string, stream bool, _ []byte) (*service.ForwardResult, error) {
+		if action != "countTokens" || stream {
+			t.Fatalf("unexpected native countTokens forward: action=%q stream=%v", action, stream)
+		}
+		if err := exchange.WriteData(http.StatusOK, "application/json", []byte(`{"totalTokens":7}`)); err != nil {
+			return nil, err
+		}
+		return &service.ForwardResult{Model: "gemini-2.5-pro", Duration: time.Millisecond}, nil
+	}}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-pro:countTokens", strings.NewReader(`{"contents":[]}`))
+	measurement, err := newGeminiDispatcherForTest(t, scheduler, forwarder).Forward(context.Background(), httptest.NewRecorder(), req, geminiDispatchRequest())
+	if err != nil || measurement.AccountID != 211 {
+		t.Fatalf("native countTokens failed: measurement=%+v err=%v", measurement, err)
+	}
 }
 
 func geminiDispatchRequest() gatewaycore.DispatchRequest {

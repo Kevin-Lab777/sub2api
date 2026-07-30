@@ -45,16 +45,27 @@ type geminiForwarder interface {
 	ForwardNativeExchange(context.Context, gatewaytransport.Exchange, *service.Account, string, string, bool, []byte) (*service.ForwardResult, error)
 }
 
+type antigravityGeminiForwarder interface {
+	ValidateTechnicalRuntime() error
+	ForwardGeminiExchange(context.Context, gatewaytransport.Exchange, *service.Account, string, string, bool, []byte) (*service.ForwardResult, error)
+}
+
 // GeminiDispatcher owns native Gemini endpoint parsing, technical-pool
 // scheduling, account concurrency, and provider forwarding.
 type GeminiDispatcher struct {
-	scheduler          geminiScheduler
-	forwarder          geminiForwarder
-	maxAccountSwitches int
-	maxBodyBytes       int64
+	scheduler            geminiScheduler
+	forwarder            geminiForwarder
+	antigravityForwarder antigravityGeminiForwarder
+	maxAccountSwitches   int
+	maxBodyBytes         int64
 }
 
-func NewGeminiDispatcher(scheduler geminiScheduler, forwarder geminiForwarder, cfg GeminiDispatcherConfig) (*GeminiDispatcher, error) {
+func NewGeminiDispatcher(
+	scheduler geminiScheduler,
+	forwarder geminiForwarder,
+	antigravityForwarder antigravityGeminiForwarder,
+	cfg GeminiDispatcherConfig,
+) (*GeminiDispatcher, error) {
 	if scheduler == nil {
 		return nil, errors.New("gemini account scheduler is required")
 	}
@@ -67,6 +78,12 @@ func NewGeminiDispatcher(scheduler geminiScheduler, forwarder geminiForwarder, c
 	if err := forwarder.ValidateTechnicalRuntime(); err != nil {
 		return nil, fmt.Errorf("validate Gemini forwarder: %w", err)
 	}
+	if antigravityForwarder == nil {
+		return nil, errors.New("Antigravity Gemini forwarder is required")
+	}
+	if err := antigravityForwarder.ValidateTechnicalRuntime(); err != nil {
+		return nil, fmt.Errorf("validate Antigravity Gemini forwarder: %w", err)
+	}
 	if cfg.MaxAccountSwitches <= 0 {
 		return nil, errors.New("gemini max account switches must be positive")
 	}
@@ -74,10 +91,11 @@ func NewGeminiDispatcher(scheduler geminiScheduler, forwarder geminiForwarder, c
 		return nil, errors.New("gemini max body bytes must be positive")
 	}
 	return &GeminiDispatcher{
-		scheduler:          scheduler,
-		forwarder:          forwarder,
-		maxAccountSwitches: cfg.MaxAccountSwitches,
-		maxBodyBytes:       cfg.MaxBodyBytes,
+		scheduler:            scheduler,
+		forwarder:            forwarder,
+		antigravityForwarder: antigravityForwarder,
+		maxAccountSwitches:   cfg.MaxAccountSwitches,
+		maxBodyBytes:         cfg.MaxBodyBytes,
 	}, nil
 }
 
@@ -87,7 +105,7 @@ func (d *GeminiDispatcher) Forward(
 	req *http.Request,
 	dispatch gatewaycore.DispatchRequest,
 ) (*gatewaycore.Measurement, error) {
-	if d == nil || d.scheduler == nil || d.forwarder == nil {
+	if d == nil || d.scheduler == nil || d.forwarder == nil || d.antigravityForwarder == nil {
 		return nil, errors.New("gemini dispatcher is not initialized")
 	}
 	if dispatch.Pool.Platform != service.PlatformGemini {
@@ -109,10 +127,12 @@ func (d *GeminiDispatcher) Forward(
 		return nil, errors.New("Gemini request body is empty")
 	}
 
-	// Native Gemini dispatch deliberately selects native Gemini accounts. The
-	// exact pool ID remains mandatory; this platform constraint never broadens
-	// account lookup beyond the resolved pool.
-	ctx = context.WithValue(ctx, ctxkey.ForcePlatform, service.PlatformGemini)
+	// Antigravity has no exact countTokens operation. Constrain only that action
+	// to native Gemini accounts; generation keeps the technical pool's explicit
+	// mixed-scheduling policy.
+	if action == "countTokens" {
+		ctx = context.WithValue(ctx, ctxkey.ForcePlatform, service.PlatformGemini)
+	}
 	req = req.WithContext(ctx)
 	exchange := gatewaytransport.NewHTTPExchange(w, req)
 	poolID := dispatch.Pool.ID
@@ -145,9 +165,9 @@ func (d *GeminiDispatcher) Forward(
 			return nil, acquireErr
 		}
 		release = releaseOnContextDone(ctx, release)
-		if account.Platform != service.PlatformGemini {
+		if account.Platform == service.PlatformAntigravity && !account.IsMixedSchedulingEnabled() {
 			release()
-			return nil, fmt.Errorf("%w: scheduler selected %s account %d for native Gemini", ErrUnsupportedPoolPlatform, account.Platform, account.ID)
+			return nil, fmt.Errorf("%w: Antigravity account %d is not enabled for mixed Gemini scheduling", ErrUnsupportedPoolPlatform, account.ID)
 		}
 
 		attemptCtx := ctx
@@ -157,15 +177,36 @@ func (d *GeminiDispatcher) Forward(
 		writtenBefore := exchange.Response().Written()
 		sizeBefore := exchange.Response().Size()
 		forwardStarted := time.Now()
-		result, forwardErr := d.forwarder.ForwardNativeExchange(
-			attemptCtx,
-			exchange,
-			account,
-			model,
-			action,
-			stream,
-			body,
-		)
+		var result *service.ForwardResult
+		var forwardErr error
+		switch account.Platform {
+		case service.PlatformGemini:
+			result, forwardErr = d.forwarder.ForwardNativeExchange(
+				attemptCtx,
+				exchange,
+				account,
+				model,
+				action,
+				stream,
+				body,
+			)
+		case service.PlatformAntigravity:
+			if action == "countTokens" {
+				forwardErr = fmt.Errorf("%w: Antigravity account %d selected for Gemini countTokens", ErrUnsupportedPoolPlatform, account.ID)
+				break
+			}
+			result, forwardErr = d.antigravityForwarder.ForwardGeminiExchange(
+				attemptCtx,
+				exchange,
+				account,
+				model,
+				action,
+				stream,
+				body,
+			)
+		default:
+			forwardErr = fmt.Errorf("%w: scheduler selected %s account %d for Gemini", ErrUnsupportedPoolPlatform, account.Platform, account.ID)
+		}
 		release()
 
 		if forwardErr == nil {
