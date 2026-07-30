@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler"
@@ -57,4 +58,63 @@ func TestAdminIdentityRoutesExcludeCustomerSelfService(t *testing.T) {
 			t.Errorf("customer self-service route is registered: %s", route)
 		}
 	}
+}
+
+func TestAdminRoutesExcludeCustomerAndCommerceManagement(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	allow := func(c *gin.Context) { c.Next() }
+
+	RegisterAdminRoutes(
+		router.Group("/api/v1"),
+		&handler.Handlers{Admin: &handler.AdminHandlers{}},
+		middleware.AdminAuthMiddleware(allow),
+		middleware.AuditLogMiddleware(allow),
+		middleware.StepUpAuthMiddleware(allow),
+		nil,
+		nil,
+	)
+
+	paths := make([]string, 0, len(router.Routes()))
+	for _, route := range router.Routes() {
+		paths = append(paths, route.Path)
+	}
+
+	requiredPrefixes := []string{
+		"/api/v1/admin/groups",
+		"/api/v1/admin/accounts",
+		"/api/v1/admin/proxies",
+	}
+	for _, prefix := range requiredPrefixes {
+		if !containsRoutePrefix(paths, prefix) {
+			t.Errorf("technical management route is missing: %s", prefix)
+		}
+	}
+
+	forbiddenPrefixes := []string{
+		"/api/v1/admin/users",
+		"/api/v1/admin/announcements",
+		"/api/v1/admin/redeem-codes",
+		"/api/v1/admin/promo-codes",
+		"/api/v1/admin/subscriptions",
+		"/api/v1/admin/user-attributes",
+		"/api/v1/admin/api-keys",
+		"/api/v1/admin/risk-control",
+		"/api/v1/admin/payment",
+		"/api/v1/admin/affiliates",
+	}
+	for _, prefix := range forbiddenPrefixes {
+		if containsRoutePrefix(paths, prefix) {
+			t.Errorf("customer or commerce route is registered: %s", prefix)
+		}
+	}
+}
+
+func containsRoutePrefix(paths []string, prefix string) bool {
+	for _, path := range paths {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }

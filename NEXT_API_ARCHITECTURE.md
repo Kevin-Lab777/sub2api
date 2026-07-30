@@ -45,6 +45,18 @@ Every invocation provides:
 The usage callback returns token and media measurements to New API. Next API
 does not calculate customer prices or mutate customer balances.
 
+`gatewaycore.Engine` now implements this boundary. It resolves the exact
+technical pool selected by New API, rejects inactive or inconsistent pools,
+dispatches to the explicitly registered Anthropic, OpenAI, or Gemini protocol
+implementation, validates raw upstream measurements, and invokes the caller's
+usage callback. It has no default protocol, cross-pool fallback, customer
+principal, or billing path.
+
+The engine is ready for provider adapters, but the existing HTTP handlers have
+not yet been attached to it. Those handlers still accept customer API-key
+principals and therefore remain transitional code rather than the final
+in-process path.
+
 ## Removal Sequence
 
 1. Introduce the public runtime contract and a dedicated dependency graph.
@@ -58,6 +70,21 @@ does not calculate customer prices or mutate customer balances.
    and frontend pages from Next API.
 5. Retain only administrator authentication plus account-pool, account, OAuth,
    proxy, scheduling, operations, and account-level usage management.
+
+## Current Progress
+
+- The public runtime contract and protocol-independent engine are implemented
+  and tested.
+- Customer self-service and commerce routes are no longer registered.
+- Inactive customer, payment, subscription, announcement, affiliate, promo,
+  redeem, user-attribute, risk-control, model-plaza, and payment-route handlers
+  are no longer members of the Wire handler aggregation graph.
+- The administrator frontend exposes only the retained gateway management
+  routes.
+- The legacy gateway handlers, authentication service, settings handler,
+  customer caches/workers, and customer Ent schemas still require separation
+  or deletion. Their presence is tracked as unfinished work, not as a runtime
+  compatibility mechanism.
 
 Each removal is complete only when its route, dependency injection provider,
 background worker, persistence schema, generated ORM code, frontend entry, and
