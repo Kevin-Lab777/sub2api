@@ -3,5 +3,5 @@ export function resolveCompletedSetupRedirectPath(isAuthenticated: boolean, isAd
     return '/login'
   }
 
-  return isAdmin ? '/admin/dashboard' : '/dashboard'
+  return isAdmin ? '/admin/accounts' : '/login'
 }

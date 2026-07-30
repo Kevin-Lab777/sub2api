@@ -9,13 +9,18 @@ const componentSource = readFileSync(componentPath, 'utf8')
 const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
 const styleSource = readFileSync(stylePath, 'utf8')
 
-describe('AppSidebar custom SVG styles', () => {
-  it('does not override uploaded SVG fill or stroke colors', () => {
-    expect(componentSource).toContain('.sidebar-svg-icon {')
-    expect(componentSource).toContain('color: currentColor;')
-    expect(componentSource).toContain('display: block;')
-    expect(componentSource).not.toContain('stroke: currentColor;')
-    expect(componentSource).not.toContain('fill: none;')
+describe('AppSidebar product boundary', () => {
+  it('uses the shared icon component and has no raw custom SVG injection', () => {
+    expect(componentSource).toContain("import Icon from '@/components/icons/Icon.vue'")
+    expect(componentSource).not.toContain('v-html')
+  })
+
+  it('keeps account pools and removes customer commerce navigation', () => {
+    expect(componentSource).toContain("path: '/admin/groups'")
+    expect(componentSource).toContain("path: '/admin/accounts'")
+    expect(componentSource).not.toContain("path: '/keys'")
+    expect(componentSource).not.toContain("path: '/admin/orders'")
+    expect(componentSource).not.toContain("path: '/admin/subscriptions'")
   })
 })
 
