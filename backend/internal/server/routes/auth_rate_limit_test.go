@@ -25,7 +25,7 @@ func newAuthRoutesTestRouter(redisClient *redis.Client) *gin.Engine {
 			Auth:    &handler.AuthHandler{},
 			Setting: &handler.SettingHandler{},
 		},
-		servermiddleware.JWTAuthMiddleware(func(c *gin.Context) {
+		servermiddleware.AdminAuthMiddleware(func(c *gin.Context) {
 			c.Next()
 		}),
 		servermiddleware.AuditLogMiddleware(func(c *gin.Context) {
@@ -52,11 +52,9 @@ func TestAuthRoutesRateLimitFailCloseWhenRedisUnavailable(t *testing.T) {
 
 	router := newAuthRoutesTestRouter(rdb)
 	paths := []string{
-		"/api/v1/auth/register",
 		"/api/v1/auth/login",
 		"/api/v1/auth/login/2fa",
-		"/api/v1/auth/send-verify-code",
-		"/api/v1/auth/oauth/pending/send-verify-code",
+		"/api/v1/auth/refresh",
 	}
 
 	for _, path := range paths {
@@ -69,5 +67,24 @@ func TestAuthRoutesRateLimitFailCloseWhenRedisUnavailable(t *testing.T) {
 
 		require.Equal(t, http.StatusTooManyRequests, w.Code, "path=%s", path)
 		require.Contains(t, w.Body.String(), "rate limit exceeded", "path=%s", path)
+	}
+}
+
+func TestAuthRoutesExcludeCustomerAuthentication(t *testing.T) {
+	router := newAuthRoutesTestRouter(nil)
+	routes := router.Routes()
+
+	forbidden := map[string]struct{}{
+		"POST /api/v1/auth/register":                         {},
+		"POST /api/v1/auth/send-verify-code":                 {},
+		"GET /api/v1/auth/oauth/github/start":                {},
+		"POST /api/v1/auth/oauth/pending/create-account":     {},
+		"POST /api/v1/auth/oauth/oidc/complete-registration": {},
+	}
+	for _, route := range routes {
+		key := route.Method + " " + route.Path
+		if _, exists := forbidden[key]; exists {
+			t.Fatalf("customer authentication route is registered: %s", key)
+		}
 	}
 }

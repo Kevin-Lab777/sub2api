@@ -2202,7 +2202,7 @@ func TestBindOIDCOAuthLoginReturns2FAChallengeWhenUserHasTotp(t *testing.T) {
 	require.Nil(t, storedSession.ConsumedAt)
 }
 
-func TestLogin2FACompletesPendingOAuthBindAndConsumesSession(t *testing.T) {
+func TestLogin2FARejectsPendingCustomerOAuthBind(t *testing.T) {
 	totpCache := &oauthPendingFlowTotpCacheStub{}
 	defaultSubAssigner := &oauthPendingFlowDefaultSubAssignerStub{}
 	handler, client := newOAuthPendingFlowTestHandlerWithDependencies(t, oauthPendingFlowTestHandlerOptions{
@@ -2285,41 +2285,31 @@ func TestLogin2FACompletesPendingOAuthBindAndConsumesSession(t *testing.T) {
 
 	handler.Login2FA(ginCtx)
 
-	require.Equal(t, http.StatusOK, recorder.Code)
-	payload := decodeJSONResponseData(t, recorder)
-	require.NotEmpty(t, payload["access_token"])
-	require.NotEmpty(t, payload["refresh_token"])
-	accessToken, ok := payload["access_token"].(string)
-	require.True(t, ok)
-	claims, err := handler.authService.ValidateToken(accessToken)
-	require.NoError(t, err)
-	reloadedUser, err := handler.userService.GetByID(ctx, existingUser.ID)
-	require.NoError(t, err)
-	require.Equal(t, reloadedUser.TokenVersion, claims.TokenVersion)
+	require.Equal(t, http.StatusForbidden, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "NEXT_API_ADMIN_ONLY")
 
-	identity, err := client.AuthIdentity.Query().
+	_, err = client.AuthIdentity.Query().
 		Where(
 			authidentity.ProviderTypeEQ("oidc"),
 			authidentity.ProviderKeyEQ("https://issuer.example"),
 			authidentity.ProviderSubjectEQ("oidc-login-2fa-123"),
 		).
 		Only(ctx)
-	require.NoError(t, err)
-	require.Equal(t, existingUser.ID, identity.UserID)
+	require.True(t, dbent.IsNotFound(err))
 
 	storedSession, err := client.PendingAuthSession.Get(ctx, session.ID)
 	require.NoError(t, err)
-	require.NotNil(t, storedSession.ConsumedAt)
+	require.Nil(t, storedSession.ConsumedAt)
 
 	loginSession, err := totpCache.GetLoginSession(ctx, tempToken)
 	require.NoError(t, err)
-	require.Nil(t, loginSession)
+	require.NotNil(t, loginSession)
 
 	storedUser, err := client.User.Get(ctx, existingUser.ID)
 	require.NoError(t, err)
-	require.Equal(t, 9.5, storedUser.Balance)
-	require.Equal(t, 6, storedUser.Concurrency)
-	require.Equal(t, 1, countProviderGrantRecords(t, client, existingUser.ID, "oidc", "first_bind"))
+	require.Equal(t, 1.5, storedUser.Balance)
+	require.Equal(t, 4, storedUser.Concurrency)
+	require.Zero(t, countProviderGrantRecords(t, client, existingUser.ID, "oidc", "first_bind"))
 	require.Empty(t, defaultSubAssigner.calls)
 }
 

@@ -33,17 +33,11 @@ func RegisterAdminRoutes(
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
 
-		// 用户管理
-		registerUserManagementRoutes(admin, h)
-
 		// 分组管理
 		registerGroupRoutes(admin, h)
 
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
-
-		// 公告管理
-		registerAnnouncementRoutes(admin, h)
 
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
@@ -60,12 +54,6 @@ func RegisterAdminRoutes(
 		// 代理管理
 		registerProxyRoutes(admin, h, stepUpAuth)
 
-		// 卡密管理
-		registerRedeemCodeRoutes(admin, h)
-
-		// 优惠码管理
-		registerPromoCodeRoutes(admin, h)
-
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
@@ -81,23 +69,14 @@ func RegisterAdminRoutes(
 		// 系统管理
 		registerSystemRoutes(admin, h)
 
-		// 订阅管理
-		registerSubscriptionRoutes(admin, h)
-
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
-
-		// 用户属性管理
-		registerUserAttributeRoutes(admin, h)
 
 		// 错误透传规则管理
 		registerErrorPassthroughRoutes(admin, h)
 
 		// TLS 指纹模板管理
 		registerTLSFingerprintProfileRoutes(admin, h)
-
-		// API Key 管理
-		registerAdminAPIKeyRoutes(admin, h)
 
 		// 定时测试计划
 		registerScheduledTestRoutes(admin, h)
@@ -108,14 +87,8 @@ func RegisterAdminRoutes(
 		// 渠道监控
 		registerChannelMonitorRoutes(admin, h)
 
-		// 风控中心
-		registerContentModerationRoutes(admin, h)
-
 		// 独立提示词输入审计
 		registerPromptAuditRoutes(admin, h)
-
-		// 邀请返利（专属用户管理）
-		registerAffiliateRoutes(admin, h)
 
 		// 操作审计日志
 		registerAuditLogRoutes(admin, h, stepUpAuth)

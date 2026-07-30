@@ -147,6 +147,7 @@ func (h *AuthHandler) ensureBackendModeAllowsNewUserLogin(ctx context.Context) e
 		return nil
 	}
 	return infraerrors.Forbidden("BACKEND_MODE_ADMIN_ONLY", "Backend mode is active. Only admin login is allowed.")
+
 }
 
 func (h *AuthHandler) isBackendModeEnabled(ctx context.Context) bool {
@@ -158,6 +159,16 @@ func (h *AuthHandler) isBackendModeEnabled(ctx context.Context) bool {
 		return settings.BackendModeEnabled
 	}
 	return h.settingSvc.IsBackendModeEnabled(ctx)
+}
+
+func ensureNextAPIAdminLogin(user *service.User) error {
+	if user == nil {
+		return infraerrors.Unauthorized("INVALID_USER", "user not found")
+	}
+	if user.IsAdmin() {
+		return nil
+	}
+	return infraerrors.Forbidden("NEXT_API_ADMIN_ONLY", "Only administrator login is allowed.")
 }
 
 // Register handles user registration
@@ -241,7 +252,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	_ = token // token 由 authService.Login 返回但此处由 respondWithTokenPair 重新生成
 
-	if err := h.ensureBackendModeAllowsUser(c.Request.Context(), user); err != nil {
+	if err := ensureNextAPIAdminLogin(user); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -332,7 +343,7 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		return
 	}
 
-	if err := h.ensureBackendModeAllowsUser(c.Request.Context(), user); err != nil {
+	if err := ensureNextAPIAdminLogin(user); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
