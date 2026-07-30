@@ -52,6 +52,11 @@ implementation, validates raw upstream measurements, and invokes the caller's
 usage callback. It has no default protocol, cross-pool fallback, customer
 principal, or billing path.
 
+The technical scheduler accepts only pool identity, model, session identity,
+and excluded account IDs. It does not accept New API user IDs or provider
+metadata user IDs. A pool-level client restriction rejects the invocation in
+place; configured legacy fallback-group IDs are never traversed by scheduling.
+
 The engine is ready for provider adapters, but the existing HTTP handlers have
 not yet been attached to it. Those handlers still accept customer API-key
 principals and therefore remain transitional code rather than the final
@@ -75,6 +80,10 @@ in-process path.
 
 - The public runtime contract and protocol-independent engine are implemented
   and tested.
+- Pool resolution loads the authoritative technical group once and binds it to
+  the invocation context for scheduler reuse.
+- Account scheduling no longer accepts customer identity arguments and cannot
+  switch from the requested pool to a fallback group.
 - Customer self-service and commerce routes are no longer registered.
 - Inactive customer, payment, subscription, announcement, affiliate, promo,
   redeem, user-attribute, risk-control, model-plaza, and payment-route handlers

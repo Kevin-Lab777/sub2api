@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSelectAccountForModelWithExclusions_UsesFallbackGroupForChannelRestriction(t *testing.T) {
+func TestSelectAccountForModelWithExclusions_DoesNotLeaveRequestedPool(t *testing.T) {
 	t.Parallel()
 
 	groupID := int64(10)
@@ -64,12 +64,11 @@ func TestSelectAccountForModelWithExclusions_UsesFallbackGroupForChannelRestrict
 
 	ctx := context.WithValue(context.Background(), ctxkey.Group, groupRepo.groups[groupID])
 	account, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "claude-sonnet-4-6", nil)
-	require.NoError(t, err)
-	require.NotNil(t, account)
-	require.Equal(t, int64(1), account.ID)
+	require.ErrorIs(t, err, ErrClaudeCodeOnly)
+	require.Nil(t, account)
 }
 
-func TestSelectAccountWithLoadAwareness_UsesFallbackGroupForChannelRestriction(t *testing.T) {
+func TestSelectAccountWithLoadAwareness_DoesNotLeaveRequestedPool(t *testing.T) {
 	t.Parallel()
 
 	groupID := int64(10)
@@ -122,9 +121,7 @@ func TestSelectAccountWithLoadAwareness_UsesFallbackGroupForChannelRestriction(t
 	}
 
 	ctx := context.WithValue(context.Background(), ctxkey.Group, groupRepo.groups[groupID])
-	result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "claude-sonnet-4-6", nil, "", 0)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, result.Account)
-	require.Equal(t, int64(1), result.Account.ID)
+	result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "claude-sonnet-4-6", nil)
+	require.ErrorIs(t, err, ErrClaudeCodeOnly)
+	require.Nil(t, result)
 }

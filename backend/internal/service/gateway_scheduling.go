@@ -93,10 +93,9 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 	return s.hydrateSelectedAccount(ctx, account)
 }
 
-// SelectAccountWithLoadAwareness selects account with load-awareness and wait plan.
-// metadataUserID: 用于客户端亲和调度，从中提取客户端 ID
-// sub2apiUserID: 系统用户 ID，用于二维亲和调度
-func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string, sub2apiUserID int64) (*AccountSelectionResult, error) {
+// SelectAccountWithLoadAwareness selects an account from the requested
+// technical pool using load awareness, sticky sessions, and a wait plan.
+func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	// 调试日志：记录调度入口参数
 	excludedIDsList := make([]int64, 0, len(excludedIDs))
 	for id := range excludedIDs {
@@ -859,34 +858,19 @@ func (s *GatewayService) resolveGatewayGroup(ctx context.Context, groupID *int64
 		return nil, nil, nil
 	}
 
-	currentID := *groupID
-	visited := map[int64]struct{}{}
-	for {
-		if _, seen := visited[currentID]; seen {
-			return nil, nil, fmt.Errorf("fallback group cycle detected")
-		}
-		visited[currentID] = struct{}{}
-
-		group, err := s.resolveGroupByID(ctx, currentID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if !group.ClaudeCodeOnly || IsClaudeCodeClient(ctx) {
-			return group, &currentID, nil
-		}
-
-		if group.FallbackGroupID == nil {
-			return nil, nil, ErrClaudeCodeOnly
-		}
-		currentID = *group.FallbackGroupID
+	group, err := s.resolveGroupByID(ctx, *groupID)
+	if err != nil {
+		return nil, nil, err
 	}
+	if group.ClaudeCodeOnly && !IsClaudeCodeClient(ctx) {
+		return nil, nil, ErrClaudeCodeOnly
+	}
+	return group, groupID, nil
 }
 
 // checkClaudeCodeRestriction 检查分组的 Claude Code 客户端限制
-// 如果分组启用了 claude_code_only 且请求不是来自 Claude Code 客户端：
-//   - 有降级分组：返回降级分组的 ID
-//   - 无降级分组：返回 ErrClaudeCodeOnly 错误
+// 分组启用了 claude_code_only 且请求不是来自 Claude Code 客户端时，
+// 返回 ErrClaudeCodeOnly。技术调度不会切换到另一个分组。
 func (s *GatewayService) checkClaudeCodeRestriction(ctx context.Context, groupID *int64) (*Group, *int64, error) {
 	if groupID == nil {
 		return nil, groupID, nil
