@@ -18,6 +18,7 @@ import (
 
 const (
 	nativeOpenAIChatCompletionsEndpoint                        = "/v1/chat/completions"
+	nativeOpenAICompletionsEndpoint                            = "/v1/completions"
 	openAIChatCredentialUnavailableReason GatewayFailureReason = "openai_chat_credential_unavailable"
 	openAIChatTransportUnavailableReason  GatewayFailureReason = "openai_chat_transport_unavailable"
 )
@@ -25,29 +26,39 @@ const (
 // ParseOpenAIChatCompletionsRequest validates the routing fields used by the
 // native direct Chat Completions transport.
 func ParseOpenAIChatCompletionsRequest(body []byte) (model string, stream bool, err error) {
+	return parseNativeOpenAICompletionsRequest(body, "Chat Completions")
+}
+
+// ParseOpenAICompletionsRequest validates the routing fields used by the
+// native legacy Completions transport.
+func ParseOpenAICompletionsRequest(body []byte) (model string, stream bool, err error) {
+	return parseNativeOpenAICompletionsRequest(body, "Completions")
+}
+
+func parseNativeOpenAICompletionsRequest(body []byte, endpointName string) (model string, stream bool, err error) {
 	if len(body) == 0 || !json.Valid(body) {
-		return "", false, errors.New("OpenAI Chat Completions request must be valid JSON")
+		return "", false, fmt.Errorf("OpenAI %s request must be valid JSON", endpointName)
 	}
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(body, &object); err != nil || object == nil {
-		return "", false, errors.New("OpenAI Chat Completions request must be a JSON object")
+		return "", false, fmt.Errorf("OpenAI %s request must be a JSON object", endpointName)
 	}
 	modelRaw, ok := object["model"]
 	if !ok {
-		return "", false, errors.New("OpenAI Chat Completions model is required")
+		return "", false, fmt.Errorf("OpenAI %s model is required", endpointName)
 	}
 	if err := json.Unmarshal(modelRaw, &model); err != nil || model == "" || model != strings.TrimSpace(model) {
-		return "", false, errors.New("OpenAI Chat Completions model must be an exact non-empty string")
+		return "", false, fmt.Errorf("OpenAI %s model must be an exact non-empty string", endpointName)
 	}
 	if streamRaw, exists := object["stream"]; exists {
 		var streamValue any
 		if err := json.Unmarshal(streamRaw, &streamValue); err != nil {
-			return "", false, errors.New("OpenAI Chat Completions stream must be a boolean")
+			return "", false, fmt.Errorf("OpenAI %s stream must be a boolean", endpointName)
 		}
 		var ok bool
 		stream, ok = streamValue.(bool)
 		if !ok {
-			return "", false, errors.New("OpenAI Chat Completions stream must be a boolean")
+			return "", false, fmt.Errorf("OpenAI %s stream must be a boolean", endpointName)
 		}
 	}
 	return model, stream, nil
@@ -152,16 +163,40 @@ func (s *OpenAIGatewayService) ForwardChatCompletionsExchange(
 	account *Account,
 	body []byte,
 ) (*OpenAIForwardResult, error) {
+	return s.forwardNativeOpenAICompletionsEndpoint(ctx, exchange, account, body, nativeOpenAIChatCompletionsEndpoint)
+}
+
+// ForwardCompletionsExchange forwards one direct API-key legacy Completions
+// request without translating it through Chat or Responses.
+func (s *OpenAIGatewayService) ForwardCompletionsExchange(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	body []byte,
+) (*OpenAIForwardResult, error) {
+	return s.forwardNativeOpenAICompletionsEndpoint(ctx, exchange, account, body, nativeOpenAICompletionsEndpoint)
+}
+
+func (s *OpenAIGatewayService) forwardNativeOpenAICompletionsEndpoint(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	body []byte,
+	endpoint string,
+) (*OpenAIForwardResult, error) {
 	if exchange == nil || exchange.Request() == nil || exchange.Response() == nil {
 		return nil, errors.New("OpenAI Chat Completions exchange is required")
 	}
-	if exchange.Request().URL == nil || exchange.Request().Method != http.MethodPost || exchange.Request().URL.Path != nativeOpenAIChatCompletionsEndpoint {
+	if exchange.Request().URL == nil || exchange.Request().Method != http.MethodPost || exchange.Request().URL.Path != endpoint {
 		return nil, errors.New("native OpenAI Chat Completions endpoint mismatch")
 	}
 	if account == nil || account.Platform != PlatformOpenAI || account.Type != AccountTypeAPIKey {
 		return nil, errors.New("native direct OpenAI Chat Completions requires an OpenAI API-key account")
 	}
 	originalModel, stream, err := ParseOpenAIChatCompletionsRequest(body)
+	if endpoint == nativeOpenAICompletionsEndpoint {
+		originalModel, stream, err = ParseOpenAICompletionsRequest(body)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +221,7 @@ func (s *OpenAIGatewayService) ForwardChatCompletionsExchange(
 			fmt.Errorf("get OpenAI Chat Completions credential: %w", err),
 		)
 	}
-	upstreamReq, err := s.buildNativeOpenAIChatCompletionsRequest(ctx, exchange, account, upstreamBody, token, stream)
+	upstreamReq, err := s.buildNativeOpenAIChatCompletionsRequest(ctx, exchange, account, upstreamBody, token, stream, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +266,7 @@ func (s *OpenAIGatewayService) ForwardChatCompletionsExchange(
 				errors.New("streaming OpenAI Chat Completions received a non-SSE upstream response"),
 			)
 		}
-		return s.forwardNativeOpenAIChatCompletionsStream(exchange, resp, originalModel, upstreamModel, startedAt)
+		return s.forwardNativeOpenAIChatCompletionsStream(exchange, resp, originalModel, upstreamModel, endpoint, startedAt)
 	}
 	if kind != nativeOpenAIChatContentJSON {
 		return nil, nativeOpenAIAccountFailoverError(
@@ -241,7 +276,7 @@ func (s *OpenAIGatewayService) ForwardChatCompletionsExchange(
 			errors.New("unary OpenAI Chat Completions received a non-JSON upstream response"),
 		)
 	}
-	return s.forwardNativeOpenAIChatCompletionsJSON(exchange, resp, originalModel, upstreamModel, startedAt)
+	return s.forwardNativeOpenAIChatCompletionsJSON(exchange, resp, originalModel, upstreamModel, endpoint, startedAt)
 }
 
 func (s *OpenAIGatewayService) buildNativeOpenAIChatCompletionsRequest(
@@ -251,8 +286,15 @@ func (s *OpenAIGatewayService) buildNativeOpenAIChatCompletionsRequest(
 	body []byte,
 	token string,
 	stream bool,
+	endpoint string,
 ) (*http.Request, error) {
-	targetURL, err := s.openAIChatCompletionsTargetURL(account)
+	var targetURL string
+	var err error
+	if endpoint == nativeOpenAICompletionsEndpoint {
+		targetURL, err = s.openAICompletionsTargetURL(account)
+	} else {
+		targetURL, err = s.openAIChatCompletionsTargetURL(account)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -280,6 +322,18 @@ func (s *OpenAIGatewayService) buildNativeOpenAIChatCompletionsRequest(
 		req.Header.Set("Accept", "application/json")
 	}
 	return req, nil
+}
+
+func (s *OpenAIGatewayService) openAICompletionsTargetURL(account *Account) (string, error) {
+	baseURL := account.GetOpenAIBaseURL()
+	if baseURL == "" {
+		baseURL = "https://api.openai.com"
+	}
+	validatedURL, err := s.validateUpstreamBaseURL(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base_url: %w", err)
+	}
+	return buildOpenAIEndpointURL(validatedURL, nativeOpenAICompletionsEndpoint), nil
 }
 
 type nativeOpenAIChatContentKind uint8
@@ -340,6 +394,7 @@ func (s *OpenAIGatewayService) forwardNativeOpenAIChatCompletionsJSON(
 	resp *http.Response,
 	originalModel string,
 	upstreamModel string,
+	endpoint string,
 	startedAt time.Time,
 ) (*OpenAIForwardResult, error) {
 	body, err := readUpstreamResponseBodyExchange(resp.Body, s.cfg, exchange, nil)
@@ -370,7 +425,7 @@ func (s *OpenAIGatewayService) forwardNativeOpenAIChatCompletionsJSON(
 		Usage:            usage,
 		Model:            originalModel,
 		UpstreamModel:    upstreamModel,
-		UpstreamEndpoint: nativeOpenAIChatCompletionsEndpoint,
+		UpstreamEndpoint: endpoint,
 		Duration:         time.Since(startedAt),
 	}, nil
 }
@@ -380,6 +435,7 @@ func (s *OpenAIGatewayService) forwardNativeOpenAIChatCompletionsStream(
 	resp *http.Response,
 	originalModel string,
 	upstreamModel string,
+	endpoint string,
 	startedAt time.Time,
 ) (*OpenAIForwardResult, error) {
 	writer := exchange.Response()
@@ -445,7 +501,7 @@ func (s *OpenAIGatewayService) forwardNativeOpenAIChatCompletionsStream(
 		Usage:            usage,
 		Model:            originalModel,
 		UpstreamModel:    upstreamModel,
-		UpstreamEndpoint: nativeOpenAIChatCompletionsEndpoint,
+		UpstreamEndpoint: endpoint,
 		Stream:           true,
 		Duration:         time.Since(startedAt),
 		FirstTokenMs:     firstTokenMs,

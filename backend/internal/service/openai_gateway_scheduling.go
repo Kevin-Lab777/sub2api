@@ -983,6 +983,12 @@ func (s *OpenAIGatewayService) SelectTechnicalChatCompletionsDirectAccountWithLo
 	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityChatCompletions, technicalOpenAIChatCompletionsDirectSelectionPolicy)
 }
 
+// SelectTechnicalCompletionsDirectAccountWithLoadAwareness selects an exact-
+// pool API-key account that exposes the legacy Completions endpoint.
+func (s *OpenAIGatewayService) SelectTechnicalCompletionsDirectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityCompletions, technicalOpenAIChatCompletionsDirectSelectionPolicy)
+}
+
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, policy openAISelectionPolicy) (*AccountSelectionResult, error) {
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	if policy.enforceChannelPricing && s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {

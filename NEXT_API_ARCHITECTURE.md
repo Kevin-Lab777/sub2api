@@ -83,7 +83,7 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | `GET /v1/responses` inbound WebSocket v2 | Implemented and tested |
 | `POST /v1/chat/completions` direct API-key upstream | Implemented and tested |
 | Subscription-account Chat Completions adapter | Pending |
-| Legacy `POST /v1/completions` | Pending |
+| Legacy `POST /v1/completions` direct API-key upstream | Implemented and tested |
 | Embeddings | Pending |
 | Images | Pending |
 | Live/realtime and sideband | Pending |
@@ -125,6 +125,11 @@ run the legacy client-restriction, fast-policy, silent-refusal, image-bridge,
 response-repair, or protocol-probing paths. Subscription accounts are not
 silently routed through this direct component; their Responses adapter remains
 explicitly unfinished.
+
+The legacy Completions endpoint shares the same strict direct transport and
+account boundary while preserving its prompt-shaped request and
+`text_completion` response. It has a distinct account capability and is never
+routed to subscription accounts or translated through Chat Completions.
 
 Antigravity accounts participating in Gemini mixed scheduling also retain a
 separate Gin-bound forwarder and are not silently routed through the native
@@ -213,7 +218,9 @@ therefore remain transitional code rather than the final in-process path.
   exact-pool dispatcher with raw JSON/SSE forwarding, documented stream-usage
   negotiation, committed-response failover boundaries, and exact
   prompt/completion/cache telemetry. Subscription-account conversion and the
-  legacy Completions endpoint remain pending.
+  legacy Completions endpoint uses the same direct transport with a distinct
+  capability and raw prompt/text-completion protocol. Subscription-account
+  conversion remains pending.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

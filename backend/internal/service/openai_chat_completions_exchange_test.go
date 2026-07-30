@@ -170,3 +170,37 @@ func TestForwardChatCompletionsExchangeInvalidUnaryPayloadCanFailOverBeforeCommi
 	require.True(t, errors.As(err, &failover))
 	require.Empty(t, recorder.Body.String())
 }
+
+func TestForwardCompletionsExchangePreservesLegacyPromptProtocol(t *testing.T) {
+	upstream := &openAIResponsesHTTPStub{
+		status: http.StatusOK,
+		header: http.Header{"Content-Type": []string{"application/json"}},
+		body:   `{"id":"cmpl_1","object":"text_completion","model":"gpt-3.5-upstream","choices":[{"index":0,"text":" world","finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1}}`,
+	}
+	svc := &OpenAIGatewayService{httpUpstream: upstream, cfg: &config.Config{}}
+	account := &Account{
+		ID:       405,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key": "sk-completions",
+			"model_mapping": map[string]any{
+				"legacy-alias": "gpt-3.5-upstream",
+			},
+		},
+	}
+	body := []byte(`{"model":"legacy-alias","prompt":["hello","hi"],"max_tokens":8}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/completions", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	result, err := svc.ForwardCompletionsExchange(context.Background(), gatewaytransport.NewHTTPExchange(recorder, req), account, body)
+	require.NoError(t, err)
+	require.Equal(t, 2, result.Usage.InputTokens)
+	require.Equal(t, 1, result.Usage.OutputTokens)
+	require.Equal(t, nativeOpenAICompletionsEndpoint, result.UpstreamEndpoint)
+	require.Equal(t, "https://api.openai.com/v1/completions", upstream.lastReq.URL.String())
+	posted, err := io.ReadAll(upstream.lastReq.Body)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"model":"gpt-3.5-upstream","prompt":["hello","hi"],"max_tokens":8}`, string(posted))
+	require.JSONEq(t, upstream.body, recorder.Body.String())
+}

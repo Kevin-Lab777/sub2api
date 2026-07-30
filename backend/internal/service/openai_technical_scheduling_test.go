@@ -415,3 +415,23 @@ func TestOpenAISelectTechnicalChatCompletionsDirectRequiresAPIKeyAccount(t *test
 	require.NoError(t, err)
 	require.Equal(t, int64(2), selection.Account.ID)
 }
+
+func TestOpenAISelectTechnicalCompletionsDirectRequiresAPIKeyAccount(t *testing.T) {
+	t.Parallel()
+
+	require.False(t, (&Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}).SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityCompletions))
+	require.True(t, (&Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}).SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityCompletions))
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0},
+			{ID: 2, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1},
+		}},
+		concurrencyService: NewConcurrencyService(&technicalOpenAIConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{2: {AccountID: 2, LoadRate: 0}},
+		}),
+	}
+	selection, err := svc.SelectTechnicalCompletionsDirectAccountWithLoadAwareness(context.Background(), nil, "", "gpt-3.5", nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), selection.Account.ID)
+}

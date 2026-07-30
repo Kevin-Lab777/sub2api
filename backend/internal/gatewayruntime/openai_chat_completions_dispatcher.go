@@ -33,15 +33,17 @@ func OpenAIChatCompletionsDispatcherConfigFromApplication(cfg *config.Config) (O
 type openAIChatCompletionsGateway interface {
 	ValidateTechnicalRuntime() error
 	SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	SelectTechnicalCompletionsDirectAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	AcquireSelection(context.Context, *service.AccountSelectionResult) (func(), error)
 	ForwardChatCompletionsExchange(context.Context, gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	ForwardCompletionsExchange(context.Context, gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
 	BindStickySession(context.Context, *int64, string, int64) error
 }
 
 // OpenAIChatCompletionsDispatcher is the native direct API-key component for
-// POST /v1/chat/completions. Subscription-account conversion remains a
-// separate unfinished component, so this dispatcher is not yet registered as
-// the complete OpenAI runtime.
+// Chat Completions and legacy Completions. Subscription-account conversion
+// remains a separate unfinished component, so this dispatcher is not yet
+// registered as the complete OpenAI runtime.
 type OpenAIChatCompletionsDispatcher struct {
 	gateway            openAIChatCompletionsGateway
 	maxAccountSwitches int
@@ -80,7 +82,7 @@ func (d *OpenAIChatCompletionsDispatcher) Forward(
 	if dispatch.Pool.Platform != service.PlatformOpenAI {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPoolPlatform, dispatch.Pool.Platform)
 	}
-	if req == nil || req.URL == nil || req.Method != http.MethodPost || req.URL.Path != "/v1/chat/completions" {
+	if req == nil || req.URL == nil || req.Method != http.MethodPost || (req.URL.Path != "/v1/chat/completions" && req.URL.Path != "/v1/completions") {
 		return nil, fmt.Errorf("invalid OpenAI Chat Completions endpoint: %s %s", requestMethod(req), requestPath(req))
 	}
 	body, err := pkghttputil.ReadRequestBodyWithPreallocLimit(req, d.maxBodyBytes)
@@ -88,6 +90,10 @@ func (d *OpenAIChatCompletionsDispatcher) Forward(
 		return nil, fmt.Errorf("read OpenAI Chat Completions request body: %w", err)
 	}
 	model, _, err := service.ParseOpenAIChatCompletionsRequest(body)
+	legacyCompletions := req.URL.Path == "/v1/completions"
+	if legacyCompletions {
+		model, _, err = service.ParseOpenAICompletionsRequest(body)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -104,13 +110,13 @@ func (d *OpenAIChatCompletionsDispatcher) Forward(
 	var lastFailover *service.UpstreamFailoverError
 
 	for {
-		selection, selectErr := d.gateway.SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(
-			ctx,
-			&poolID,
-			dispatch.Invocation.SessionID,
-			dispatch.Invocation.Model,
-			failedAccountIDs,
-		)
+		var selection *service.AccountSelectionResult
+		var selectErr error
+		if legacyCompletions {
+			selection, selectErr = d.gateway.SelectTechnicalCompletionsDirectAccountWithLoadAwareness(ctx, &poolID, dispatch.Invocation.SessionID, dispatch.Invocation.Model, failedAccountIDs)
+		} else {
+			selection, selectErr = d.gateway.SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(ctx, &poolID, dispatch.Invocation.SessionID, dispatch.Invocation.Model, failedAccountIDs)
+		}
 		if selectErr != nil {
 			if lastFailover != nil {
 				return nil, errors.Join(lastFailover, selectErr)
@@ -134,10 +140,16 @@ func (d *OpenAIChatCompletionsDispatcher) Forward(
 		writtenBefore := exchange.Response().Written()
 		sizeBefore := exchange.Response().Size()
 		startedAt := time.Now()
-		result, forwardErr := d.gateway.ForwardChatCompletionsExchange(ctx, exchange, account, body)
+		var result *service.OpenAIForwardResult
+		var forwardErr error
+		if legacyCompletions {
+			result, forwardErr = d.gateway.ForwardCompletionsExchange(ctx, exchange, account, body)
+		} else {
+			result, forwardErr = d.gateway.ForwardChatCompletionsExchange(ctx, exchange, account, body)
+		}
 		release()
 		if result != nil {
-			measurement, measureErr := openAIChatCompletionsMeasurement(exchange, account, result, startedAt)
+			measurement, measureErr := openAIChatCompletionsMeasurement(exchange, account, result, req.URL.Path, startedAt)
 			if measureErr != nil {
 				return nil, errors.Join(forwardErr, measureErr)
 			}
@@ -175,7 +187,7 @@ func (d *OpenAIChatCompletionsDispatcher) Forward(
 
 func (d *OpenAIChatCompletionsDispatcher) Close(context.Context) error { return nil }
 
-func openAIChatCompletionsMeasurement(exchange gatewaytransport.Exchange, account *service.Account, result *service.OpenAIForwardResult, startedAt time.Time) (*gatewaycore.Measurement, error) {
+func openAIChatCompletionsMeasurement(exchange gatewaytransport.Exchange, account *service.Account, result *service.OpenAIForwardResult, endpoint string, startedAt time.Time) (*gatewaycore.Measurement, error) {
 	if result == nil {
 		return nil, errors.New("OpenAI Chat Completions forward returned no result")
 	}
@@ -193,7 +205,7 @@ func openAIChatCompletionsMeasurement(exchange gatewaytransport.Exchange, accoun
 	}
 	return &gatewaycore.Measurement{
 		AccountID:               account.ID,
-		Endpoint:                "/v1/chat/completions",
+		Endpoint:                endpoint,
 		UpstreamModel:           upstreamModel,
 		InputTokens:             int64(result.Usage.InputTokens),
 		OutputTokens:            int64(result.Usage.OutputTokens),

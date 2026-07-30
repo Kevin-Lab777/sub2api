@@ -32,6 +32,10 @@ func (s *openAIChatCompletionsGatewayStub) SelectTechnicalChatCompletionsDirectA
 	return s.selectAccount(poolID, excluded)
 }
 
+func (s *openAIChatCompletionsGatewayStub) SelectTechnicalCompletionsDirectAccountWithLoadAwareness(ctx context.Context, poolID *int64, session, model string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+	return s.SelectTechnicalChatCompletionsDirectAccountWithLoadAwareness(ctx, poolID, session, model, excluded)
+}
+
 func (s *openAIChatCompletionsGatewayStub) AcquireSelection(_ context.Context, selection *service.AccountSelectionResult) (func(), error) {
 	if selection == nil || selection.Account == nil {
 		return nil, service.ErrInvalidAccountSelection
@@ -44,6 +48,10 @@ func (s *openAIChatCompletionsGatewayStub) AcquireSelection(_ context.Context, s
 
 func (s *openAIChatCompletionsGatewayStub) ForwardChatCompletionsExchange(_ context.Context, exchange gatewaytransport.Exchange, account *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
 	return s.forward(exchange, account, body)
+}
+
+func (s *openAIChatCompletionsGatewayStub) ForwardCompletionsExchange(ctx context.Context, exchange gatewaytransport.Exchange, account *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
+	return s.ForwardChatCompletionsExchange(ctx, exchange, account, body)
 }
 
 func (s *openAIChatCompletionsGatewayStub) BindStickySession(_ context.Context, poolID *int64, session string, accountID int64) error {
@@ -193,5 +201,27 @@ func TestOpenAIChatCompletionsDispatcherRejectsModelMismatchBeforeScheduling(t *
 	_, err := newOpenAIChatCompletionsDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIChatCompletionsDispatchRequest())
 	if !errors.Is(err, ErrInvocationModelMismatch) {
 		t.Fatalf("expected model mismatch, got %v", err)
+	}
+}
+
+func TestOpenAIChatCompletionsDispatcherRoutesLegacyCompletionsDirectly(t *testing.T) {
+	account := &service.Account{ID: 531, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey}
+	gateway := &openAIChatCompletionsGatewayStub{}
+	gateway.selectAccount = func(_ *int64, _ map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	gateway.forward = func(exchange gatewaytransport.Exchange, _ *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
+		if exchange.Request().URL.Path != "/v1/completions" || string(body) != `{"model":"gpt-5.4","prompt":"hello"}` {
+			t.Fatalf("legacy request was not preserved: path=%s body=%s", exchange.Request().URL.Path, body)
+		}
+		if err := exchange.WriteData(http.StatusOK, "application/json", []byte(`{"id":"cmpl_1"}`)); err != nil {
+			return nil, err
+		}
+		return &service.OpenAIForwardResult{UpstreamModel: "gpt-5.4", UpstreamEndpoint: "/v1/completions", Duration: time.Millisecond}, nil
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(`{"model":"gpt-5.4","prompt":"hello"}`))
+	measurement, err := newOpenAIChatCompletionsDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIChatCompletionsDispatchRequest())
+	if err != nil || measurement.Endpoint != "/v1/completions" || measurement.AccountID != 531 {
+		t.Fatalf("unexpected legacy measurement=%+v err=%v", measurement, err)
 	}
 }
