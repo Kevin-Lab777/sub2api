@@ -22,6 +22,8 @@ import (
 const (
 	openAIResponsesCredentialUnavailableReason GatewayFailureReason = "openai_responses_credential_unavailable"
 	openAIResponsesTransportUnavailableReason  GatewayFailureReason = "openai_responses_transport_unavailable"
+	nativeOpenAIResponsesEndpoint                                   = "/v1/responses"
+	nativeOpenAIResponsesCompactEndpoint                            = "/v1/responses/compact"
 )
 
 // ValidateTechnicalRuntime verifies the dependencies used by the native
@@ -126,6 +128,36 @@ func resolveExactOpenAIAccountModel(account *Account, requestedModel string) (st
 	mappedModel, ok := rawMapped.(string)
 	if !ok || mappedModel == "" || mappedModel != strings.TrimSpace(mappedModel) {
 		return "", fmt.Errorf("OpenAI account %d has an invalid exact mapping for model %q", account.ID, requestedModel)
+	}
+	return mappedModel, nil
+}
+
+func resolveExactOpenAICompactAccountModel(account *Account, requestedModel string) (string, error) {
+	regularModel, err := resolveExactOpenAIAccountModel(account, requestedModel)
+	if err != nil {
+		return "", err
+	}
+	if account.Credentials == nil {
+		return regularModel, nil
+	}
+	raw, configured := account.Credentials["compact_model_mapping"]
+	if !configured || raw == nil {
+		return regularModel, nil
+	}
+	mapping, ok := raw.(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("OpenAI account %d compact_model_mapping must be an object", account.ID)
+	}
+	if len(mapping) == 0 {
+		return regularModel, nil
+	}
+	rawMapped, exists := mapping[regularModel]
+	if !exists {
+		return regularModel, nil
+	}
+	mappedModel, ok := rawMapped.(string)
+	if !ok || mappedModel == "" || mappedModel != strings.TrimSpace(mappedModel) {
+		return "", fmt.Errorf("OpenAI account %d has an invalid exact compact mapping for model %q", account.ID, regularModel)
 	}
 	return mappedModel, nil
 }
@@ -237,8 +269,36 @@ func (s *OpenAIGatewayService) ForwardResponsesExchange(
 	account *Account,
 	body []byte,
 ) (*OpenAIForwardResult, error) {
+	return s.forwardNativeOpenAIResponsesEndpoint(ctx, exchange, account, body, false)
+}
+
+// ForwardResponsesCompactExchange forwards exactly one unary
+// /v1/responses/compact request without dropping or rewriting request fields.
+func (s *OpenAIGatewayService) ForwardResponsesCompactExchange(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	body []byte,
+) (*OpenAIForwardResult, error) {
+	return s.forwardNativeOpenAIResponsesEndpoint(ctx, exchange, account, body, true)
+}
+
+func (s *OpenAIGatewayService) forwardNativeOpenAIResponsesEndpoint(
+	ctx context.Context,
+	exchange gatewaytransport.Exchange,
+	account *Account,
+	body []byte,
+	compact bool,
+) (*OpenAIForwardResult, error) {
 	if exchange == nil || exchange.Request() == nil || exchange.Response() == nil {
 		return nil, errors.New("openai exchange is required")
+	}
+	expectedEndpoint := nativeOpenAIResponsesEndpoint
+	if compact {
+		expectedEndpoint = nativeOpenAIResponsesCompactEndpoint
+	}
+	if exchange.Request().URL == nil || exchange.Request().URL.Path != expectedEndpoint {
+		return nil, fmt.Errorf("native OpenAI Responses endpoint mismatch: expected %s", expectedEndpoint)
 	}
 	if account == nil {
 		return nil, errors.New("openai account is required")
@@ -255,6 +315,9 @@ func (s *OpenAIGatewayService) ForwardResponsesExchange(
 	}
 	startedAt := time.Now()
 	upstreamModel, err := resolveExactOpenAIAccountModel(account, originalModel)
+	if compact {
+		upstreamModel, err = resolveExactOpenAICompactAccountModel(account, originalModel)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +341,7 @@ func (s *OpenAIGatewayService) ForwardResponsesExchange(
 			NextAccountAction: NextAccountRetry,
 		}, fmt.Errorf("get OpenAI account credential: %w", err))
 	}
-	upstreamReq, err := s.buildNativeOpenAIResponsesRequest(ctx, exchange, account, body, token, stream)
+	upstreamReq, err := s.buildNativeOpenAIResponsesRequest(ctx, exchange, account, body, token, stream, compact)
 	if err != nil {
 		return nil, err
 	}
@@ -323,6 +386,12 @@ func (s *OpenAIGatewayService) ForwardResponsesExchange(
 	if err != nil {
 		return nil, err
 	}
+	if compact {
+		if responseKind != nativeOpenAIResponsesContentJSON {
+			return nil, fmt.Errorf("OpenAI compact request received non-JSON upstream content type %q", resp.Header.Get("Content-Type"))
+		}
+		return s.forwardNativeOpenAIResponsesJSON(exchange, resp, originalModel, upstreamModel, expectedEndpoint, startedAt)
+	}
 	if stream {
 		if responseKind != nativeOpenAIResponsesContentSSE {
 			return nil, fmt.Errorf("OpenAI streaming request received non-SSE upstream content type %q", resp.Header.Get("Content-Type"))
@@ -332,7 +401,7 @@ func (s *OpenAIGatewayService) ForwardResponsesExchange(
 	if responseKind == nativeOpenAIResponsesContentSSE {
 		return s.collectNativeOpenAIResponsesStream(exchange, resp, originalModel, upstreamModel, startedAt)
 	}
-	return s.forwardNativeOpenAIResponsesJSON(exchange, resp, originalModel, upstreamModel, startedAt)
+	return s.forwardNativeOpenAIResponsesJSON(exchange, resp, originalModel, upstreamModel, expectedEndpoint, startedAt)
 }
 
 type nativeOpenAIResponsesContentKind uint8
@@ -398,6 +467,7 @@ func (s *OpenAIGatewayService) buildNativeOpenAIResponsesRequest(
 	body []byte,
 	token string,
 	stream bool,
+	compact bool,
 ) (*http.Request, error) {
 	targetURL := openaiPlatformAPIURL
 	if account.Type == AccountTypeOAuth {
@@ -408,6 +478,9 @@ func (s *OpenAIGatewayService) buildNativeOpenAIResponsesRequest(
 			return nil, err
 		}
 		targetURL = buildOpenAIResponsesURL(validatedURL)
+	}
+	if compact {
+		targetURL = strings.TrimRight(targetURL, "/") + "/compact"
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -428,7 +501,7 @@ func (s *OpenAIGatewayService) buildNativeOpenAIResponsesRequest(
 		}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if stream {
+	if stream && !compact {
 		req.Header.Set("Accept", "text/event-stream")
 	} else {
 		req.Header.Set("Accept", "application/json")
@@ -485,6 +558,7 @@ func (s *OpenAIGatewayService) forwardNativeOpenAIResponsesJSON(
 	exchange gatewaytransport.Exchange,
 	resp *http.Response,
 	originalModel, upstreamModel string,
+	upstreamEndpoint string,
 	startedAt time.Time,
 ) (*OpenAIForwardResult, error) {
 	body, err := readUpstreamResponseBodyExchange(resp.Body, s.cfg, exchange, nil)
@@ -506,7 +580,7 @@ func (s *OpenAIGatewayService) forwardNativeOpenAIResponsesJSON(
 	if err := exchange.WriteData(resp.StatusCode, contentType, body); err != nil {
 		return nil, err
 	}
-	return nativeOpenAIResponsesResult(body, usage, originalModel, upstreamModel, false, resp, startedAt, nil), nil
+	return nativeOpenAIResponsesResult(body, usage, originalModel, upstreamModel, upstreamEndpoint, false, resp, startedAt, nil), nil
 }
 
 func (s *OpenAIGatewayService) collectNativeOpenAIResponsesStream(
@@ -530,7 +604,7 @@ func (s *OpenAIGatewayService) collectNativeOpenAIResponsesStream(
 	if err := exchange.WriteData(resp.StatusCode, "application/json", terminal); err != nil {
 		return nil, err
 	}
-	return nativeOpenAIResponsesResult(terminal, usage, originalModel, upstreamModel, false, resp, startedAt, nil), nil
+	return nativeOpenAIResponsesResult(terminal, usage, originalModel, upstreamModel, nativeOpenAIResponsesEndpoint, false, resp, startedAt, nil), nil
 }
 
 func parseNativeOpenAIResponsesTerminal(stream []byte) ([]byte, OpenAIUsage, bool, error) {
@@ -731,6 +805,7 @@ func nativeOpenAIResponsesResult(
 	body []byte,
 	usage OpenAIUsage,
 	originalModel, upstreamModel string,
+	upstreamEndpoint string,
 	stream bool,
 	resp *http.Response,
 	startedAt time.Time,
@@ -743,7 +818,7 @@ func nativeOpenAIResponsesResult(
 		Usage:              usage,
 		Model:              originalModel,
 		UpstreamModel:      upstreamModel,
-		UpstreamEndpoint:   "/v1/responses",
+		UpstreamEndpoint:   upstreamEndpoint,
 		Stream:             stream,
 		ResponseHeaders:    resp.Header.Clone(),
 		Duration:           time.Since(startedAt),

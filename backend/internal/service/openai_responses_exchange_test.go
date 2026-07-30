@@ -44,6 +44,28 @@ func TestParseOpenAIResponsesRequestRejectsNonExactProtocolFields(t *testing.T) 
 	}
 }
 
+func TestResolveExactOpenAICompactAccountModelUsesSequentialExactMappings(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{ID: 213, Credentials: map[string]any{
+		"model_mapping": map[string]any{
+			"customer-alias": "gpt-5.4",
+		},
+		"compact_model_mapping": map[string]any{
+			"gpt-5.4": "gpt-5.4-compact",
+			"gpt-*":   "wildcard-must-not-run",
+		},
+	}}
+	mapped, err := resolveExactOpenAICompactAccountModel(account, "customer-alias")
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.4-compact", mapped)
+
+	account.Credentials["compact_model_mapping"] = map[string]any{"gpt-*": "wildcard-must-not-run"}
+	mapped, err = resolveExactOpenAICompactAccountModel(account, "customer-alias")
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5.4", mapped)
+}
+
 func TestExtractNativeOpenAIResponsesUsageRejectsLegacyAliasesAndNegativeValues(t *testing.T) {
 	t.Parallel()
 
@@ -210,6 +232,64 @@ func TestOpenAIForwardResponsesExchangeOAuthUsesSubscriptionTransportHeaders(t *
 	require.Equal(t, "responses=experimental", upstream.lastReq.Header.Get("OpenAI-Beta"))
 	require.Equal(t, "next-api", upstream.lastReq.Header.Get("originator"))
 	require.Equal(t, "session-oauth", upstream.lastReq.Header.Get("session_id"))
+}
+
+func TestOpenAIForwardResponsesCompactExchangePreservesRequestFields(t *testing.T) {
+	t.Parallel()
+
+	upstream := &openAIResponsesHTTPStub{
+		status: http.StatusOK,
+		header: http.Header{"Content-Type": []string{"application/json"}},
+		body:   `{"id":"cmp_native","model":"gpt-5.4-compact","output":[{"type":"compaction","encrypted_content":"raw"}],"usage":{"input_tokens":9,"output_tokens":2}}`,
+	}
+	svc := &OpenAIGatewayService{httpUpstream: upstream, cfg: &config.Config{}}
+	account := &Account{
+		ID:       211,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "sk-compact",
+			"base_url": "https://gateway.example/v1",
+			"compact_model_mapping": map[string]any{
+				"gpt-5.4": "gpt-5.4-compact",
+			},
+		},
+	}
+	body := []byte(`{"model":"gpt-5.4","stream":true,"store":true,"prompt_cache_key":"client-key","input":"compact me"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses/compact", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	result, err := svc.ForwardResponsesCompactExchange(context.Background(), gatewaytransport.NewHTTPExchange(recorder, req), account, body)
+	require.NoError(t, err)
+	require.Equal(t, nativeOpenAIResponsesCompactEndpoint, result.UpstreamEndpoint)
+	require.Equal(t, "gpt-5.4-compact", result.UpstreamModel)
+	require.JSONEq(t, upstream.body, recorder.Body.String())
+	require.Equal(t, "https://gateway.example/v1/responses/compact", upstream.lastReq.URL.String())
+	require.Equal(t, "application/json", upstream.lastReq.Header.Get("Accept"))
+
+	posted, err := io.ReadAll(upstream.lastReq.Body)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"model":"gpt-5.4-compact","stream":true,"store":true,"prompt_cache_key":"client-key","input":"compact me"}`, string(posted))
+}
+
+func TestOpenAIForwardResponsesCompactExchangeRejectsSSEUpstream(t *testing.T) {
+	t.Parallel()
+
+	upstream := &openAIResponsesHTTPStub{
+		status: http.StatusOK,
+		header: http.Header{"Content-Type": []string{"text/event-stream"}},
+		body:   "data: {\"type\":\"response.completed\"}\n\n",
+	}
+	svc := &OpenAIGatewayService{httpUpstream: upstream, cfg: &config.Config{}}
+	account := &Account{ID: 212, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "sk-compact-sse"}}
+	body := []byte(`{"model":"gpt-5.4","input":"compact me"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses/compact", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	result, err := svc.ForwardResponsesCompactExchange(context.Background(), gatewaytransport.NewHTTPExchange(recorder, req), account, body)
+	require.ErrorContains(t, err, "non-JSON upstream content type")
+	require.Nil(t, result)
+	require.Empty(t, recorder.Body.String())
 }
 
 func TestOpenAIForwardResponsesExchangeRejectsWildcardOnlyModelMapping(t *testing.T) {

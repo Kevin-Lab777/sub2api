@@ -33,14 +33,16 @@ func OpenAIResponsesDispatcherConfigFromApplication(cfg *config.Config) (OpenAIR
 type openAIResponsesGateway interface {
 	ValidateTechnicalRuntime() error
 	SelectTechnicalResponsesAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	SelectTechnicalResponsesCompactAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	AcquireSelection(context.Context, *service.AccountSelectionResult) (func(), error)
 	ForwardResponsesExchange(context.Context, gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	ForwardResponsesCompactExchange(context.Context, gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
 	BindStickySession(context.Context, *int64, string, int64) error
 }
 
-// OpenAIResponsesDispatcher is deliberately endpoint-specific. It is not a
-// complete OpenAI protocol dispatcher and must not be registered as one until
-// the remaining OpenAI endpoint families have native implementations.
+// OpenAIResponsesDispatcher is deliberately limited to the Responses HTTP
+// endpoints. It is not a complete OpenAI protocol dispatcher and must not be
+// registered as one until the remaining endpoint families are native.
 type OpenAIResponsesDispatcher struct {
 	gateway            openAIResponsesGateway
 	maxAccountSwitches int
@@ -79,7 +81,15 @@ func (d *OpenAIResponsesDispatcher) Forward(
 	if dispatch.Pool.Platform != service.PlatformOpenAI {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPoolPlatform, dispatch.Pool.Platform)
 	}
-	if req == nil || req.Method != http.MethodPost || req.URL == nil || req.URL.Path != "/v1/responses" {
+	if req == nil || req.Method != http.MethodPost || req.URL == nil {
+		return nil, fmt.Errorf("invalid OpenAI Responses endpoint: %s %s", requestMethod(req), requestPath(req))
+	}
+	compact := false
+	switch req.URL.Path {
+	case "/v1/responses":
+	case "/v1/responses/compact":
+		compact = true
+	default:
 		return nil, fmt.Errorf("invalid OpenAI Responses endpoint: %s %s", requestMethod(req), requestPath(req))
 	}
 	body, err := pkghttputil.ReadRequestBodyWithPreallocLimit(req, d.maxBodyBytes)
@@ -105,13 +115,25 @@ func (d *OpenAIResponsesDispatcher) Forward(
 	var lastFailover *service.UpstreamFailoverError
 
 	for {
-		selection, selectErr := d.gateway.SelectTechnicalResponsesAccountWithLoadAwareness(
-			ctx,
-			&poolID,
-			dispatch.Invocation.SessionID,
-			dispatch.Invocation.Model,
-			failedAccountIDs,
-		)
+		var selection *service.AccountSelectionResult
+		var selectErr error
+		if compact {
+			selection, selectErr = d.gateway.SelectTechnicalResponsesCompactAccountWithLoadAwareness(
+				ctx,
+				&poolID,
+				dispatch.Invocation.SessionID,
+				dispatch.Invocation.Model,
+				failedAccountIDs,
+			)
+		} else {
+			selection, selectErr = d.gateway.SelectTechnicalResponsesAccountWithLoadAwareness(
+				ctx,
+				&poolID,
+				dispatch.Invocation.SessionID,
+				dispatch.Invocation.Model,
+				failedAccountIDs,
+			)
+		}
 		if selectErr != nil {
 			if lastFailover != nil {
 				return nil, errors.Join(lastFailover, selectErr)
@@ -139,7 +161,13 @@ func (d *OpenAIResponsesDispatcher) Forward(
 		writtenBefore := exchange.Response().Written()
 		sizeBefore := exchange.Response().Size()
 		startedAt := time.Now()
-		result, forwardErr := d.gateway.ForwardResponsesExchange(attemptCtx, exchange, account, body)
+		var result *service.OpenAIForwardResult
+		var forwardErr error
+		if compact {
+			result, forwardErr = d.gateway.ForwardResponsesCompactExchange(attemptCtx, exchange, account, body)
+		} else {
+			result, forwardErr = d.gateway.ForwardResponsesExchange(attemptCtx, exchange, account, body)
+		}
 		release()
 		if forwardErr == nil {
 			measurement, measureErr := openAIResponsesMeasurement(exchange, dispatch, account, result, startedAt)

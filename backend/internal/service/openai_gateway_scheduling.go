@@ -201,6 +201,7 @@ type openAISelectionPolicy struct {
 	strictState           bool
 	bindStickyOnSelection bool
 	requireExactModel     bool
+	requireKnownCompact   bool
 }
 
 func legacyOpenAISelectionPolicy(useUpstreamTokenCost bool) openAISelectionPolicy {
@@ -210,6 +211,7 @@ func legacyOpenAISelectionPolicy(useUpstreamTokenCost bool) openAISelectionPolic
 		strictState:           false,
 		bindStickyOnSelection: true,
 		requireExactModel:     false,
+		requireKnownCompact:   false,
 	}
 }
 
@@ -219,6 +221,16 @@ var technicalOpenAIResponsesSelectionPolicy = openAISelectionPolicy{
 	strictState:           true,
 	bindStickyOnSelection: false,
 	requireExactModel:     true,
+	requireKnownCompact:   false,
+}
+
+var technicalOpenAIResponsesCompactSelectionPolicy = openAISelectionPolicy{
+	enforceChannelPricing: false,
+	useUpstreamTokenCost:  false,
+	strictState:           true,
+	bindStickyOnSelection: false,
+	requireExactModel:     true,
+	requireKnownCompact:   true,
 }
 
 func (p openAISelectionPolicy) acceptsModel(account *Account, requestedModel string) bool {
@@ -822,7 +834,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 // (only meaningful when requireCompact=true).
 func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *int64, platform string, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, policy openAISelectionPolicy) (*Account, bool, error) {
 	platform = normalizeOpenAICompatiblePlatform(platform)
-	compactBlocked := false
+	compactBlocked := requireCompact && policy.requireKnownCompact
 	needsUpstreamCheck := policy.enforceChannelPricing && s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
 	eligible := make([]*Account, 0, len(accounts))
 	compactTiers := make(map[int64]int, len(accounts))
@@ -836,7 +848,8 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 			continue
 		}
 
-		fresh, err := s.resolveOpenAIAccountForSelectionPolicy(ctx, acc, groupID, platform, requestedModel, false, requiredCapability, policy)
+		strictCompact := requireCompact && policy.strictState
+		fresh, err := s.resolveOpenAIAccountForSelectionPolicy(ctx, acc, groupID, platform, requestedModel, strictCompact, requiredCapability, policy)
 		if err != nil {
 			return nil, compactBlocked, err
 		}
@@ -922,6 +935,12 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 // commercial upstream-cost preference are not part of this scheduler.
 func (s *OpenAIGatewayService) SelectTechnicalResponsesAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityResponses, technicalOpenAIResponsesSelectionPolicy)
+}
+
+// SelectTechnicalResponsesCompactAccountWithLoadAwareness selects only an
+// account with explicit compact capability inside the exact technical pool.
+func (s *OpenAIGatewayService) SelectTechnicalResponsesCompactAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, true, OpenAIEndpointCapabilityResponses, technicalOpenAIResponsesCompactSelectionPolicy)
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, policy openAISelectionPolicy) (*AccountSelectionResult, error) {
@@ -1101,7 +1120,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 			continue
 		}
 		if policy.strictState {
-			fresh, resolveErr := s.resolveOpenAIAccountForSelectionPolicy(ctx, acc, groupID, platform, requestedModel, false, requiredCapability, policy)
+			fresh, resolveErr := s.resolveOpenAIAccountForSelectionPolicy(ctx, acc, groupID, platform, requestedModel, requireCompact, requiredCapability, policy)
 			if resolveErr != nil {
 				return nil, resolveErr
 			}
@@ -1133,6 +1152,9 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 	}
 
 	if len(candidates) == 0 {
+		if requireCompact {
+			return nil, ErrNoAvailableCompactAccounts
+		}
 		return nil, ErrNoAvailableAccounts
 	}
 	rateOrder := openAILegacyUpstreamRateOrder{}
@@ -1433,6 +1455,14 @@ func (s *OpenAIGatewayService) resolveOpenAIAccountForSelectionPolicy(
 		return nil, nil
 	}
 	if !policy.acceptsModel(latest, requestedModel) {
+		return nil, nil
+	}
+	if requireCompact {
+		if _, compactModelErr := resolveExactOpenAICompactAccountModel(latest, requestedModel); compactModelErr != nil {
+			return nil, compactModelErr
+		}
+	}
+	if requireCompact && policy.requireKnownCompact && openAICompactSupportTier(latest) != 2 {
 		return nil, nil
 	}
 	return latest, nil

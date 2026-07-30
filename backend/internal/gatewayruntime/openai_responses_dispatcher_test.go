@@ -15,12 +15,21 @@ import (
 )
 
 type openAIResponsesGatewayStub struct {
-	selectAccount func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
-	forward       func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
-	pools         []int64
-	boundPool     int64
-	boundAccount  int64
-	boundSession  string
+	selectAccount        func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	selectCompactAccount func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	forward              func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	forwardCompact       func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	pools                []int64
+	boundPool            int64
+	boundAccount         int64
+	boundSession         string
+}
+
+func (s *openAIResponsesGatewayStub) SelectTechnicalResponsesCompactAccountWithLoadAwareness(_ context.Context, poolID *int64, _ string, _ string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+	if poolID != nil {
+		s.pools = append(s.pools, *poolID)
+	}
+	return s.selectCompactAccount(poolID, excluded)
 }
 
 func (s *openAIResponsesGatewayStub) ValidateTechnicalRuntime() error { return nil }
@@ -44,6 +53,10 @@ func (s *openAIResponsesGatewayStub) AcquireSelection(_ context.Context, selecti
 
 func (s *openAIResponsesGatewayStub) ForwardResponsesExchange(_ context.Context, exchange gatewaytransport.Exchange, account *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
 	return s.forward(exchange, account, body)
+}
+
+func (s *openAIResponsesGatewayStub) ForwardResponsesCompactExchange(_ context.Context, exchange gatewaytransport.Exchange, account *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
+	return s.forwardCompact(exchange, account, body)
 }
 
 func (s *openAIResponsesGatewayStub) BindStickySession(_ context.Context, poolID *int64, session string, accountID int64) error {
@@ -126,6 +139,52 @@ func TestOpenAIResponsesDispatcherUsesExactPoolAndMeasuresUsage(t *testing.T) {
 	}
 	if measurement.AccountID != 101 || measurement.InputTokens != 20 || measurement.OutputTokens != 7 || measurement.CacheReadInputTokens != 5 || measurement.CacheWriteInputTokens != 2 || measurement.UpstreamModel != "gpt-5.4-2026-07-01" {
 		t.Fatalf("unexpected measurement: %+v", measurement)
+	}
+}
+
+func TestOpenAIResponsesDispatcherRoutesCompactWithoutRewritingBody(t *testing.T) {
+	account := &service.Account{ID: 102, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth}
+	gateway := &openAIResponsesGatewayStub{
+		selectAccount: func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error) {
+			t.Fatal("regular Responses scheduler must not run")
+			return nil, nil
+		},
+		forward: func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error) {
+			t.Fatal("regular Responses forwarder must not run")
+			return nil, nil
+		},
+	}
+	gateway.selectCompactAccount = func(poolID *int64, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		if poolID == nil || *poolID != 51 || len(excluded) != 0 {
+			t.Fatalf("unexpected compact selection: pool=%v excluded=%v", poolID, excluded)
+		}
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	gateway.forwardCompact = func(exchange gatewaytransport.Exchange, got *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
+		want := `{"model":"gpt-5.4","stream":true,"store":true,"input":"compact me"}`
+		if got.ID != 102 || string(body) != want || exchange.Request().URL.Path != "/v1/responses/compact" {
+			t.Fatalf("unexpected compact forward account=%d path=%s body=%s", got.ID, exchange.Request().URL.Path, body)
+		}
+		if err := exchange.WriteData(http.StatusOK, "application/json", []byte(`{"id":"cmp_1"}`)); err != nil {
+			return nil, err
+		}
+		return &service.OpenAIForwardResult{
+			Model:            "gpt-5.4",
+			UpstreamModel:    "gpt-5.4-compact",
+			UpstreamEndpoint: "/v1/responses/compact",
+			Usage:            service.OpenAIUsage{InputTokens: 11, OutputTokens: 2},
+			Duration:         time.Millisecond,
+		}, nil
+	}
+
+	body := `{"model":"gpt-5.4","stream":true,"store":true,"input":"compact me"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses/compact", strings.NewReader(body))
+	measurement, err := newOpenAIResponsesDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIResponsesDispatchRequest())
+	if err != nil {
+		t.Fatalf("Forward compact: %v", err)
+	}
+	if measurement.Endpoint != "/v1/responses/compact" || measurement.AccountID != 102 || measurement.InputTokens != 11 || measurement.OutputTokens != 2 {
+		t.Fatalf("unexpected compact measurement: %+v", measurement)
 	}
 }
 

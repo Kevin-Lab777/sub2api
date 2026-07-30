@@ -79,7 +79,8 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | OpenAI endpoint family | Native runtime state |
 | --- | --- |
 | `POST /v1/responses` over HTTP/SSE | Implemented and tested |
-| Responses compact and inbound WebSocket | Pending |
+| `POST /v1/responses/compact` unary JSON | Implemented and tested |
+| Responses inbound WebSocket | Pending |
 | Chat Completions and Completions | Pending |
 | Embeddings | Pending |
 | Images | Pending |
@@ -93,6 +94,12 @@ media types, and does not use legacy token aliases or content-hash output
 deduplication. It does not inject prompts, drop rejected fields, repair
 continuation state, reconstruct missing output, or invent usage. Missing
 terminal usage is an error rather than a zero-token success.
+
+The compact path requires an account with explicit compact capability, applies
+only exact regular and compact-specific model mappings, and requires the unary
+JSON upstream contract. It does not strip `stream`, `store`, cache keys, or any
+other request fields; unsupported payloads remain upstream errors instead of
+being converted into a synthetic SSE bridge.
 
 Antigravity accounts participating in Gemini mixed scheduling also retain a
 separate Gin-bound forwarder and are not silently routed through the native
@@ -169,7 +176,8 @@ therefore remain transitional code rather than the final in-process path.
   measurements.
 - Synthetic Gemini token estimates and signature/content rectification were
   removed from the native and Anthropic-compat Gemini paths.
-- Native OpenAI `POST /v1/responses` forwarding now has strict JSON/model
+- Native OpenAI `POST /v1/responses` and `POST /v1/responses/compact`
+  forwarding now have strict JSON/model
   validation, exact-pool scheduling, account concurrency leases, API-key and
   subscription-account authentication, raw JSON/SSE forwarding, terminal SSE
   collection, committed-response failover boundaries, and raw token/cache/image
