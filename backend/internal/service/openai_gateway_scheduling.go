@@ -202,6 +202,7 @@ type openAISelectionPolicy struct {
 	bindStickyOnSelection bool
 	requireExactModel     bool
 	requireKnownCompact   bool
+	requireResponsesWSV2  bool
 }
 
 func legacyOpenAISelectionPolicy(useUpstreamTokenCost bool) openAISelectionPolicy {
@@ -233,8 +234,21 @@ var technicalOpenAIResponsesCompactSelectionPolicy = openAISelectionPolicy{
 	requireKnownCompact:   true,
 }
 
-func (p openAISelectionPolicy) acceptsModel(account *Account, requestedModel string) bool {
-	return !p.requireExactModel || openAIAccountHasExactModelMapping(account, requestedModel)
+var technicalOpenAIResponsesWebSocketSelectionPolicy = openAISelectionPolicy{
+	enforceChannelPricing: false,
+	useUpstreamTokenCost:  false,
+	strictState:           true,
+	bindStickyOnSelection: false,
+	requireExactModel:     true,
+	requireKnownCompact:   false,
+	requireResponsesWSV2:  true,
+}
+
+func (p openAISelectionPolicy) acceptsAccount(account *Account, requestedModel string) bool {
+	if p.requireExactModel && !openAIAccountHasExactModelMapping(account, requestedModel) {
+		return false
+	}
+	return !p.requireResponsesWSV2 || account.SupportsTechnicalOpenAIResponsesWebSocketV2()
 }
 
 // noAvailableOpenAISelectionError builds the standard "no account available" error
@@ -787,7 +801,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 	if !isOpenAICompatibleAccountEligibleForRequest(ctx, account, platform, requestedModel, false, requiredCapability) {
 		return nil, nil
 	}
-	if !policy.acceptsModel(account, requestedModel) {
+	if !policy.acceptsAccount(account, requestedModel) {
 		return nil, nil
 	}
 	if !parentHealthyForShadow(account, s.parentAccountLookup(ctx)) {
@@ -943,6 +957,12 @@ func (s *OpenAIGatewayService) SelectTechnicalResponsesCompactAccountWithLoadAwa
 	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, true, OpenAIEndpointCapabilityResponses, technicalOpenAIResponsesCompactSelectionPolicy)
 }
 
+// SelectTechnicalResponsesWebSocketAccountWithLoadAwareness selects an exact-
+// pool account with explicit direct Responses WebSocket v2 support.
+func (s *OpenAIGatewayService) SelectTechnicalResponsesWebSocketAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, OpenAIEndpointCapabilityResponses, technicalOpenAIResponsesWebSocketSelectionPolicy)
+}
+
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, policy openAISelectionPolicy) (*AccountSelectionResult, error) {
 	platform = normalizeOpenAICompatiblePlatform(platform)
 	if policy.enforceChannelPricing && s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
@@ -1034,7 +1054,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 				}
 				if !clearSticky &&
 					isOpenAICompatibleAccountEligibleForRequest(ctx, account, platform, requestedModel, false, requiredCapability) &&
-					policy.acceptsModel(account, requestedModel) {
+					policy.acceptsAccount(account, requestedModel) {
 					if !policy.strictState {
 						account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, groupID, platform, requestedModel, requireCompact, requiredCapability)
 					}
@@ -1135,7 +1155,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		if !isOpenAICompatibleAccountEligibleForRequest(ctx, acc, platform, requestedModel, false, requiredCapability) {
 			continue
 		}
-		if !policy.acceptsModel(acc, requestedModel) {
+		if !policy.acceptsAccount(acc, requestedModel) {
 			continue
 		}
 		if !policy.strictState && !parentHealthyForShadow(acc, parentLookupL2) {
@@ -1404,7 +1424,7 @@ func (s *OpenAIGatewayService) resolveOpenAIAccountForSelectionPolicy(
 			return nil, nil
 		}
 		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, groupID, platform, requestedModel, requireCompact, requiredCapability)
-		if fresh == nil || !policy.acceptsModel(fresh, requestedModel) {
+		if fresh == nil || !policy.acceptsAccount(fresh, requestedModel) {
 			return nil, nil
 		}
 		return fresh, nil
@@ -1454,7 +1474,7 @@ func (s *OpenAIGatewayService) resolveOpenAIAccountForSelectionPolicy(
 	if s.isOpenAIAccountRequestRuntimeBlocked(latest, requestedModel) || s.isOpenAIProxyStreamQuarantined(latest) {
 		return nil, nil
 	}
-	if !policy.acceptsModel(latest, requestedModel) {
+	if !policy.acceptsAccount(latest, requestedModel) {
 		return nil, nil
 	}
 	if requireCompact {

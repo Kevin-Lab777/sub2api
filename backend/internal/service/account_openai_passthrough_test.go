@@ -205,6 +205,28 @@ func TestAccount_IsOpenAIResponsesWebSocketV2Enabled(t *testing.T) {
 	})
 }
 
+func TestAccount_SupportsTechnicalOpenAIResponsesWebSocketV2(t *testing.T) {
+	tests := []struct {
+		name  string
+		extra map[string]any
+		want  bool
+	}{
+		{name: "explicit typed boolean", extra: map[string]any{"openai_apikey_responses_websockets_v2_enabled": true}, want: true},
+		{name: "explicit generic v2 boolean", extra: map[string]any{"responses_websockets_v2_enabled": true}, want: true},
+		{name: "explicit passthrough mode", extra: map[string]any{"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModePassthrough}, want: true},
+		{name: "http bridge is not direct", extra: map[string]any{"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeHTTPBridge}, want: false},
+		{name: "off wins over generic capability", extra: map[string]any{"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeOff, "responses_websockets_v2_enabled": true}, want: false},
+		{name: "legacy websocket flag is insufficient", extra: map[string]any{"openai_ws_enabled": true}, want: false},
+		{name: "global default is not inherited", extra: map[string]any{}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Extra: tt.extra}
+			require.Equal(t, tt.want, account.SupportsTechnicalOpenAIResponsesWebSocketV2())
+		})
+	}
+}
+
 func TestAccount_ResolveOpenAIResponsesWebSocketV2Mode(t *testing.T) {
 	t.Run("default fallback to ctx_pool", func(t *testing.T) {
 		account := &Account{

@@ -332,3 +332,52 @@ func TestOpenAISelectTechnicalResponsesCompactAccountRejectsUnknownCapability(t 
 	_, err := svc.SelectTechnicalResponsesCompactAccountWithLoadAwareness(context.Background(), nil, "", "gpt-5.4", nil)
 	require.ErrorIs(t, err, ErrNoAvailableCompactAccounts)
 }
+
+func TestOpenAISelectTechnicalResponsesWebSocketRequiresExplicitDirectCapability(t *testing.T) {
+	t.Parallel()
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Priority:    0,
+			},
+			{
+				ID:          2,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Priority:    1,
+				Extra: map[string]any{
+					"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModePassthrough,
+				},
+			},
+			{
+				ID:          3,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Priority:    2,
+				Extra: map[string]any{
+					"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeHTTPBridge,
+				},
+			},
+		}},
+		concurrencyService: NewConcurrencyService(&technicalOpenAIConcurrencyCache{
+			loadMap: map[int64]*AccountLoadInfo{2: {AccountID: 2, LoadRate: 0}},
+		}),
+	}
+
+	selection, err := svc.SelectTechnicalResponsesWebSocketAccountWithLoadAwareness(context.Background(), nil, "", "gpt-5.4", nil)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), selection.Account.ID)
+}

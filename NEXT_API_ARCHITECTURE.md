@@ -80,7 +80,7 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | --- | --- |
 | `POST /v1/responses` over HTTP/SSE | Implemented and tested |
 | `POST /v1/responses/compact` unary JSON | Implemented and tested |
-| Responses inbound WebSocket | Pending |
+| `GET /v1/responses` inbound WebSocket v2 | Implemented and tested |
 | Chat Completions and Completions | Pending |
 | Embeddings | Pending |
 | Images | Pending |
@@ -100,6 +100,18 @@ only exact regular and compact-specific model mappings, and requires the unary
 JSON upstream contract. It does not strip `stream`, `store`, cache keys, or any
 other request fields; unsupported payloads remain upstream errors instead of
 being converted into a synthetic SSE bridge.
+
+The native Responses WebSocket path requires an account-level direct v2
+capability and establishes the upstream socket before accepting the downstream
+upgrade. Dial and handshake failures may select another account only inside the
+same technical pool; after downstream acceptance the account and concurrency
+lease remain fixed for the connection. The relay validates the first
+`response.create` and every explicitly repeated model, applies only the exact
+account model mapping, and otherwise forwards text and binary frames without an
+HTTP bridge, connection reuse, payload replay, continuation repair, synthetic
+events, or client identity impersonation. Completed-turn usage is parsed from
+the exact Responses schema and accumulated into one Engine-validated connection
+measurement when the socket closes.
 
 Antigravity accounts participating in Gemini mixed scheduling also retain a
 separate Gin-bound forwarder and are not silently routed through the native
@@ -176,13 +188,14 @@ therefore remain transitional code rather than the final in-process path.
   measurements.
 - Synthetic Gemini token estimates and signature/content rectification were
   removed from the native and Anthropic-compat Gemini paths.
-- Native OpenAI `POST /v1/responses` and `POST /v1/responses/compact`
-  forwarding now have strict JSON/model
+- Native OpenAI `POST /v1/responses`, `POST /v1/responses/compact`, and
+  `GET /v1/responses` WebSocket v2 forwarding now have strict JSON/model
   validation, exact-pool scheduling, account concurrency leases, API-key and
   subscription-account authentication, raw JSON/SSE forwarding, terminal SSE
-  collection, committed-response failover boundaries, and raw token/cache/image
-  measurements. It remains endpoint-specific and is not a complete OpenAI
-  dispatcher.
+  collection, raw WebSocket frame relay, committed-response failover
+  boundaries, and raw token/cache/image measurements. WebSocket connections
+  aggregate exact completed-turn telemetry into one runtime measurement. The
+  dispatcher remains endpoint-specific and is not a complete OpenAI dispatcher.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

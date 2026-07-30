@@ -15,14 +15,16 @@ import (
 )
 
 type openAIResponsesGatewayStub struct {
-	selectAccount        func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
-	selectCompactAccount func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
-	forward              func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
-	forwardCompact       func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
-	pools                []int64
-	boundPool            int64
-	boundAccount         int64
-	boundSession         string
+	selectAccount          func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	selectCompactAccount   func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	selectWebSocketAccount func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	forward                func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	forwardCompact         func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	forwardWebSocket       func(http.ResponseWriter, *http.Request, *service.Account, string, string) (*service.OpenAIResponsesWebSocketResult, error)
+	pools                  []int64
+	boundPool              int64
+	boundAccount           int64
+	boundSession           string
 }
 
 func (s *openAIResponsesGatewayStub) SelectTechnicalResponsesCompactAccountWithLoadAwareness(_ context.Context, poolID *int64, _ string, _ string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
@@ -41,6 +43,13 @@ func (s *openAIResponsesGatewayStub) SelectTechnicalResponsesAccountWithLoadAwar
 	return s.selectAccount(poolID, excluded)
 }
 
+func (s *openAIResponsesGatewayStub) SelectTechnicalResponsesWebSocketAccountWithLoadAwareness(_ context.Context, poolID *int64, _ string, _ string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+	if poolID != nil {
+		s.pools = append(s.pools, *poolID)
+	}
+	return s.selectWebSocketAccount(poolID, excluded)
+}
+
 func (s *openAIResponsesGatewayStub) AcquireSelection(_ context.Context, selection *service.AccountSelectionResult) (func(), error) {
 	if selection == nil || selection.Account == nil {
 		return nil, service.ErrInvalidAccountSelection
@@ -57,6 +66,10 @@ func (s *openAIResponsesGatewayStub) ForwardResponsesExchange(_ context.Context,
 
 func (s *openAIResponsesGatewayStub) ForwardResponsesCompactExchange(_ context.Context, exchange gatewaytransport.Exchange, account *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
 	return s.forwardCompact(exchange, account, body)
+}
+
+func (s *openAIResponsesGatewayStub) ForwardResponsesWebSocket(_ context.Context, w http.ResponseWriter, req *http.Request, account *service.Account, model, sessionID string) (*service.OpenAIResponsesWebSocketResult, error) {
+	return s.forwardWebSocket(w, req, account, model, sessionID)
 }
 
 func (s *openAIResponsesGatewayStub) BindStickySession(_ context.Context, poolID *int64, session string, accountID int64) error {
@@ -275,5 +288,94 @@ func TestOpenAIResponsesDispatcherDoesNotRepairInvalidJSON(t *testing.T) {
 	_, err := newOpenAIResponsesDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIResponsesDispatchRequest())
 	if err == nil || !strings.Contains(err.Error(), "valid JSON") {
 		t.Fatalf("expected strict JSON rejection, got %v", err)
+	}
+}
+
+func TestOpenAIResponsesDispatcherWebSocketFailoverBeforeCommitAndMeasuresConnection(t *testing.T) {
+	accounts := []*service.Account{
+		{ID: 201, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey},
+		{ID: 202, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey},
+	}
+	gateway := &openAIResponsesGatewayStub{}
+	gateway.selectWebSocketAccount = func(poolID *int64, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		if poolID == nil || *poolID != 51 {
+			t.Fatalf("unexpected WebSocket pool %v", poolID)
+		}
+		account := accounts[0]
+		if _, failed := excluded[account.ID]; failed {
+			account = accounts[1]
+		}
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	startedAt := time.Now()
+	gateway.forwardWebSocket = func(_ http.ResponseWriter, req *http.Request, account *service.Account, model, sessionID string) (*service.OpenAIResponsesWebSocketResult, error) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/responses" || model != "gpt-5.4" || sessionID != "session-openai" {
+			t.Fatalf("unexpected WebSocket invocation: method=%s path=%s model=%s session=%s", req.Method, req.URL.Path, model, sessionID)
+		}
+		if account.ID == 201 {
+			return nil, &service.UpstreamFailoverError{
+				StatusCode:        http.StatusBadGateway,
+				NextAccountAction: service.NextAccountRetry,
+			}
+		}
+		return &service.OpenAIResponsesWebSocketResult{
+			Usage: service.OpenAIUsage{
+				InputTokens:              17,
+				OutputTokens:             9,
+				CacheReadInputTokens:     4,
+				CacheCreationInputTokens: 2,
+			},
+			UpstreamModel:       "gpt-5.4-upstream",
+			ImageCount:          1,
+			WebSearchCalls:      2,
+			UpstreamStatusCode:  http.StatusSwitchingProtocols,
+			StartedAt:           startedAt,
+			Duration:            5 * time.Millisecond,
+			TimeToFirstResponse: time.Millisecond,
+		}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	req.Header.Set("Connection", "keep-alive, Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	measurement, err := newOpenAIResponsesDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIResponsesDispatchRequest())
+	if err != nil {
+		t.Fatalf("Forward WebSocket: %v", err)
+	}
+	if measurement.AccountID != 202 || measurement.UpstreamStatusCode != http.StatusSwitchingProtocols || measurement.InputTokens != 17 || measurement.OutputTokens != 9 || measurement.ImageCount != 1 || measurement.WebSearchCalls != 2 {
+		t.Fatalf("unexpected WebSocket measurement: %+v", measurement)
+	}
+	if len(gateway.pools) != 2 || gateway.boundPool != 51 || gateway.boundAccount != 202 || gateway.boundSession != "session-openai" {
+		t.Fatalf("unexpected WebSocket pool or binding state: %+v", gateway)
+	}
+}
+
+func TestOpenAIResponsesDispatcherWebSocketNeverSwitchesAfterCommit(t *testing.T) {
+	selections := 0
+	gateway := &openAIResponsesGatewayStub{}
+	gateway.selectWebSocketAccount = func(_ *int64, _ map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		selections++
+		return &service.AccountSelectionResult{
+			Account:     &service.Account{ID: 203, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey},
+			Acquired:    true,
+			ReleaseFunc: func() {},
+		}, nil
+	}
+	gateway.forwardWebSocket = func(http.ResponseWriter, *http.Request, *service.Account, string, string) (*service.OpenAIResponsesWebSocketResult, error) {
+		return &service.OpenAIResponsesWebSocketResult{
+			Usage:              service.OpenAIUsage{InputTokens: 3, OutputTokens: 1},
+			UpstreamModel:      "gpt-5.4",
+			UpstreamStatusCode: http.StatusSwitchingProtocols,
+			StartedAt:          time.Now(),
+			Duration:           time.Millisecond,
+		}, errors.New("committed WebSocket relay failed")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+
+	measurement, err := newOpenAIResponsesDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIResponsesDispatchRequest())
+	if err == nil || measurement == nil || selections != 1 || gateway.boundAccount != 0 {
+		t.Fatalf("committed WebSocket switched or bound unexpectedly: measurement=%+v selections=%d bound=%d err=%v", measurement, selections, gateway.boundAccount, err)
 	}
 }

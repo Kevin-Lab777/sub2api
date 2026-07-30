@@ -1721,6 +1721,60 @@ func (a *Account) IsOpenAIResponsesWebSocketV2Enabled() bool {
 	return false
 }
 
+// SupportsTechnicalOpenAIResponsesWebSocketV2 reports whether an account has
+// an explicit direct Responses WebSocket v2 capability. The technical gateway
+// does not inherit a process-wide ingress default and does not reinterpret the
+// legacy HTTP bridge as a WebSocket transport.
+func (a *Account) SupportsTechnicalOpenAIResponsesWebSocketV2() bool {
+	if a == nil || !a.IsOpenAI() || a.Extra == nil {
+		return false
+	}
+	directMode := func(key string) (bool, bool) {
+		raw, exists := a.Extra[key]
+		if !exists {
+			return false, false
+		}
+		mode, ok := raw.(string)
+		if !ok {
+			return false, true
+		}
+		switch normalizeOpenAIWSIngressMode(mode) {
+		case OpenAIWSIngressModeShared, OpenAIWSIngressModeDedicated,
+			OpenAIWSIngressModeCtxPool, OpenAIWSIngressModePassthrough:
+			return true, true
+		default:
+			return false, true
+		}
+	}
+	explicitBool := func(key string) (bool, bool) {
+		raw, exists := a.Extra[key]
+		if !exists {
+			return false, false
+		}
+		enabled, ok := raw.(bool)
+		return enabled && ok, true
+	}
+
+	if a.IsOpenAIOAuth() {
+		if supported, set := directMode("openai_oauth_responses_websockets_v2_mode"); set {
+			return supported
+		}
+		if supported, set := explicitBool("openai_oauth_responses_websockets_v2_enabled"); set {
+			return supported
+		}
+	}
+	if a.IsOpenAIApiKey() {
+		if supported, set := directMode("openai_apikey_responses_websockets_v2_mode"); set {
+			return supported
+		}
+		if supported, set := explicitBool("openai_apikey_responses_websockets_v2_enabled"); set {
+			return supported
+		}
+	}
+	supported, _ := explicitBool("responses_websockets_v2_enabled")
+	return supported
+}
+
 const (
 	OpenAIWSIngressModeOff         = "off"
 	OpenAIWSIngressModeShared      = "shared"

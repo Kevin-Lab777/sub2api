@@ -34,9 +34,11 @@ type openAIResponsesGateway interface {
 	ValidateTechnicalRuntime() error
 	SelectTechnicalResponsesAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	SelectTechnicalResponsesCompactAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	SelectTechnicalResponsesWebSocketAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	AcquireSelection(context.Context, *service.AccountSelectionResult) (func(), error)
 	ForwardResponsesExchange(context.Context, gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
 	ForwardResponsesCompactExchange(context.Context, gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	ForwardResponsesWebSocket(context.Context, http.ResponseWriter, *http.Request, *service.Account, string, string) (*service.OpenAIResponsesWebSocketResult, error)
 	BindStickySession(context.Context, *int64, string, int64) error
 }
 
@@ -81,8 +83,17 @@ func (d *OpenAIResponsesDispatcher) Forward(
 	if dispatch.Pool.Platform != service.PlatformOpenAI {
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPoolPlatform, dispatch.Pool.Platform)
 	}
-	if req == nil || req.Method != http.MethodPost || req.URL == nil {
+	if req == nil || req.URL == nil {
 		return nil, fmt.Errorf("invalid OpenAI Responses endpoint: %s %s", requestMethod(req), requestPath(req))
+	}
+	if isOpenAIResponsesWebSocketUpgrade(req) {
+		if req.Method != http.MethodGet || req.URL.Path != "/v1/responses" {
+			return nil, fmt.Errorf("invalid OpenAI Responses WebSocket endpoint: %s %s", req.Method, req.URL.Path)
+		}
+		return d.forwardWebSocket(ctx, w, req, dispatch)
+	}
+	if req.Method != http.MethodPost {
+		return nil, fmt.Errorf("invalid OpenAI Responses endpoint: %s %s", req.Method, req.URL.Path)
 	}
 	compact := false
 	switch req.URL.Path {
@@ -201,6 +212,117 @@ func (d *OpenAIResponsesDispatcher) Forward(
 }
 
 func (d *OpenAIResponsesDispatcher) Close(context.Context) error { return nil }
+
+func (d *OpenAIResponsesDispatcher) forwardWebSocket(
+	ctx context.Context,
+	w http.ResponseWriter,
+	req *http.Request,
+	dispatch gatewaycore.DispatchRequest,
+) (*gatewaycore.Measurement, error) {
+	poolID := dispatch.Pool.ID
+	failedAccountIDs := make(map[int64]struct{})
+	switchCount := 0
+	var lastFailover *service.UpstreamFailoverError
+
+	for {
+		selection, selectErr := d.gateway.SelectTechnicalResponsesWebSocketAccountWithLoadAwareness(
+			ctx,
+			&poolID,
+			dispatch.Invocation.SessionID,
+			dispatch.Invocation.Model,
+			failedAccountIDs,
+		)
+		if selectErr != nil {
+			if lastFailover != nil {
+				return nil, errors.Join(lastFailover, selectErr)
+			}
+			return nil, selectErr
+		}
+		if selection == nil || selection.Account == nil {
+			return nil, service.ErrInvalidAccountSelection
+		}
+		account := selection.Account
+		release, acquireErr := d.gateway.AcquireSelection(ctx, selection)
+		if acquireErr != nil {
+			return nil, acquireErr
+		}
+		release = releaseOnContextDone(ctx, release)
+		if account.Platform != service.PlatformOpenAI {
+			release()
+			return nil, fmt.Errorf("%w: scheduler selected %s account %d for OpenAI Responses WebSocket", ErrUnsupportedPoolPlatform, account.Platform, account.ID)
+		}
+
+		result, forwardErr := d.gateway.ForwardResponsesWebSocket(
+			ctx,
+			w,
+			req.Clone(ctx),
+			account,
+			dispatch.Invocation.Model,
+			dispatch.Invocation.SessionID,
+		)
+		release()
+		if result != nil {
+			measurement, measureErr := openAIResponsesWebSocketMeasurement(account, result)
+			if measureErr != nil {
+				return nil, errors.Join(forwardErr, measureErr)
+			}
+			if forwardErr == nil {
+				forwardErr = d.gateway.BindStickySession(ctx, &poolID, dispatch.Invocation.SessionID, account.ID)
+			}
+			return measurement, forwardErr
+		}
+		var failoverErr *service.UpstreamFailoverError
+		if !errors.As(forwardErr, &failoverErr) || !failoverErr.ShouldRetryNextAccount() {
+			return nil, forwardErr
+		}
+		lastFailover = failoverErr
+		failedAccountIDs[account.ID] = struct{}{}
+		if switchCount >= d.maxAccountSwitches {
+			return nil, lastFailover
+		}
+		switchCount++
+	}
+}
+
+func isOpenAIResponsesWebSocketUpgrade(req *http.Request) bool {
+	if req == nil || !strings.EqualFold(strings.TrimSpace(req.Header.Get("Upgrade")), "websocket") {
+		return false
+	}
+	for _, token := range strings.Split(req.Header.Get("Connection"), ",") {
+		if strings.EqualFold(strings.TrimSpace(token), "upgrade") {
+			return true
+		}
+	}
+	return false
+}
+
+func openAIResponsesWebSocketMeasurement(
+	account *service.Account,
+	result *service.OpenAIResponsesWebSocketResult,
+) (*gatewaycore.Measurement, error) {
+	if result == nil {
+		return nil, errors.New("OpenAI Responses WebSocket forward returned no result")
+	}
+	upstreamModel := strings.TrimSpace(result.UpstreamModel)
+	if upstreamModel == "" {
+		return nil, errors.New("OpenAI Responses WebSocket forward omitted upstream model")
+	}
+	return &gatewaycore.Measurement{
+		AccountID:               account.ID,
+		Endpoint:                "/v1/responses",
+		UpstreamModel:           upstreamModel,
+		InputTokens:             int64(result.Usage.InputTokens),
+		OutputTokens:            int64(result.Usage.OutputTokens),
+		CacheReadInputTokens:    int64(result.Usage.CacheReadInputTokens),
+		CacheWriteInputTokens:   int64(result.Usage.CacheCreationInputTokens),
+		ImageCount:              result.ImageCount,
+		WebSearchCalls:          result.WebSearchCalls,
+		UpstreamStatusCode:      result.UpstreamStatusCode,
+		StartedAt:               result.StartedAt,
+		Duration:                result.Duration,
+		TimeToFirstResponseByte: result.TimeToFirstResponse,
+	}, nil
+}
 
 func openAIResponsesMeasurement(
 	exchange gatewaytransport.Exchange,
