@@ -206,6 +206,7 @@ type openAISelectionPolicy struct {
 	requiredAccountType     string
 	allowedAccountTypes     []string
 	requiredImageCapability OpenAIImagesCapability
+	requireOAuthImageModel  bool
 }
 
 func legacyOpenAISelectionPolicy(useUpstreamTokenCost bool) openAISelectionPolicy {
@@ -288,6 +289,18 @@ var technicalOpenAIImagesDirectSelectionPolicy = openAISelectionPolicy{
 	requiredImageCapability: OpenAIImagesCapabilityNative,
 }
 
+var technicalOpenAIImagesSelectionPolicy = openAISelectionPolicy{
+	enforceChannelPricing:   false,
+	useUpstreamTokenCost:    false,
+	strictState:             true,
+	bindStickyOnSelection:   false,
+	requireExactModel:       true,
+	requireKnownCompact:     false,
+	allowedAccountTypes:     []string{AccountTypeAPIKey, AccountTypeOAuth},
+	requiredImageCapability: OpenAIImagesCapabilityNative,
+	requireOAuthImageModel:  true,
+}
+
 func (p openAISelectionPolicy) acceptsAccount(account *Account, requestedModel string) bool {
 	if account == nil || (p.requiredAccountType != "" && account.Type != p.requiredAccountType) {
 		return false
@@ -309,6 +322,12 @@ func (p openAISelectionPolicy) acceptsAccount(account *Account, requestedModel s
 	}
 	if p.requiredImageCapability != "" && !account.SupportsOpenAIImageCapability(p.requiredImageCapability) {
 		return false
+	}
+	if p.requireOAuthImageModel && account.Type == AccountTypeOAuth {
+		mappedModel, err := resolveExactOpenAIAccountModel(account, requestedModel)
+		if err != nil || !IsGPTImageGenerationModel(mappedModel) {
+			return false
+		}
 	}
 	return !p.requireResponsesWSV2 || account.SupportsTechnicalOpenAIResponsesWebSocketV2()
 }
@@ -1054,6 +1073,13 @@ func (s *OpenAIGatewayService) SelectTechnicalEmbeddingsAccountWithLoadAwareness
 // API-key account that exposes the native Images API.
 func (s *OpenAIGatewayService) SelectTechnicalImagesDirectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "", technicalOpenAIImagesDirectSelectionPolicy)
+}
+
+// SelectTechnicalImagesAccountWithLoadAwareness selects an exact-pool direct
+// or subscription account for an Images request that the subscription adapter
+// has already proved representable.
+func (s *OpenAIGatewayService) SelectTechnicalImagesAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "", technicalOpenAIImagesSelectionPolicy)
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, policy openAISelectionPolicy) (*AccountSelectionResult, error) {

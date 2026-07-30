@@ -32,13 +32,15 @@ func OpenAIImagesDispatcherConfigFromApplication(cfg *config.Config) (OpenAIImag
 
 type openAIImagesGateway interface {
 	ValidateTechnicalRuntime() error
+	SelectTechnicalImagesAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	SelectTechnicalImagesDirectAccountWithLoadAwareness(context.Context, *int64, string, string, map[int64]struct{}) (*service.AccountSelectionResult, error)
 	AcquireSelection(context.Context, *service.AccountSelectionResult) (func(), error)
 	ForwardImagesDirectExchange(context.Context, gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	ForwardImagesSubscriptionExchange(context.Context, gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
 }
 
-// OpenAIImagesDispatcher owns direct API-key Images API forwarding. The
-// subscription-account Responses adapter is a distinct component.
+// OpenAIImagesDispatcher owns direct API-key Images forwarding and the strict
+// subscription-account Responses adapter.
 type OpenAIImagesDispatcher struct {
 	gateway            openAIImagesGateway
 	maxAccountSwitches int
@@ -92,6 +94,7 @@ func (d *OpenAIImagesDispatcher) Forward(
 	if parsed.Model != dispatch.Invocation.Model {
 		return nil, fmt.Errorf("%w: invocation=%q body=%q", ErrInvocationModelMismatch, dispatch.Invocation.Model, parsed.Model)
 	}
+	subscriptionValidationErr := service.ValidateOpenAIImagesSubscriptionRequest(req, body)
 
 	req = req.Clone(ctx)
 	exchange := gatewaytransport.NewHTTPExchange(w, req)
@@ -102,14 +105,21 @@ func (d *OpenAIImagesDispatcher) Forward(
 	var lastFailover *service.UpstreamFailoverError
 
 	for {
-		selection, selectErr := d.gateway.SelectTechnicalImagesDirectAccountWithLoadAwareness(
-			ctx,
-			&poolID,
-			"",
-			dispatch.Invocation.Model,
-			failedAccountIDs,
-		)
+		var selection *service.AccountSelectionResult
+		var selectErr error
+		if subscriptionValidationErr != nil {
+			selection, selectErr = d.gateway.SelectTechnicalImagesDirectAccountWithLoadAwareness(
+				ctx, &poolID, "", dispatch.Invocation.Model, failedAccountIDs,
+			)
+		} else {
+			selection, selectErr = d.gateway.SelectTechnicalImagesAccountWithLoadAwareness(
+				ctx, &poolID, "", dispatch.Invocation.Model, failedAccountIDs,
+			)
+		}
 		if selectErr != nil {
+			if subscriptionValidationErr != nil {
+				selectErr = errors.Join(subscriptionValidationErr, selectErr)
+			}
 			if lastFailover != nil {
 				return nil, errors.Join(lastFailover, selectErr)
 			}
@@ -124,15 +134,23 @@ func (d *OpenAIImagesDispatcher) Forward(
 			return nil, acquireErr
 		}
 		release = releaseOnContextDone(ctx, release)
-		if account.Platform != service.PlatformOpenAI || account.Type != service.AccountTypeAPIKey {
+		if account.Platform != service.PlatformOpenAI ||
+			(account.Type != service.AccountTypeAPIKey && account.Type != service.AccountTypeOAuth) ||
+			(subscriptionValidationErr != nil && account.Type != service.AccountTypeAPIKey) {
 			release()
-			return nil, fmt.Errorf("scheduler selected unsupported account %d for direct OpenAI Images", account.ID)
+			return nil, fmt.Errorf("scheduler selected unsupported account %d for OpenAI Images", account.ID)
 		}
 
 		writtenBefore := exchange.Response().Written()
 		sizeBefore := exchange.Response().Size()
 		startedAt := time.Now()
-		result, forwardErr := d.gateway.ForwardImagesDirectExchange(ctx, exchange, account, body)
+		var result *service.OpenAIForwardResult
+		var forwardErr error
+		if account.Type == service.AccountTypeOAuth {
+			result, forwardErr = d.gateway.ForwardImagesSubscriptionExchange(ctx, exchange, account, body)
+		} else {
+			result, forwardErr = d.gateway.ForwardImagesDirectExchange(ctx, exchange, account, body)
+		}
 		release()
 		if result != nil {
 			measurement, measureErr := openAIImagesMeasurement(exchange, account, result, startedAt)

@@ -88,7 +88,7 @@ complete OpenAI protocol dispatcher. The current support matrix is:
 | Legacy `POST /v1/completions` direct API-key upstream | Implemented and tested |
 | Embeddings | Implemented and tested |
 | Direct API-key Images generations/edits | Implemented and tested |
-| Subscription-account Images adapter | Pending |
+| Subscription-account Images adapter | Implemented and tested |
 | Live/realtime and sideband | Pending |
 
 The native Responses path performs only protocol validation, exact model
@@ -164,6 +164,19 @@ count from request `n`, treat partial images as billable output, deduplicate by
 content, guess JSON from an SSE media type, emit keepalives, or synthesize a
 completion for a truncated stream. Like Embeddings, Images is stateless and
 does not create sticky-session cache entries.
+
+Subscription-account Images uses a separate strict Images-to-Responses
+adapter. It preserves JSON generation requests and JSON/multipart edits only
+when every field has an exact Responses image-tool representation. Requests
+that require a fabricated remote URL, unknown fields, or per-image usage split
+from an aggregate multi-image stream are scheduled only to direct API-key
+accounts. The adapter requires authoritative `response.created` metadata before
+emitting partial frames and a real `response.completed` output, passes through
+exact image-tool usage, and reports edit image-input tokens only when the
+upstream provides them. It does not use `response.output_item.done` as a
+missing-terminal fallback, synthesize
+timestamps or completion events, deduplicate image content, finalize truncated
+streams, download client assets, or create sticky-session cache entries.
 
 Antigravity accounts participating in Gemini mixed scheduling also retain a
 separate Gin-bound forwarder and are not silently routed through the native
@@ -264,6 +277,10 @@ therefore remain transitional code rather than the final in-process path.
 - Direct API-key `POST /v1/images/generations` and `/v1/images/edits` now have
   framework-independent JSON/multipart forwarding, official JSON/SSE usage
   validation, actual completed-image accounting, and no sticky-session cache.
+- Subscription-account Images now has a framework-independent strict
+  Images-to-Responses adapter with exact request-shape eligibility, real
+  lifecycle conversion, exact tool-usage telemetry, and direct-account-only
+  routing for unrepresentable public Images semantics.
 - The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. OpenAI and Antigravity provider services still depend on Gin and

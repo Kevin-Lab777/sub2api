@@ -15,15 +15,27 @@ import (
 )
 
 type openAIImagesGatewayStub struct {
-	selectAccount func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
-	forward       func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
-	pools         []int64
-	selectSession string
+	selectAccount       func(*int64, map[int64]struct{}) (*service.AccountSelectionResult, error)
+	forward             func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	forwardSubscription func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error)
+	pools               []int64
+	selectionModes      []string
+	selectSession       string
 }
 
 func (s *openAIImagesGatewayStub) ValidateTechnicalRuntime() error { return nil }
 
 func (s *openAIImagesGatewayStub) SelectTechnicalImagesDirectAccountWithLoadAwareness(_ context.Context, poolID *int64, session string, _ string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+	s.selectionModes = append(s.selectionModes, "direct")
+	return s.selectImagesAccount(poolID, session, excluded)
+}
+
+func (s *openAIImagesGatewayStub) SelectTechnicalImagesAccountWithLoadAwareness(_ context.Context, poolID *int64, session string, _ string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
+	s.selectionModes = append(s.selectionModes, "mixed")
+	return s.selectImagesAccount(poolID, session, excluded)
+}
+
+func (s *openAIImagesGatewayStub) selectImagesAccount(poolID *int64, session string, excluded map[int64]struct{}) (*service.AccountSelectionResult, error) {
 	if poolID != nil {
 		s.pools = append(s.pools, *poolID)
 	}
@@ -42,6 +54,13 @@ func (s *openAIImagesGatewayStub) AcquireSelection(_ context.Context, selection 
 }
 
 func (s *openAIImagesGatewayStub) ForwardImagesDirectExchange(_ context.Context, exchange gatewaytransport.Exchange, account *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
+	return s.forward(exchange, account, body)
+}
+
+func (s *openAIImagesGatewayStub) ForwardImagesSubscriptionExchange(_ context.Context, exchange gatewaytransport.Exchange, account *service.Account, body []byte) (*service.OpenAIForwardResult, error) {
+	if s.forwardSubscription != nil {
+		return s.forwardSubscription(exchange, account, body)
+	}
 	return s.forward(exchange, account, body)
 }
 
@@ -182,6 +201,55 @@ func TestOpenAIImagesDispatcherReturnsMeasurementWithCommittedProtocolError(t *t
 	measurement, err := newOpenAIImagesDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIImagesDispatchRequest())
 	if err == nil || measurement == nil || measurement.ImageCount != 1 || measurement.OutputTokens != 3 || selections != 1 {
 		t.Fatalf("committed protocol error lost measurement or switched: measurement=%+v selections=%d err=%v", measurement, selections, err)
+	}
+}
+
+func TestOpenAIImagesDispatcherUsesSubscriptionAdapterForRepresentableRequest(t *testing.T) {
+	account := &service.Account{ID: 1041, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth}
+	gateway := &openAIImagesGatewayStub{}
+	gateway.selectAccount = func(_ *int64, _ map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	gateway.forward = func(gatewaytransport.Exchange, *service.Account, []byte) (*service.OpenAIForwardResult, error) {
+		t.Fatal("direct forwarder must not run for an OAuth account")
+		return nil, nil
+	}
+	gateway.forwardSubscription = func(exchange gatewaytransport.Exchange, got *service.Account, _ []byte) (*service.OpenAIForwardResult, error) {
+		if got.ID != account.ID {
+			t.Fatalf("unexpected account %d", got.ID)
+		}
+		if err := exchange.WriteData(http.StatusOK, "application/json", []byte(`{"data":[{"b64_json":"aW1hZ2U="}]}`)); err != nil {
+			return nil, err
+		}
+		return &service.OpenAIForwardResult{UpstreamModel: "gpt-image-2", ImageCount: 1, Duration: time.Millisecond}, nil
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", strings.NewReader(`{"model":"image-alias","prompt":"cat"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	measurement, err := newOpenAIImagesDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIImagesDispatchRequest())
+	if err != nil || measurement == nil || measurement.AccountID != account.ID || len(gateway.selectionModes) != 1 || gateway.selectionModes[0] != "mixed" {
+		t.Fatalf("unexpected subscription dispatch measurement=%+v modes=%v err=%v", measurement, gateway.selectionModes, err)
+	}
+}
+
+func TestOpenAIImagesDispatcherRoutesUnrepresentableSubscriptionShapeOnlyToDirectAccounts(t *testing.T) {
+	account := &service.Account{ID: 1051, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey}
+	gateway := &openAIImagesGatewayStub{}
+	gateway.selectAccount = func(_ *int64, _ map[int64]struct{}) (*service.AccountSelectionResult, error) {
+		return &service.AccountSelectionResult{Account: account, Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	gateway.forward = func(exchange gatewaytransport.Exchange, _ *service.Account, _ []byte) (*service.OpenAIForwardResult, error) {
+		if err := exchange.WriteData(http.StatusOK, "application/json", []byte(`{"data":[{"url":"https://example.com/image.png"}]}`)); err != nil {
+			return nil, err
+		}
+		return &service.OpenAIForwardResult{UpstreamModel: "gpt-image-2", ImageCount: 1, Duration: time.Millisecond}, nil
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", strings.NewReader(`{"model":"image-alias","prompt":"cat","response_format":"url"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	measurement, err := newOpenAIImagesDispatcherForTest(t, gateway).Forward(context.Background(), httptest.NewRecorder(), req, openAIImagesDispatchRequest())
+	if err != nil || measurement == nil || len(gateway.selectionModes) != 1 || gateway.selectionModes[0] != "direct" {
+		t.Fatalf("unrepresentable subscription shape did not stay direct: measurement=%+v modes=%v err=%v", measurement, gateway.selectionModes, err)
 	}
 }
 
