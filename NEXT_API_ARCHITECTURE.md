@@ -96,6 +96,12 @@ in-process path.
   are no longer members of the Wire handler aggregation graph.
 - The administrator frontend exposes only the retained gateway management
   routes.
+- Customer self-service, registration and social OAuth, payment consumption,
+  subscriptions, affiliate, redeem, promotion, announcement, risk-control,
+  model-plaza, and customer-management frontend implementations have been
+  physically removed. Stripe and Airwallex browser SDKs are no longer runtime
+  dependencies; payment-provider editors remain temporarily because the
+  transitional settings page still embeds them.
 - The legacy gateway handlers, customer authentication implementation, settings handler,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. Their presence is tracked as unfinished work, not as a runtime
