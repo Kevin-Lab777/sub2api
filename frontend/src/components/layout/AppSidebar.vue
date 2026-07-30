@@ -118,10 +118,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useAdminSettingsStore, useAppStore } from '@/stores'
+import { useAppStore, useOpsCapabilitiesStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
@@ -139,7 +139,7 @@ interface NavItem {
 const { t } = useI18n()
 const route = useRoute()
 const appStore = useAppStore()
-const adminSettingsStore = useAdminSettingsStore()
+const opsCapabilitiesStore = useOpsCapabilitiesStore()
 
 const homePath = '/admin/accounts'
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
@@ -152,7 +152,7 @@ const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 const flagChannelMonitor = makeSidebarFlag(FeatureFlags.channelMonitor)
-const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
+const flagOpsMonitoring = () => opsCapabilitiesStore.monitoringEnabled
 
 const adminNavItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
@@ -202,16 +202,10 @@ if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-s
   document.documentElement.classList.add('dark')
 }
 
-watch(
-  () => appStore.publicSettingsLoaded,
-  (loaded) => {
-    if (loaded) void adminSettingsStore.fetch()
-  },
-  { immediate: true }
-)
-
 onMounted(() => {
-  void adminSettingsStore.fetch()
+  void opsCapabilitiesStore.fetch().catch((error) => {
+    console.error('[AppSidebar] Failed to load Ops capabilities', error)
+  })
   if (appStore.sidebarScrollTop > 0 && sidebarNavRef.value) {
     void nextTick(() => {
       if (sidebarNavRef.value) {

@@ -531,6 +531,13 @@ func (h *GroupHandler) Create(c *gin.Context) {
 	response.Success(c, dto.GroupFromServiceAdmin(group))
 }
 
+func float64ValueOrDefault(value *float64, defaultValue float64) float64 {
+	if value == nil {
+		return defaultValue
+	}
+	return *value
+}
+
 // Duplicate handles creating an inactive group copy with the source account bindings.
 // POST /api/v1/admin/groups/:id/duplicate
 func (h *GroupHandler) Duplicate(c *gin.Context) {

@@ -2,6 +2,7 @@ export default {
     ops: {
       title: '运维监控',
       description: '运维监控与排障',
+      monitoringDisabled: '服务端配置已停用运维监控。',
       // Dashboard
       systemHealth: '系统健康',
       overview: '概览',

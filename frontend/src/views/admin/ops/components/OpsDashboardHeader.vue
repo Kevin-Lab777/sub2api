@@ -8,7 +8,6 @@ import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api'
 import { opsAPI, type OpsDashboardOverview, type OpsMetricThresholds, type OpsRealtimeTrafficSummary } from '@/api/admin/ops'
 import type { OpsRequestDetailsPreset } from './OpsRequestDetailsModal.vue'
-import { useAdminSettingsStore } from '@/stores'
 import { formatNumber } from '@/utils/format'
 
 type RealtimeWindow = '1min' | '5min' | '30min' | '1h'
@@ -27,6 +26,7 @@ interface Props {
   fullscreen?: boolean
   customStartTime?: string | null
   customEndTime?: string | null
+  realtimeMonitoringEnabled?: boolean
 }
 
 interface Emits {
@@ -48,7 +48,6 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const { t } = useI18n()
-const adminSettingsStore = useAdminSettingsStore()
 
 const realtimeWindow = ref<RealtimeWindow>('1min')
 
@@ -296,17 +295,14 @@ function makeZeroRealtimeTrafficSummary(): OpsRealtimeTrafficSummary {
 
 async function loadRealtimeTrafficSummary() {
   if (realtimeTrafficLoading.value) return
-  if (!adminSettingsStore.opsRealtimeMonitoringEnabled) {
+  if (!props.realtimeMonitoringEnabled) {
     realtimeTrafficSummary.value = makeZeroRealtimeTrafficSummary()
     return
   }
   realtimeTrafficLoading.value = true
   try {
     const res = await opsAPI.getRealtimeTrafficSummary(realtimeWindow.value, props.platform, props.groupId)
-    if (res && res.enabled === false) {
-      adminSettingsStore.setOpsRealtimeMonitoringEnabledLocal(false)
-    }
-    realtimeTrafficSummary.value = res?.summary ?? null
+    realtimeTrafficSummary.value = res?.enabled === false ? makeZeroRealtimeTrafficSummary() : (res?.summary ?? null)
   } catch (err) {
     console.error('[OpsDashboardHeader] Failed to load realtime traffic summary', err)
     realtimeTrafficSummary.value = null
@@ -324,7 +320,7 @@ watch(
 )
 
 watch(
-  () => adminSettingsStore.opsRealtimeMonitoringEnabled,
+  () => props.realtimeMonitoringEnabled,
   (enabled) => {
     if (!enabled) {
       // Keep UI stable when realtime monitoring is turned off.

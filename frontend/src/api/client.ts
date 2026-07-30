@@ -138,32 +138,6 @@ apiClient.interceptors.response.use(
       // Validate `data` shape to avoid HTML error pages breaking our error handling.
       const apiData = (typeof data === 'object' && data !== null ? data : {}) as Record<string, any>
 
-      // Ops monitoring disabled: treat as feature-flagged 404, and proactively redirect away
-      // from ops pages to avoid broken UI states.
-      if (status === 404 && apiData.message === 'Ops monitoring is disabled') {
-        try {
-          localStorage.setItem('ops_monitoring_enabled_cached', 'false')
-        } catch {
-          // ignore localStorage failures
-        }
-        try {
-          window.dispatchEvent(new CustomEvent('ops-monitoring-disabled'))
-        } catch {
-          // ignore event failures
-        }
-
-        if (window.location.pathname.startsWith('/admin/ops')) {
-          window.location.href = '/admin/settings'
-        }
-
-        return Promise.reject({
-          status,
-          code: 'OPS_DISABLED',
-          message: apiData.message || error.message,
-          url
-        })
-      }
-
       if (status === 423 && apiData.code === 'ADMIN_COMPLIANCE_ACK_REQUIRED') {
         try {
           window.dispatchEvent(new CustomEvent('admin-compliance-required', {

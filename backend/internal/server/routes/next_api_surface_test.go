@@ -76,8 +76,10 @@ func TestAdminRoutesExcludeCustomerAndCommerceManagement(t *testing.T) {
 	)
 
 	paths := make([]string, 0, len(router.Routes()))
+	registered := make(map[string]struct{}, len(router.Routes()))
 	for _, route := range router.Routes() {
 		paths = append(paths, route.Path)
+		registered[route.Method+" "+route.Path] = struct{}{}
 	}
 
 	requiredPrefixes := []string{
@@ -106,6 +108,39 @@ func TestAdminRoutesExcludeCustomerAndCommerceManagement(t *testing.T) {
 	for _, prefix := range forbiddenPrefixes {
 		if containsRoutePrefix(paths, prefix) {
 			t.Errorf("customer or commerce route is registered: %s", prefix)
+		}
+	}
+
+	requiredSettingsRoutes := []string{
+		"GET /api/v1/admin/ops/capabilities",
+		"GET /api/v1/admin/settings/admin-api-key",
+		"GET /api/v1/admin/settings/overload-cooldown",
+		"GET /api/v1/admin/settings/rate-limit-429-cooldown",
+		"GET /api/v1/admin/settings/panel-rate-limit",
+		"GET /api/v1/admin/settings/stream-timeout",
+		"GET /api/v1/admin/settings/rectifier",
+		"GET /api/v1/admin/settings/beta-policy",
+		"GET /api/v1/admin/settings/web-search-emulation",
+	}
+	for _, route := range requiredSettingsRoutes {
+		if _, exists := registered[route]; !exists {
+			t.Errorf("technical setting route is missing: %s", route)
+		}
+	}
+
+	forbiddenSettingsRoutes := []string{
+		"GET /api/v1/admin/settings",
+		"PUT /api/v1/admin/settings",
+		"POST /api/v1/admin/settings/test-smtp",
+		"POST /api/v1/admin/settings/send-test-email",
+		"GET /api/v1/admin/settings/email-templates",
+		"GET /api/v1/admin/backups/image-storage",
+		"PUT /api/v1/admin/backups/image-storage",
+		"POST /api/v1/admin/backups/image-storage/test",
+	}
+	for _, route := range forbiddenSettingsRoutes {
+		if _, exists := registered[route]; exists {
+			t.Errorf("removed SaaS setting route is registered: %s", route)
 		}
 	}
 }

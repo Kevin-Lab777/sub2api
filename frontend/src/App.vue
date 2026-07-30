@@ -5,7 +5,7 @@ import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
 import { resolveRouteDocumentTitle } from '@/router/title'
-import { useAppStore, useAuthStore, useAdminComplianceStore, useAdminSettingsStore } from '@/stores'
+import { useAppStore, useAuthStore, useAdminComplianceStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 
@@ -14,13 +14,9 @@ const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const adminComplianceStore = useAdminComplianceStore()
-const adminSettingsStore = useAdminSettingsStore()
 
 function updateDocumentTitle() {
-  const customMenuItems = [
-    ...(appStore.cachedPublicSettings?.custom_menu_items ?? []),
-    ...(authStore.isAdmin ? adminSettingsStore.customMenuItems : []),
-  ]
+  const customMenuItems = appStore.cachedPublicSettings?.custom_menu_items ?? []
   document.title = resolveRouteDocumentTitle(route, appStore.siteName, customMenuItems)
 }
 
@@ -42,8 +38,6 @@ watch(
     () => route.meta.titleKey,
     () => appStore.siteName,
     () => appStore.cachedPublicSettings?.custom_menu_items,
-    () => authStore.isAdmin,
-    () => adminSettingsStore.customMenuItems,
   ],
   updateDocumentTitle,
   { deep: true }

@@ -106,7 +106,19 @@ in-process path.
   longer registered, and their queues, cleanup services, workers, and the
   otherwise-idle payment-order expiry worker are absent from the application
   dependency graph. Synchronous provider image forwarding remains available.
-- The legacy gateway handlers, customer authentication implementation, settings handler,
+- The administrator settings surface now contains only gateway cooldowns,
+  panel rate limits, stream timeout handling, request rectification, Anthropic
+  beta policy, web-search emulation, administrator API-key management, and
+  backups. The former SaaS-wide settings and email-template routes, handlers,
+  DTOs, payment-provider editors, and asynchronous image-storage settings have
+  been physically removed.
+- Ops console discovery uses the dedicated `/admin/ops/capabilities` contract.
+  It no longer loads the removed SaaS settings or payment configuration, and
+  it does not persist server capability flags in browser storage.
+- Payment providers, image-storage providers, customer notification services,
+  Turnstile, user attributes, and customer TOTP/user services are absent from
+  the administrator settings dependency graph.
+- The legacy gateway handlers, customer authentication implementation,
   customer caches/workers, and customer Ent schemas still require separation
   or deletion. Their presence is tracked as unfinished work, not as a runtime
   compatibility mechanism.

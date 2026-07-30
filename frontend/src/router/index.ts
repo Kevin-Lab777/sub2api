@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
-import { useAdminSettingsStore } from '@/stores/adminSettings'
 import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
@@ -144,8 +143,11 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   const appStore = useAppStore()
-  const adminSettingsStore = useAdminSettingsStore()
-  document.title = resolveRouteDocumentTitle(to, appStore.siteName, adminSettingsStore.customMenuItems)
+  document.title = resolveRouteDocumentTitle(
+    to,
+    appStore.siteName,
+    appStore.cachedPublicSettings?.custom_menu_items ?? []
+  )
 
   if (to.path === '/setup') {
     try {

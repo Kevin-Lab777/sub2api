@@ -2,6 +2,7 @@ export default {
     ops: {
       title: 'Ops Monitoring',
       description: 'Operational monitoring and troubleshooting',
+      monitoringDisabled: 'Ops monitoring is disabled in the server configuration.',
       // Dashboard
       systemHealth: 'System Health',
       overview: 'Overview',

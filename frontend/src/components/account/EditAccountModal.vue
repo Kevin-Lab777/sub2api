@@ -2861,7 +2861,6 @@ const webSearchGlobalEnabled = ref(false)
 const {
   globalEnabled: quotaNotifyGlobalEnabled,
   state: quotaNotifyState,
-  loadGlobalState: loadQuotaNotifyGlobal,
   loadFromExtra: loadQuotaNotifyFromExtra,
   writeToExtra: writeQuotaNotifyToExtra,
   reset: resetQuotaNotify,
@@ -2872,7 +2871,6 @@ adminAPI.settings.getWebSearchEmulationConfig().then(cfg => {
   webSearchGlobalEnabled.value = cfg?.enabled === true && (cfg?.providers?.length ?? 0) > 0
 }).catch(() => { webSearchGlobalEnabled.value = false })
 
-loadQuotaNotifyGlobal()
 const editQuotaLimit = ref<number | null>(null)
 const editQuotaDailyLimit = ref<number | null>(null)
 const editQuotaWeeklyLimit = ref<number | null>(null)

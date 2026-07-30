@@ -10,6 +10,13 @@
 
       <OpsDashboardSkeleton v-if="loading && !hasLoadedOnce" :fullscreen="isFullscreen" />
 
+      <div
+        v-else-if="opsCapabilitiesStore.capabilities && !opsEnabled"
+        class="rounded border border-gray-200 p-6 text-sm text-gray-600 dark:border-dark-700 dark:text-gray-300"
+      >
+        {{ t('admin.ops.monitoringDisabled') }}
+      </div>
+
       <OpsDashboardHeader
         v-else-if="opsEnabled"
         :overview="overview"
@@ -25,6 +32,7 @@
         :fullscreen="isFullscreen"
         :custom-start-time="customStartTime"
         :custom-end-time="customEndTime"
+        :realtime-monitoring-enabled="opsRealtimeEnabled"
         @update:time-range="onTimeRangeChange"
         @update:platform="onPlatformChange"
         @update:group="onGroupChange"
@@ -152,7 +160,7 @@ import {
   type OpsThroughputTrendResponse,
   type OpsMetricThresholds
 } from '@/api/admin/ops'
-import { useAdminSettingsStore, useAppStore } from '@/stores'
+import { useAppStore, useOpsCapabilitiesStore } from '@/stores'
 import OpsDashboardHeader from './components/OpsDashboardHeader.vue'
 import OpsDashboardSkeleton from './components/OpsDashboardSkeleton.vue'
 import OpsConcurrencyCard from './components/OpsConcurrencyCard.vue'
@@ -173,10 +181,11 @@ import OpsAlertRulesCard from './components/OpsAlertRulesCard.vue'
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
-const adminSettingsStore = useAdminSettingsStore()
+const opsCapabilitiesStore = useOpsCapabilitiesStore()
 const { t } = useI18n()
 
-const opsEnabled = computed(() => adminSettingsStore.opsMonitoringEnabled)
+const opsEnabled = computed(() => opsCapabilitiesStore.monitoringEnabled === true)
+const opsRealtimeEnabled = computed(() => opsCapabilitiesStore.realtimeMonitoringEnabled === true)
 
 type TimeRange = '5m' | '30m' | '1h' | '6h' | '24h' | 'custom'
 const allowedTimeRanges = new Set<TimeRange>(['5m', '30m', '1h', '6h', '24h', 'custom'])
@@ -287,8 +296,8 @@ const applyRouteQueryToState = () => {
   if (nextMode && allowedQueryModes.has(nextMode as QueryMode)) {
     queryMode.value = nextMode as QueryMode
   } else {
-    const fallback = adminSettingsStore.opsQueryModeDefault || 'auto'
-    queryMode.value = allowedQueryModes.has(fallback as QueryMode) ? (fallback as QueryMode) : 'auto'
+    const configuredDefault = opsCapabilitiesStore.queryModeDefault || 'auto'
+    queryMode.value = allowedQueryModes.has(configuredDefault as QueryMode) ? (configuredDefault as QueryMode) : 'auto'
   }
 
   // Deep links
@@ -774,9 +783,20 @@ onMounted(async () => {
   // Fullscreen mode: listen for ESC key
   window.addEventListener('keydown', handleKeydown)
 
-  await adminSettingsStore.fetch()
-  if (!adminSettingsStore.opsMonitoringEnabled) {
-    await router.replace('/admin/settings')
+  try {
+    await opsCapabilitiesStore.fetch()
+  } catch (error) {
+    console.error('[OpsDashboard] Failed to load Ops capabilities', error)
+    errorMessage.value = t('admin.ops.failedToLoadData')
+    loading.value = false
+    hasLoadedOnce.value = true
+    return
+  }
+
+  applyRouteQueryToState()
+  if (!opsEnabled.value) {
+    loading.value = false
+    hasLoadedOnce.value = true
     return
   }
 
