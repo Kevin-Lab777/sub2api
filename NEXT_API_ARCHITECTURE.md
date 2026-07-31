@@ -195,12 +195,13 @@ Apple Silicon macOS. Missing platform support, app resources, or attestation
 keys remain explicit availability errors; Next API does not bypass or emulate
 the proof for Linux containers.
 
-Antigravity accounts participating in Gemini mixed scheduling also retain a
-separate Gin-bound forwarder and are not silently routed through the native
-Gemini implementation. These paths must be migrated before a complete
-production `gatewaycore.Runtime` can be assembled. New API does not import this
-partial runtime yet. The existing customer-authenticated HTTP handlers
-therefore remain transitional code rather than the final in-process path.
+Antigravity accounts participating in Gemini mixed scheduling use the native
+framework-independent exchange, while the legacy Gin adapter remains available
+for the transitional HTTP server. `gatewayruntime.NewRuntime` now assembles the
+complete native protocol set. `gatewayapp.Open` exposes that runtime through a
+dedicated technical-account dependency graph; New API has not imported it yet.
+The existing customer-authenticated HTTP handlers therefore remain transitional
+code rather than the final in-process path.
 
 ## Removal Sequence
 
@@ -302,11 +303,17 @@ therefore remain transitional code rather than the final in-process path.
   exact-pool OAuth scheduling, the group Live switch, account-only long-lived
   concurrency leases, technical session ownership, real DeviceCheck
   attestation reuse, and raw text/binary WebSocket relay.
+- `gatewayruntime.NewRuntime` now composes the Anthropic, Gemini, and all native
+  OpenAI endpoint dispatchers behind one production `gatewaycore.Runtime`.
+- `gatewayapp.Open` now has a dedicated Wire graph containing only technical
+  account-pool infrastructure and provider services. It does not construct the
+  customer authentication, billing, subscription, payment, notification, or
+  customer API-key services from the legacy application graph.
 - The legacy gateway handlers, customer authentication implementation,
-  customer caches/workers, and customer Ent schemas still require separation
-  or deletion. OpenAI and Antigravity provider services still depend on Gin and
-  block complete runtime assembly. Their presence is tracked as unfinished work,
-  not as a runtime compatibility mechanism.
+  customer caches/workers, and customer Ent schemas remain in the transitional
+  HTTP server and still require later separation or deletion. Native OpenAI and
+  Antigravity exchange methods are used by the in-process runtime; their Gin
+  compatibility methods are not a runtime dependency.
 
 Each removal is complete only when its route, dependency injection provider,
 background worker, persistence schema, generated ORM code, frontend entry, and
